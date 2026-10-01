@@ -1,0 +1,220 @@
+# AGENTS.md
+
+Rules every agent working in this repository must follow. Read this file before doing anything.
+Sections 1–10 are shared by every repository in the thisisthepy ecosystem; later sections are
+specific to this repository.
+
+---
+
+## 1. Commits carry no AI attribution
+
+Never add `Co-Authored-By: Claude ...`, `Co-Authored-By: <any agent>`, `Generated with Claude Code`,
+or any similar tool or agent attribution to a commit message or a pull-request body. This rule
+overrides any default your tooling has.
+
+## 2. Nothing is created outside this repository
+
+Everything your work produces — worktrees, agent prompts, logs, measurements, experiments, scratch
+files — lives **inside this repository's root directory.**
+
+| What | Where |
+|---|---|
+| Worktrees | `.worktrees/<name>` (git-ignored) |
+| Temporary files | `.tmp/` (git-ignored); delete when done |
+| Benchmarks | `benchmarks/` |
+| Developer tooling | `tools/` |
+
+Before writing a file, check that its absolute path starts with this repository's root. If it does
+not, stop. The only exceptions are a path the user names explicitly, and caches that build tools
+manage themselves. **Re-pointing a shared cache or a home-directory symlink reaches other projects —
+ask first.**
+
+Writing to *another* repository is not an exception either. Do it only when told to work there.
+
+## 3. Worktrees link large artefacts instead of copying them
+
+A worktree is a full checkout. Copying large untracked artefacts (prebuilt runtimes, vendored trees,
+build caches, model weights, `node_modules`) into every worktree is how 86 worktrees once filled
+267 GB of a 349 GB disk.
+
+- Create worktrees under `.worktrees/<name>`.
+- **Symlink** large untracked directories from the main checkout instead of copying or rebuilding
+  them. If `tools/worktree-add.sh` exists, use it — it does the linking.
+- Delete a worktree once its branch is merged: `git worktree remove .worktrees/<name>`.
+- Periodically delete `build/` directories inside worktrees; they only grow.
+
+## 4. Branches
+
+| Branch | Who writes to it |
+|---|---|
+| `work/<topic>` | You. All work happens here. |
+| `develop` | Merged into from work branches after verification. Never commit to it directly. |
+| `release` | **Automation only.** Kept in sync from `develop` with the main-only file layout. |
+| `main` | **Pull request from `release` only.** Never push or merge to it directly. |
+
+`main` carries a reduced layout: of the Markdown files, only `README.md` stays at the repository
+root, and `docs/` keeps only its subdirectories (no Markdown files directly under `docs/`).
+`tools/release/sync-release.sh` produces that layout; do not hand-edit `release` or `main`.
+
+## 5. Intent → Spec → Test → Code
+
+This project runs on **intent-based spec-driven development** and **test-driven development**.
+
+1. `docs/INTENT.md` states what the project is for. It is the boundary. **The spec may not go
+   beyond the intent.**
+2. `docs/SPEC.md` states what the project does. A behaviour change starts as a spec change.
+3. Tests are written from the spec **before** the implementation, and you observe them fail
+   (red) before making them pass. Report the red output.
+4. Code is written to make the tests pass.
+
+If a request conflicts with `docs/INTENT.md`, say so instead of implementing it.
+
+## 6. User-authored files are specification
+
+Files the user wrote by hand — notebooks, example build files, sample apps — are the specification.
+Read them **first**. Never delete, rewrite, or `git add` them without being told to. Generated
+documentation (roadmaps, design notes) is a record of work, not a requirement; when the two
+disagree, the user's file wins.
+
+## 7. Show a conclusion before acting on it
+
+Anything beyond the immediate request — another repository, a public API signature, deleting
+files, killing processes, pushing to a remote, changing branch protection — state what you would do
+and why, and wait. Investigating, measuring, and reporting are always fine.
+
+When a rule and backward compatibility conflict, **the rule wins.** List the callers that break and
+fix them; do not keep the forbidden thing "so nothing breaks".
+
+## 8. Verification that can fail
+
+- Never read a build's exit code through a pipe (`| tail`, `| grep`). Redirect to a file, then read
+  `$?`. A background command ending in `echo` always reports 0.
+- Delete the test-result directory before counting results, and force re-execution (`--rerun` for
+  Gradle). Stale XML otherwise reports an old, larger number.
+- Run independent test modules as **separate** invocations. One invocation can hide an ordering
+  dependency.
+- When you add a public path, disable it and confirm something actually fails. If nothing fails,
+  nothing uses it.
+- **Do not trust an agent's report.** Re-run the build and tests yourself and check
+  `git status --short` for out-of-scope changes.
+- **Never `git add -A`.** Stage explicit paths. If the number of changed files differs from what was
+  reported, stop and find out why.
+- Measurements run alone, unfiltered, after checking `uptime`.
+
+## 9. Reporting
+
+Report by category, and never put them in one column:
+**feature added / defect fixed / test added / documentation corrected / deleted.**
+A rising test count is not progress when the tests assert an absence. Before writing "nothing left
+to implement", say what you counted against.
+
+## 10. Agents
+
+- A headless agent (`claude -p`, `agy -p`) has **no next turn**. Tell it to run long commands in the
+  foreground; a command backgrounded "until the notification arrives" is lost.
+- Pass the model explicitly. Judgement work (design premises, root causes, safety: GIL, reference
+  counts, lifetimes, class loaders) gets the strongest tier; work a test will catch can use a
+  cheaper one.
+- Give every agent prompt the absolute paths it may write to, and repeat rule 2 in it.
+
+---
+
+Sections 11 onward are specific to **Gemstone** (`github.com/LogitAI/Gemstone`).
+
+## 11. What this repository is
+
+Gemstone is a multiplatform AI chat system made of two programs that live side by side:
+
+| Directory | Language | What it is |
+|---|---|---|
+| `app/` | Kotlin, Compose Multiplatform | The chat client. Targets Android, iOS, desktop (JVM) and web (Wasm). |
+| `api/` | Python 3.12 | The model-serving API: FastAPI + WebSocket server, model wrappers, inference backends, tools. |
+
+The client talks to the API over HTTP and a WebSocket. The two are versioned together; a protocol
+change touches both and is specified in `docs/SPEC.md` first (rule 5).
+
+Read `docs/INTENT.md` and `docs/SPEC.md` before changing behaviour. `PROJECT.md` (Korean) records
+status, decisions and open questions.
+
+## 12. Build, run and test
+
+Gradle and Python are independent toolchains. Neither needs the other to build.
+
+**Python API** (requires Python `>=3.12,<3.13`, managed with `uv`):
+
+```bash
+uv sync                                   # install dependencies from pyproject.toml
+python -m api run server                  # serve on 0.0.0.0:23100
+python -m api run server 127.0.0.1 23100  # explicit host and port
+```
+
+`python -m api` with no arguments crashes (`api/__main__.py` reads `sys.argv[1]` unguarded); always
+pass `run server`.
+
+**Kotlin client** (module `:app`):
+
+| Goal | Command |
+|---|---|
+| Desktop app | `./gradlew :app:run` |
+| Desktop installers (Dmg / Msi / Deb) | `./gradlew :app:packageDistributionForCurrentOS` |
+| Android debug install | `./gradlew :app:installDebug` |
+| Web (Wasm) dev server | `./gradlew :app:wasmJsBrowserDevelopmentRun` |
+| Common tests on the JVM | `./gradlew :app:desktopTest` |
+| iOS | Open `app/src/iosMain/swift/iosApp.xcodeproj` in Xcode (see the caveat in `docs/SPEC.md`) |
+
+Verification follows rule 8: redirect Gradle output to a file and read `$?`; run each target's test
+task as its own invocation; delete `app/build/test-results/` before counting.
+
+**Current test reality.** The only Kotlin test (`app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`)
+asserts `1 + 2 == 3`. The Python API has no tests; `api/src/test/` holds static web assets, not tests.
+Do not report either as coverage. New behaviour starts with a real failing test (rule 5); where the
+test belongs for Python code is an open decision recorded in `PROJECT.md`.
+
+## 13. Generated and large files
+
+- `api/src/test/webpack/` is a **committed build output** of the Wasm client, served by the API at
+  `/`. Do not hand-edit it. Regenerate it from `app/` with Gradle and say so in the report.
+- Model weights are downloaded from Hugging Face at first use (several GB per model). The
+  transformers backend caches quantised weights in `api/src/main/backend/.cache/`. Never commit
+  weights or caches, and do not trigger a model download from a test or a script without asking.
+- `.idea/` is partly tracked; leave IDE files alone unless the task is about them.
+
+## 14. Secrets and configuration
+
+- API keys live in `.env` (git-ignored). `.env.example` is the template; today it holds only
+  `SERPAPI_KEY`. Never commit `.env`, and never print a key into a log or a report.
+- The client finds the server through `GEMSTONE_SERVER_HOST` / `GEMSTONE_SERVER_PORT` (system
+  property or environment variable; the port value includes its leading colon, e.g. `:23100`).
+  The web client always uses the host it was served from.
+
+## 15. Dependencies
+
+- Do not add a version pin to `torch`, `torchvision` or `torchaudio` in `pyproject.toml`; the file
+  says so, and the Windows wheels come from the CUDA index configured under `[tool.uv.sources]`.
+- `llama-cpp-python` is pulled from prebuilt wheels per OS and Python version. Changing those URLs
+  changes what every Windows and Linux user installs; treat it as a rule-7 change.
+- Kotlin and library versions live in `gradle/libs.versions.toml`. Bump them there, not inline.
+
+## 16. Line endings and encoding
+
+Write every file as UTF-8 with LF line endings. Some checkouts of this repository have had files
+converted to CRLF by an editor; do not mass-convert files you were not asked to touch, because the
+whole-file diff hides real changes. The repository has no `.gitattributes` yet — adding one is a
+decision for the maintainer.
+
+## 17. Documentation layout
+
+| File | Language | Purpose |
+|---|---|---|
+| `README.md` | English | Public front page. The only Markdown file kept at the root on `main`. |
+| `docs/locale/README_ko.md` | Korean | Faithful translation of `README.md`. Update both together. |
+| `PROJECT.md` | Korean | Status, structure, decisions, open questions. Develop-only. |
+| `docs/INTENT.md` | English | Why the project exists and what it is not. Develop-only. |
+| `docs/SPEC.md` | English | The behavioural contract, each item with a status. Develop-only. |
+| `docs/guide/` | en + ko | Static GitHub Pages site. Run `python3 docs/guide/check_guide.py` after editing it. |
+| `docs/<topic>/` | any | Every other document lives in a topic subdirectory, never directly in `docs/`. |
+
+`README.md` and `docs/locale/README_ko.md` must not link to develop-only files (`AGENTS.md`,
+`CLAUDE.md`, `PROJECT.md`, `docs/INTENT.md`, `docs/SPEC.md`); those links are dead on `main`.
+
+`CLAUDE.md` contains exactly `@AGENTS.md` and nothing else.

@@ -235,3 +235,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+############################################
+# Agent workspace (see AGENTS.md section 2)
+#
+.worktrees/
+.tmp/
