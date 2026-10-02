@@ -13,7 +13,10 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from api.src.main import server, settings
+from api.src.main import registry as registry_module
+from api.src.main import server
+from api.src.main.registry import Registry
+from api.tests.test_ollama_api import QWEN, FakeStore
 
 
 class FakeTokenizer:
@@ -40,15 +43,17 @@ class FakeEngine:
         yield from self.chunks
 
 
-class FakeModel:
-    def __init__(self, engine):
-        self.runtime = engine
+def serve(monkeypatch, engine):
+    """ Every model name the registry is asked for loads `engine` (SPEC S1.14). """
+    reg = Registry(loader=lambda hf_id: engine, store=FakeStore(QWEN))
+    monkeypatch.setattr(registry_module, "registry", reg)
+    return reg
 
 
 @pytest.fixture
 def fake(monkeypatch):
     engine = FakeEngine()
-    monkeypatch.setattr(settings.Session, "load_model", classmethod(lambda cls, model_name: FakeModel(engine)))
+    serve(monkeypatch, engine)
     return engine
 
 
@@ -100,7 +105,8 @@ def test_models_lists_the_catalogue_in_openai_format(client):
     assert response.status_code == 200
     body = response.json()
     assert body["object"] == "list"
-    assert {m["id"] for m in body["data"]} == set(settings.MODEL_LIST)
+    assert {m["id"] for m in body["data"]} == {m["id"] for m in registry_module.registry.models()}
+    assert {"qwen3", "default"} <= {m["id"] for m in body["data"]}
     assert all(m["object"] == "model" and "owned_by" in m and "created" in m for m in body["data"])
 
 
@@ -306,7 +312,7 @@ def test_disconnect_mid_stream_cancels_generation(monkeypatch):
             return endless(messages, **kwargs)
 
     engine = EndlessEngine()
-    monkeypatch.setattr(settings.Session, "load_model", classmethod(lambda cls, model_name: FakeModel(engine)))
+    reg = serve(monkeypatch, engine)
 
     body = json.dumps({"model": "qwen3", "stream": True, "messages": [{"role": "user", "content": "Hi"}]}).encode()
 
@@ -345,6 +351,7 @@ def test_disconnect_mid_stream_cancels_generation(monkeypatch):
     assert closed.wait(timeout=10)
     assert seen["cancel"].is_set()
     assert time.monotonic() - started_at < 20
+    assert reg.loaded() and reg._resident.active == 0  # the lease was released
 
 
 # --- errors -------------------------------------------------------------------------------------
@@ -369,7 +376,7 @@ def test_malformed_request_is_400_in_openai_error_format(client):
 # --- a real model --------------------------------------------------------------------------------
 
 def test_real_model_stream_equals_engine_output(engine, monkeypatch):
-    monkeypatch.setattr(settings.Session, "load_model", classmethod(lambda cls, model_name: FakeModel(engine)))
+    serve(monkeypatch, engine)
     messages = [{"role": "user", "content": "The capital of France is"}]
     expected = "".join(engine(messages, temperature=0, max_new_tokens=16)).strip()
 

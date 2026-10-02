@@ -1,7 +1,8 @@
 """
 OpenAI-compatible API (SPEC S1.10): `GET /v1/models` and `POST /v1/chat/completions`.
 
-The routes call a model's engine directly. Unlike the chat app's WebSocket (S1.4, S1.6), they never
+The routes call a model's engine directly; the engine comes from the registry (SPEC S1.14), which
+the chat app's WebSocket and the Ollama API share, so a model is loaded once for all of them. Unlike the chat app's WebSocket (S1.4, S1.6), they never
 run tools: a `<tool_call>` the model emits is returned to the client as `tool_calls`, and the
 client sends the result back as a `tool` message in its next request.
 
@@ -21,7 +22,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel as Schema, ConfigDict, ValidationError
 from starlette.concurrency import run_in_threadpool
 
-from . import settings
+from . import registry as registry_module
+from .registry import in_catalogue, parse_keep_alive, resolve_model_name
 
 
 router = APIRouter(prefix="/v1")
@@ -353,12 +355,13 @@ def _engine_error(e: Exception) -> APIError:
 
 @router.get("/models")
 def list_models():
+    """ The models the registry knows (SPEC S1.2). """
     created = int(time.time())
     return {
         "object": "list",
         "data": [
-            {"id": model_id, "object": "model", "created": created, "owned_by": "gemstone"}
-            for model_id in settings.MODEL_LIST
+            {"id": m["id"], "object": "model", "created": created, "owned_by": "gemstone"}
+            for m in registry_module.registry.models()
         ],
     }
 
@@ -384,13 +387,50 @@ async def _chat_completions(request: Request):
                        param=".".join(map(str, first["loc"])))
     if req.n not in (None, 1):
         raise APIError(400, "Only n=1 is supported.", param="n")
-    if req.model not in settings.MODEL_LIST:
+    try:
+        keep_alive = parse_keep_alive(body.get("keep_alive"))  # extension, as in Ollama
+    except ValueError as e:
+        raise APIError(400, str(e), param="keep_alive")
+    try:
+        hf_id = resolve_model_name(req.model)
+    except LookupError:
         raise APIError(404, f"The model '{req.model}' does not exist.", param="model", code="model_not_found")
 
     messages = _engine_messages(req.messages)
     tools = _select_tools(req)
-    model = await run_in_threadpool(settings.Session.load_model, req.model)
-    engine = model.runtime
+
+    # Hold the model in the registry until the reply ends; a catalogue model missing from the cache
+    # is fetched on first use.
+    registry = registry_module.registry
+    try:
+        lease = await run_in_threadpool(registry.acquire, hf_id, keep_alive, in_catalogue(req.model))
+    except LookupError:
+        raise APIError(404, f"The model '{req.model}' does not exist locally; pull it first.",
+                       param="model", code="model_not_found")
+    release = _once(lambda: registry.release(lease))
+    try:
+        return await _complete(req, lease, release, messages, tools)
+    except BaseException:
+        release()
+        raise
+
+
+def _once(fn):
+    """ `fn` runs on the first call only, from whichever path ends the request first. """
+    lock, done = threading.Lock(), []
+
+    def wrapper():
+        with lock:
+            if done:
+                return
+            done.append(True)
+        fn()
+    return wrapper
+
+
+async def _complete(req: ChatCompletionRequest, lease, release, messages, tools):
+    """ Run the completion on the leased model. Returns a response that calls `release` once done. """
+    model, engine = lease.model, lease.engine
 
     parameters = _model_defaults(model)
     for name in ("temperature", "top_p", "top_k", "min_p"):
@@ -413,6 +453,7 @@ async def _chat_completions(request: Request):
         finally:
             with anyio.CancelScope(shield=True):
                 await run_in_threadpool(generation.close)
+            release()
         content = "".join(v for k, v in events if k == "content")
         reasoning = "".join(v for k, v in events if k == "reasoning")
         message: Dict[str, Any] = {"role": "assistant", "content": content or None}
@@ -434,6 +475,7 @@ async def _chat_completions(request: Request):
     except Exception as e:
         with anyio.CancelScope(shield=True):
             await run_in_threadpool(generation.close)
+        release()
         raise _engine_error(e)
 
     include_usage = bool((req.stream_options or {}).get("include_usage"))
@@ -473,6 +515,7 @@ async def _chat_completions(request: Request):
             # Also reached when the client disconnects: stop generation and free the engine (#35).
             with anyio.CancelScope(shield=True):
                 await run_in_threadpool(generation.close)
+            release()
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})

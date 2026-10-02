@@ -9,7 +9,9 @@ import threading
 import json
 import os
 
-from .settings import STATIC_DIR, WEBPACK_DIR, MODEL_LIST, Session
+from .settings import STATIC_DIR, WEBPACK_DIR, Session
+from . import registry as registry_module
+from .registry import DEFAULT_KEEP_ALIVE, in_catalogue, resolve_model_name
 from .models.config import ChatHistory
 from .openai_api import router as openai_router
 from .ollama_api import router as ollama_router
@@ -46,8 +48,11 @@ def index():
 
 @app.get("/api/models")
 def models():
-    """ List available models """
-    return MODEL_LIST
+    """ List the models the registry knows (SPEC S1.2): {id: {model_name, model_description}} """
+    return {
+        m["id"]: dict(model_name=m["model_name"], model_description=m["model_description"])
+        for m in registry_module.registry.models()
+    }
 
 
 @app.post("/api/models/{model_id}/sessions/")
@@ -82,7 +87,7 @@ async def chat_with_streaming(websocket: WebSocket):
     try:
         session_id = json.loads(await websocket.receive_text()).get("session_id")
         session = Session(session_id=session_id)
-        model = session.model
+        hf_id = resolve_model_name(session.model_id)
     except Exception:
         traceback.print_exc()
         await websocket.close(code=1008, reason="Invalid session ID or model not found.")
@@ -92,10 +97,21 @@ async def chat_with_streaming(websocket: WebSocket):
     chat_history.extend(json.loads(await websocket.receive_text()))
     user_prompt = await websocket.receive_text()
 
+    # The registry owns the model (SPEC S1.14): the lease keeps it resident until this generation
+    # ends, then the default keep_alive applies. A catalogue model missing from the cache is
+    # fetched on first use, as the app always did.
+    registry = registry_module.registry
+    try:
+        lease = await run_in_threadpool(registry.acquire, hf_id, DEFAULT_KEEP_ALIVE, in_catalogue(session.model_id))
+    except Exception:
+        traceback.print_exc()
+        await websocket.close(code=1008, reason="Model not found or failed to load.")
+        return
+
     # Generation runs on worker threads so the event loop stays free; a client that goes away
     # sets `cancel`, which stops generation and frees the model for the next request.
     cancel = threading.Event()
-    tokens = model.chat(
+    tokens = lease.model.chat(  # a generator: nothing runs until the first `next`
         chat_history, user_prompt, print_output=True, cancel=cancel, tool_call_caches=session.tool_call_caches
     )
     done = object()
@@ -108,8 +124,10 @@ async def chat_with_streaming(websocket: WebSocket):
         pass  # the client went away mid-stream
     finally:
         cancel.set()
-        await run_in_threadpool(tokens.close)
-        del model
+        try:
+            await run_in_threadpool(tokens.close)
+        finally:
+            registry.release(lease)
 
 
 if __name__ == '__main__':

@@ -1,19 +1,21 @@
 """
-Model management for the Ollama-compatible API (SPEC S1.14): model names, the local model store
-(the Hugging Face cache) and residency.
+Model management (SPEC S1.14): model names, the catalogue, the local model store (the Hugging Face
+cache) and residency.
+
+The registry is the single owner of loaded models. The chat app's WebSocket (S1.4), the
+OpenAI-compatible API (S1.10) and the Ollama-compatible API (S1.15) all take their engine, and the
+model class wrapped around it, from `registry`; sessions (S1.3) hold a model name only.
 
 Residency: one model is resident at a time. Loading another one waits until the resident model has
 no generation in flight, then unloads it. After a request the model stays loaded for its
 `keep_alive` (default 5 minutes; 0 unloads at once; negative keeps it loaded until another model
 replaces it), and an idle model is never unloaded while a generation is running.
-
-The registry is independent of the chat app's sessions (`settings.Session`): they hold their own
-model objects.
 """
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Iterable, List, Optional
 import gc
+import importlib
 import json
 import os
 import re
@@ -22,11 +24,25 @@ import threading
 import time
 
 
+@dataclass(frozen=True)
+class CatalogueEntry:
+    """ A Gemstone model: its weights, the name the app shows, and its model class. """
+    hf_id: str
+    model_name: str
+    model_description: str
+    module: str  # api/src/main/models/<module>, whose `Model` is the model class
+
+
+# Gemstone's own models (S1.7), listed by GET /api/models and /v1/models.
+CATALOGUE = dict(
+    qwen3=CatalogueEntry("Qwen/Qwen3-0.6B", "Qwen 3", "Qwen 3 0.6B", "qwen3"),
+)
+CATALOGUE["default"] = CATALOGUE["qwen3"]
+
 # Ollama-style and Gemstone names that map to a Hugging Face model id. Any other name containing
 # a "/" is taken to be a Hugging Face id itself (an optional ":latest" tag is ignored).
 MODEL_ALIASES = {
-    "qwen3": "Qwen/Qwen3-0.6B",          # Gemstone id (settings.MODEL_LIST, models/qwen3)
-    "default": "Qwen/Qwen3-0.6B",        # Gemstone alias of qwen3
+    **{name: entry.hf_id for name, entry in CATALOGUE.items()},  # qwen3, default
     "qwen3:0.6b": "Qwen/Qwen3-0.6B",     # Ollama library name
     "qwen3:latest": "Qwen/Qwen3-0.6B",
     "smollm2:135m": "HuggingFaceTB/SmolLM2-135M-Instruct",  # Ollama's smollm2:135m is the instruct model
@@ -52,6 +68,31 @@ def resolve_model_name(name: str) -> str:
     if "/" in repo and tag in ("", "latest") and re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
         return repo
     raise LookupError(f"model '{name}' not found")
+
+
+def in_catalogue(name: str) -> bool:
+    """ True for a Gemstone model name (`qwen3`, `default`). """
+    return isinstance(name, str) and name.strip().lower() in CATALOGUE
+
+
+_plain_classes: dict = {}
+
+
+def model_class_for(hf_id: str) -> type:
+    """
+    The model class that wraps `hf_id`'s engine: the Gemstone class (system prompt, sampling
+    defaults, server-side tools) for a catalogue model, otherwise a plain `BaseModel` subclass
+    with no tools.
+    """
+    for entry in CATALOGUE.values():
+        if entry.hf_id == hf_id:
+            return importlib.import_module(f"{__package__}.models.{entry.module}").Model
+    if hf_id not in _plain_classes:
+        from .models.base import BaseModel
+        from .utils import FunctionCalling
+        _plain_classes[hf_id] = type("PlainModel", (BaseModel,), dict(
+            model_id=hf_id, supported_tools=FunctionCalling.DISABLED))
+    return _plain_classes[hf_id]
 
 
 _DURATION = re.compile(r"(\d+(?:\.\d*)?|\.\d+)(ns|us|µs|ms|s|m|h)")
@@ -196,9 +237,13 @@ def now_iso() -> str:
 
 
 def load_engine(hf_id: str):
-    """ Load a model from the local cache only; /api/pull is how a model gets there. """
+    """
+    Load a model from the local cache only; /api/pull (or a first use of a catalogue model) is how
+    a model gets there. The model class's context length and engine options apply.
+    """
     from .engine import Engine
-    return Engine(hf_id, local_files_only=True)
+    cls = model_class_for(hf_id)
+    return Engine(hf_id, context_length=cls.context_length or None, local_files_only=True, **cls.engine_options)
 
 
 @dataclass(eq=False)
@@ -206,6 +251,7 @@ class Resident:
     hf_id: str
     engine: object
     info: Optional[LocalModel]
+    model: object = None  # the model class instance wrapping `engine`
     active: int = 0
     keep_alive: float = DEFAULT_KEEP_ALIVE
     expires_at: Optional[datetime] = None  # None while active, or forever
@@ -222,22 +268,45 @@ class Lease:
     def engine(self):
         return self.resident.engine
 
+    @property
+    def model(self):
+        """ The model class instance (prompt, defaults, tools) around the engine. """
+        return self.resident.model
+
 
 class Registry:
-    def __init__(self, loader: Optional[Callable[[str], object]] = None, store=None):
+    def __init__(self, loader: Optional[Callable[[str], object]] = None, store=None,
+                 model_class: Optional[Callable[[str], type]] = None):
         self.loader = loader or load_engine
         self.store = store if store is not None else HFStore()
+        self.model_class = model_class or model_class_for
         self._cond = threading.Condition()
         self._resident: Optional[Resident] = None
         self._loading = False
 
+    # -- the catalogue -----------------------------------------------------------------------------
+
+    def models(self) -> List[dict]:
+        """
+        The models a request can name: Gemstone's catalogue, then every other model in the local
+        store under its Hugging Face id. Entries: `id`, `hf_id`, `model_name`, `model_description`.
+        """
+        entries = [dict(id=name, hf_id=e.hf_id, model_name=e.model_name, model_description=e.model_description)
+                   for name, e in CATALOGUE.items()]
+        known = {e.hf_id for e in CATALOGUE.values()}
+        for info in self.store.list():
+            if info.hf_id not in known:
+                entries.append(dict(id=info.hf_id, hf_id=info.hf_id, model_name=info.hf_id,
+                                    model_description=f"{info.hf_id} (Hugging Face)"))
+        return entries
+
     # -- residency ---------------------------------------------------------------------------------
 
-    def acquire(self, hf_id: str, keep_alive: float = DEFAULT_KEEP_ALIVE) -> Lease:
+    def acquire(self, hf_id: str, keep_alive: float = DEFAULT_KEEP_ALIVE, fetch: bool = False) -> Lease:
         """
         Load `hf_id` if it is not resident (unloading the resident model once it is idle) and hold
-        it for one request. Raises LookupError when the model is not in the local store.
-        Every acquire must be followed by `release`.
+        it for one request. Raises LookupError when the model is not in the local store, unless
+        `fetch` is set: then it is downloaded first. Every acquire must be followed by `release`.
         """
         with self._cond:
             while True:
@@ -258,16 +327,21 @@ class Registry:
         start = time.perf_counter()
         try:
             info = self.store.get(hf_id)
+            if info is None and fetch:
+                self.store.download(hf_id)
+                info = self.store.get(hf_id)
             if info is None:
                 raise LookupError(f"model '{hf_id}' not found, try pulling it first")
             engine = self.loader(hf_id)
+            model = self.model_class(hf_id)(engine=engine)
         except BaseException:
             with self._cond:
                 self._loading = False
                 self._cond.notify_all()
             raise
+        print("INFO:     Model", hf_id, "is LOADED")
         with self._cond:
-            self._resident = Resident(hf_id, engine, info, active=1, keep_alive=keep_alive)
+            self._resident = Resident(hf_id, engine, info, model, active=1, keep_alive=keep_alive)
             self._loading = False
             self._cond.notify_all()
             return Lease(self._resident, time.perf_counter() - start)
@@ -356,6 +430,8 @@ class Registry:
         self._cancel_timer(r)
         self._resident = None
         r.engine = None
+        r.model = None
+        print("INFO:     Model", r.hf_id, "is UNLOADED")
         self._cond.notify_all()
         gc.collect()
         torch = sys.modules.get("torch")  # free accelerator memory only if torch is already in use

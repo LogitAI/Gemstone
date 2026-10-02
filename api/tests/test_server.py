@@ -8,8 +8,10 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 
-from api.src.main import server, settings
+from api.src.main import registry as registry_module
+from api.src.main import server
 from api.src.main.models.base import BaseModel
+from api.src.main.registry import Registry
 from api.src.main.models.config import ChatHistory
 from api.src.main.utils import FunctionCalling
 
@@ -26,11 +28,15 @@ class TinyModel(BaseModel):
 
 @pytest.fixture
 def client(engine, monkeypatch):
-    model = TinyModel(engine=engine)
-    monkeypatch.setattr(settings.Session, "load_model", classmethod(lambda cls, model_name: model))
+    from api.tests.test_ollama_api import QWEN, FakeStore
+
+    # The session's model ("default") resolves to Qwen3; the registry loads the test engine for it
+    # and wraps it in TinyModel (SPEC S1.14).
+    reg = Registry(loader=lambda hf_id: engine, store=FakeStore(QWEN), model_class=lambda hf_id: TinyModel)
+    monkeypatch.setattr(registry_module, "registry", reg)
     with TestClient(server.app) as c:
         yield c
-    model.clean_up()
+    reg.unload()
 
 
 def open_chat(client, prompt="The capital of France is"):

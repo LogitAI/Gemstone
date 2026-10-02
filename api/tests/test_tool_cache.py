@@ -11,6 +11,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
+from api.src.main import registry as registry_module
 from api.src.main import server, settings
 from api.src.main.models.base import BaseModel
 from api.src.main.models.config import ChatHistory
@@ -77,9 +78,7 @@ def model(lookups):
             ),
         )
 
-    m = CacheModel(engine=FakeEngine())
-    yield m
-    m.clean_up()
+    return CacheModel(engine=FakeEngine())
 
 
 def run_turn(model, history, prompt, caches):
@@ -141,7 +140,11 @@ def test_cache_is_dropped_when_the_session_closes(model):
 
 
 def test_websocket_second_turn_uses_the_session_cache(model, lookups, monkeypatch):
-    monkeypatch.setattr(settings.Session, "load_model", classmethod(lambda cls, name: model))
+    from api.tests.test_ollama_api import QWEN, FakeStore
+
+    reg = registry_module.Registry(
+        loader=lambda hf_id: model.runtime, store=FakeStore(QWEN), model_class=lambda hf_id: type(model))
+    monkeypatch.setattr(registry_module, "registry", reg)
 
     def turn(client, session_id, history, prompt):
         with client.websocket_connect("/api/chat/streaming") as ws:

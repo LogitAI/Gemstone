@@ -1,31 +1,19 @@
-from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
-import gc
 import os
 
 
-@dataclass
-class ModelSettings:
-    """ Model settings """
-    model_name: str
-    model_description: str
-
-
-MODEL_LIST = dict(
-    qwen3=ModelSettings(
-        model_name="Qwen 3",
-        model_description="Qwen 3 0.6B"
-    ),
-)
-MODEL_LIST['default'] = MODEL_LIST['qwen3']
+# The model catalogue lives in the registry (registry.CATALOGUE, SPEC S1.2).
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../test/static")
 WEBPACK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../test/webpack")
 
 
 class Session:
-    """ Session Manager """
+    """
+    Session Manager. A session holds a model name and its tool-result cache, never an engine:
+    the registry (registry.py, SPEC S1.14) loads, shares and unloads models.
+    """
     __sessions: dict[str, 'Session'] = {}
     _initialized = False
 
@@ -49,40 +37,15 @@ class Session:
             print("INFO:     Session", self.session_id, "is CREATED for model", model_id)
             self.__sessions[self.session_id] = self
             print("INFO:     Current sessions:", list(self.__sessions))
-            self._model = None
             self.tool_call_caches: dict[str, str] = {}  # tool call id -> result (S1.6)
-
-    @property
-    def model(self):
-        """ Get the model instance for this session """
-        if self._model is None:
-            self._model = self.load_model(self.model_id)
-        return self._model
-
-    @classmethod
-    def load_model(cls, model_name: str):
-        """ Load a model by its name """
-        if model_name not in MODEL_LIST:
-            raise ValueError(f"Model '{model_name}' is not supported.")
-        exec(f"from .models import {model_name}", globals())
-        return globals()[model_name].Model()
 
     @classmethod
     def close(cls, session_id: str):
-        """ Close the session """
+        """ Close the session. The model stays resident for its keep_alive (S1.14). """
         if session_id in cls.__sessions:
             print("INFO:     Session", session_id, "is DELETED for model", cls.__sessions[session_id].model_id)
-            import sys
-            if sys.getrefcount(cls.__sessions[session_id]._model) <= 3:
-                cls.__sessions[session_id]._model.clean_up()
-                cls.__sessions[session_id]._model = None  # Clear the model reference
             cls.__sessions[session_id].tool_call_caches.clear()
             del cls.__sessions[session_id]
             print("INFO:     Current sessions:", list(cls.__sessions))
-            cls.clean_up()
         else:
             raise ValueError(f"Session {session_id} not found")
-
-    @classmethod
-    def clean_up(cls):
-        gc.collect()
