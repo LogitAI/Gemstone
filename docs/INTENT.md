@@ -62,7 +62,9 @@ Decided by the maintainer on 2026-10-02:
 - **The serving system depends on [torchnative](https://github.com/thisisthepy/torchnative)**, so the
   same Python model code can later run on the device (G2).
 - **Continuous batching and paged attention will be introduced.**
-- vLLM is not a dependency.
+- vLLM is not a dependency. This follows from the decisions above rather than being a separate
+  decision: vLLM assumes the CUDA PyTorch runtime and cannot run on torchnative. If the direction
+  changes, revisit it.
 
 The README says the API is *planned to become OpenAI-like*. The rationale, the engine proposal and
 the risks are recorded in [`serving/engine.md`](serving/engine.md).

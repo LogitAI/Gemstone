@@ -158,7 +158,8 @@ Decided (2026-10-02):
   with `llama-cpp-python` and `bitsandbytes`.
 - Models load through `transformers` (`from_pretrained`) on torchnative.
 - The Python requirement becomes `>=3.13` (torchnative's floor). Today it is `>=3.12,<3.13`.
-- vLLM is not a dependency.
+- vLLM is not a dependency: a consequence of the torchnative decision, because vLLM assumes the
+  CUDA PyTorch runtime and cannot run on torchnative.
 
 Proposal, pending confirmation: the engine is transformers 5.x continuous batching with a paged KV
 cache, kernels live in torchnative, and the engine uses only the public `torch` / `transformers`
