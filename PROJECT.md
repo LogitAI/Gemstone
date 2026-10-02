@@ -119,7 +119,7 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 
 | 마일스톤 | 목표일 | 범위 | 완료 기준 | 이슈 |
 |---|---|---|---|---|
-| **M1 단일 torchnative 엔진** | 2026-11-16 | transformers `generate` 기반 엔진 하나(공개 torch API 만 사용). GGUF·BIN·GPTQ 제거. Python 3.13. q8_0. WebSocket 스트리밍 채팅과 서버 측 도구 유지. 요청 직렬화. 연결이 끊기면 생성 중단. 모델은 Llama 3.2 1B/3B, SmolLM2 | Llama 3.2 1B 로 torchnative(cpu, mps) 스트리밍 채팅 테스트 통과. `llama-cpp`·`bitsandbytes` import 0건 | #36 #35 |
+| **M1 단일 torchnative 엔진** | 2026-11-16 | transformers `generate` 기반 엔진 하나(공개 torch API 만 사용). GGUF·BIN·GPTQ 제거. Python 3.13. q8_0. WebSocket 스트리밍 채팅과 서버 측 도구 유지. 요청 직렬화. 연결이 끊기면 생성 중단. 모델은 Qwen3-0.6B(기본)와 SmolLM2. 자동 테스트는 torchnative #23(Qwen3 상류 일치)이 착지할 때까지 SmolLM2 | torchnative(cpu, mps)에서 스트리밍 채팅 테스트 통과. `llama-cpp`·`bitsandbytes` import 0건 | #36 #35 |
 | **M2 동시 요청** | 2026-11-23 | transformers `generate_batch` 기반 연속 배칭과 페이지드 KV 캐시. attention 은 `sdpa_paged`/`eager_paged`(순수 torch op) | 동시 두 요청의 출력이 순차 생성과 같다. 같은 시드의 샘플링은 배칭 여부와 상관없이 같은 출력을 낸다. 처리량 측정 기록 | #63 #64 |
 | **M3 실사용 Ollama 대체** | 2026-11-30 | OpenAI 호환 `/v1/chat/completions`(스트리밍, tool call pass-through)·`/v1/models`. Ollama 핵심 엔드포인트(`/api/chat` `/api/generate` `/api/tags` `/api/show` `/api/pull` `/api/delete` `/api/ps`)와 `keep_alive`. 상주 모델 1개. Hugging Face 의 q8_0 | OpenAI·Ollama 클라이언트로 tool call 왕복 테스트 통과. Ollama 클라이언트로 작은 모델 pull·list·채팅·삭제 | #65 #66 #57 |
 | **M4 성능과 범위 확장** | 2027-02-26 | 아래 "11월에서 뺀 것" | 항목별 이슈에 적음 | #74 #75 #67 #37 |
@@ -132,7 +132,7 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 | 4비트(Q4) 가중치, GGUF 가져오기 | torchnative Q4_0 의 생성 품질이 떨어진다(logit RMS 29.5%). GGUF 리더도 없다(TN-M3). 11월에는 q8_0 만 낸다 | #67 |
 | 여러 모델 동시 상주와 축출, 나머지 Ollama 명령(create/copy/push, Modelfile, embeddings) | 실사용에 필요한 최소 범위 밖이다. 상주 모델 1개와 핵심 엔드포인트로 시작한다 | #75 |
 | 세션 프리픽스 캐시 | 체감 속도는 좋아지지만 정확성 기능은 아니다 | #37 |
-| Qwen3 와 큰 모델(8B 이상) | Qwen3 은 torchnative 에서 아직 검증되지 않았다. 4비트가 없으면 8B 는 메모리 부담이 크다 | — |
+| Qwen3 4B 이상과 8B 이상 모델 | Qwen3 은 0.6B 부터 검증한다(torchnative #23). 4비트가 없으면 큰 모델은 메모리 부담이 크다 | — |
 | CUDA 서버 경로 | torchnative CUDA 는 연결만 돼 있고 실행해 본 적이 없다 | — |
 
 **위험**
