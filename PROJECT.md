@@ -19,8 +19,9 @@ INTENT → SPEC 순으로 그쪽이 이깁니다.
 |---|---|---|
 | WebSocket 스트리밍 채팅 (`/api/chat/streaming`) | 구현 | `api/src/main/server.py` |
 | 도구 호출 (날씨·공휴일·환율·계산·웹검색) | 구현 | `api/src/main/utils/` |
-| GGUF / BIN 백엔드, Qwen3 14B · Llama 3.1 8B | 구현 | `api/src/main/backend/`, `models/` |
-| GPTQ 백엔드 | 예정 | `gptq.py` 는 import 불가한 스크래치 |
+| GGUF / BIN 백엔드, Qwen3 14B · Llama 3.1 8B | 구현됨, **제거 중(전환기)** | `api/src/main/backend/`, `models/` |
+| GPTQ 백엔드 | **폐기** | `gptq.py` 는 import 불가한 스크래치. 다중 백엔드 구조를 버림 |
+| torchnative 단일 서빙 시스템(Ollama 대체) | 예정 | 연속 배칭·페이지드 어텐션 포함. 엔진 세부는 제안 단계(transformers 5.x 연속 배칭 + 페이지드 KV 캐시, 커널은 torchnative), 확정 대기 |
 | 비스트리밍 `POST /api/chat`, `GET /api/hello` | 부분 (결함) | `BaseModel.chat` 이 항상 제너레이터 |
 | 세션 API | 부분 (결함) | 오류를 `raise` 대신 `return`, 404 대신 500 |
 | Android · 데스크톱 · 웹 클라이언트 | 구현 | `app/build.gradle.kts` |
@@ -43,7 +44,7 @@ api/                Python 3.12 모델 서빙 서버
   src/main/server.py      FastAPI 엔드포인트
   src/main/settings.py    모델 목록, 세션 관리
   src/main/models/        모델 정의 (qwen3, llama3)
-  src/main/backend/       추론 런타임 (gguf, bin)
+  src/main/backend/       추론 런타임 (gguf, bin — 제거 중, torchnative 로 대체 예정)
   src/main/utils/         도구 구현과 도구 호출 루프
   src/test/               정적 웹 자산 (빌드된 Wasm 클라이언트, Brython 테스트 페이지) — 테스트 코드 아님
 docs/               INTENT, SPEC, locale/, guide/ (GitHub Pages)
@@ -78,11 +79,11 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
    의도와 맞는가? 범위 안인지, 선택 기능인지, 서버 전용인지 결정이 필요하다.
 2. **원격 모델 제공자**(OpenAI, Anthropic, HF Inference) — 옛 README 트리에만 있고 코드·의도에 없다.
 3. **동기화(sync)** 가 무엇을 무엇으로 동기화하는지.
-4. **온디바이스 엔진** — Python 을 통한 llama.cpp 인가, torchnative 인가.
+4. **서빙 엔진 세부** — 방향은 torchnative 단일 시스템으로 확정(다중 백엔드·vLLM 사용 안 함). 엔진 구성은 미확정: 현재 제안은 transformers 5.x 연속 배칭 + 페이지드 KV 캐시를 엔진으로, 커널은 torchnative.
 5. **Python 테스트의 위치** — `api/src/test/` 는 운영 중인 정적 자산이 차지하고 있다.
    테스트 디렉터리를 새로 정할지, 자산을 옮길지.
 6. **릴리스 흐름** — 공통 규정은 `release` 브랜치와 `tools/release/sync-release.sh` 를 전제하지만
    이 저장소에는 `release/cnu` 브랜치만 있고 스크립트가 없다.
-7. **줄바꿈** — `.gitattributes` 가 없다. 편집기가 CRLF 로 바꾼 파일이 많으니 정책이 필요하다.
+7. **줄바꿈** — 해결됨: LF 로 고정(`.gitattributes`, `.bat`/`.cmd`/`.ps1` 만 CRLF). `docs/build/` 는 추적한다.
 8. **GitHub Pages 배포** — "브랜치에서 배포" 는 `/` 또는 `/docs` 만 고를 수 있어 `docs/guide/` 를
    바로 쓸 수 없다. Actions 워크플로를 둘지 결정이 필요하다.

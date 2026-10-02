@@ -128,7 +128,7 @@ Gemstone is a multiplatform AI chat system made of two programs that live side b
 | Directory | Language | What it is |
 |---|---|---|
 | `app/` | Kotlin, Compose Multiplatform | The chat client. Targets Android, iOS, desktop (JVM) and web (Wasm). |
-| `api/` | Python 3.12 | The model-serving API: FastAPI + WebSocket server, model wrappers, inference backends, tools. |
+| `api/` | Python 3.12 | The model-serving API: FastAPI + WebSocket server, model wrappers, inference backends (being removed in favour of a torchnative-based serving system), tools. |
 
 The client talks to the API over HTTP and a WebSocket. The two are versioned together; a protocol
 change touches both and is specified in `docs/SPEC.md` first (rule 5).
@@ -199,8 +199,8 @@ test belongs for Python code is an open decision recorded in `PROJECT.md`.
 
 Write every file as UTF-8 with LF line endings. Some checkouts of this repository have had files
 converted to CRLF by an editor; do not mass-convert files you were not asked to touch, because the
-whole-file diff hides real changes. The repository has no `.gitattributes` yet — adding one is a
-decision for the maintainer.
+whole-file diff hides real changes. The repository's `.gitattributes` fixes LF (only `.bat`, `.cmd` and `.ps1` are CRLF), so new
+files should simply be written with LF. `docs/build/` is tracked (an exception in `.gitignore`).
 
 ## 17. Documentation layout
 

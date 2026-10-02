@@ -51,9 +51,13 @@ model's reasoning and its tool calls.
 ### G5 — A model-serving API in Python
 
 Until G2 lands, and for machines that are stronger than the phone in your pocket, a Python server
-loads open-weight models (Qwen 3, Llama 3.1) through quantised backends (llama.cpp GGUF,
-transformers + bitsandbytes) and serves them to the client. The README says the API is *planned to
-become OpenAI-like*.
+loads open-weight models (Qwen 3, Llama 3.1) and serves them to the client. The goal is local,
+private LLM serving — an Ollama replacement — on torchnative, as a single serving system.
+Continuous batching and paged attention are planned. The multiple backends in the code today
+(llama.cpp GGUF, transformers + bitsandbytes, GPTQ) are being removed (transition); vLLM will not be
+used. The README says the API is *planned to become OpenAI-like*.
+
+> Decision relayed by the maintainer, 2026-10-02.
 
 ### G6 — Tool-using assistant
 
@@ -102,7 +106,7 @@ with `domain/`, `adapter/` and `framework/` layers.
   server is for the user's own machine or network.
 - **Not the Python runtime.** Embedding CPython in Kotlin is Python Multiplatform's job. Gemstone
   consumes it; it does not reimplement it.
-- **Not a general LLM SDK.** The Python backends exist to serve the chat app, not as a library for
+- **Not a general LLM SDK.** The Python serving system exists to serve the chat app, not as a library for
   other applications.
 
 ## 5. Questions the intent does not yet answer
@@ -114,5 +118,6 @@ with `domain/`, `adapter/` and `framework/` layers.
    project tree lists `OpenAIClient.kt`, `AnthropicClient.kt` and `HuggingFaceClient.kt`, but the
    feature list never mentions remote models and no such code exists.
 3. What does *sync* mean (G7)?
-4. Which on-device inference engine will the client use once Python Multiplatform is adopted
-   (llama.cpp through Python, or a sibling such as torchnative)?
+4. What exactly is the torchnative serving engine? Current proposal, pending confirmation:
+   transformers 5.x continuous batching with a paged KV cache as the engine, kernels in torchnative.
+   (The choice of torchnative over llama.cpp is decided; this engine detail is not.)

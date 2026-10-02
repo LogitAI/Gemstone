@@ -95,9 +95,9 @@ frames; tool activity arrives as `<tool_call> … </tool_call>` frames (S1.6).
 - Code: `api/src/main/utils/__init__.py`, `api/src/main/utils/*.py`, `api/src/main/models/base.py`.
   Test: none.
 
-### S1.7 Models — `implemented` · G5
+### S1.7 Models — `implemented` (weights format changes with the backend transition) · G5
 
-| Id | Weights | Backend | Context | Tools |
+| Id | Weights | Backend (being removed) | Context | Tools |
 |---|---|---|---|---|
 | `qwen3` (default) | `Qwen/Qwen3-14B-GGUF`, `*Q4_K_M.gguf` | GGUF (default) or BIN | 40 960 | yes |
 | `llama3` | `lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF`, `*Q4_K_M.gguf` | GGUF | 131 072 | no |
@@ -105,15 +105,19 @@ frames; tool activity arrives as `<tool_call> … </tool_call>` frames (S1.6).
 Each model carries its own system prompt and sampling defaults. Code:
 `api/src/main/models/qwen3/model.py`, `api/src/main/models/llama3/model.py`. Test: none.
 
-### S1.8 Inference backends — `partial` · G5
+### S1.8 Inference backends — `being removed` (transition) · G5
 
-- **GGUF** (`llama-cpp-python`) — `implemented`. Downloads from the Hugging Face Hub; tries GPU
+The multiple-backend structure is dropped. These backends stay in the code until the torchnative
+serving system (S1.11) replaces them.
+
+
+- **GGUF** (`llama-cpp-python`) — `being removed` (works today). Downloads from the Hugging Face Hub; tries GPU
   layer counts `-1, 50, 45, … 0` until one fits; on Windows always uses CPU (0 layers).
   Default backend. Code: `api/src/main/backend/gguf.py`.
-- **BIN** (`transformers` + `bitsandbytes`) — `implemented`. Quantises to 4-bit NF4 on first load
+- **BIN** (`transformers` + `bitsandbytes`) — `being removed` (works today). Quantises to 4-bit NF4 on first load
   and caches the result under `api/src/main/backend/.cache/`. Code: `api/src/main/backend/bin.py`.
-- **GPTQ** — `planned`. `api/src/main/backend/gptq.py` is a scratch script (it contains a bare
-  `pip install` line) and is not importable.
+- **GPTQ** — `being removed` (never worked). `api/src/main/backend/gptq.py` is a scratch script (it
+  contains a bare `pip install` line) and is not importable; it will not be completed.
 - A backend whose library is missing is replaced by a dummy and a warning is printed.
 - Test: none.
 
@@ -127,6 +131,21 @@ Each model carries its own system prompt and sampling defaults. Code:
 ### S1.10 OpenAI-compatible API — `planned` · G5
 
 The README states the plan. No code.
+
+### S1.11 torchnative serving engine — `planned` · G5
+
+A single serving system built on torchnative replaces S1.8; the goal is local, private LLM serving
+— an Ollama replacement. vLLM will not be used. Engine detail is a proposal, pending confirmation:
+transformers 5.x continuous batching with a paged KV cache as the engine, kernels in torchnative.
+No code on `develop`.
+
+### S1.12 Continuous batching — `planned` · G5
+
+Serve concurrent requests in one batch. Part of S1.11; no code.
+
+### S1.13 Paged attention (paged KV cache) — `planned` · G5
+
+Paged KV cache for the serving engine. Part of S1.11; no code.
 
 ## 2. Client (`app/`)
 
@@ -206,6 +225,7 @@ line is hard-coded in Korean (`"…초 동안"`, `ChatScreen.kt`).
 ### S3.1 On-device inference through Python Multiplatform — `planned` · G2, G3
 
 The client embeds the Python model code via Python Multiplatform and runs without the server.
+The engine is the torchnative-based system of S1.11.
 No code on `develop`.
 
 ### S3.2 Offline operation — `planned` · G3

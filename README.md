@@ -40,7 +40,7 @@ separate server and no network at all.
 - 🚀 **Streaming chat** — tokens arrive over a WebSocket as they are generated and render as Markdown on the fly.
 - 🧠 **Visible reasoning** — the model's `<think>` block appears as a collapsible panel with elapsed time.
 - 🔌 **Tool calling** — weather, public holidays, exchange rates, a calculator and web search, run server-side in parallel and fed back to the model.
-- 📦 **Quantised open-weight models** — Qwen 3 14B and Llama 3.1 8B in 4-bit, through llama.cpp (GGUF) or transformers + bitsandbytes.
+- 📦 **Quantised open-weight models** — Qwen 3 14B and Llama 3.1 8B in 4-bit. Today they run through llama.cpp (GGUF) or transformers + bitsandbytes; those backends are being removed (transition) in favour of a single serving system built on torchnative — an Ollama replacement, with continuous batching and paged attention planned. The engine detail is a proposal, pending confirmation.
 - 🖥️ **Native desktop feel** — a JetBrains Jewel decorated window, with Dmg / Msi / Deb installers.
 
 ## 🚀 Quick start
@@ -56,7 +56,7 @@ cd Gemstone
 uv sync
 ```
 
-Optional — llama.cpp with CUDA:
+Optional — llama.cpp with CUDA (transitional: the llama.cpp backend is being removed):
 
 ```bash
 CMAKE_ARGS="-DGGML_CUDA=on -DLLAVA_BUILD=off -DCMAKE_CUDA_ARCHITECTURES=native" \
@@ -112,7 +112,7 @@ flowchart LR
     end
     subgraph Server["api/ — Python 3.12"]
         EP["FastAPI<br/>/api/chat/streaming"] --> M["Model<br/>Qwen 3 · Llama 3.1"]
-        M --> B["Backend<br/>GGUF · BIN"]
+        M --> B["Backend (being removed)<br/>GGUF · BIN → torchnative"]
         M <--> T["Tools<br/>weather · search · …"]
     end
     WS -- "WebSocket :23100" --> EP
@@ -124,8 +124,8 @@ flowchart LR
 | `app/src/commonMain` | UI, view models, network protocol — shared by every target |
 | `app/src/{android,ios,desktop,wasmJs}Main` | One entry point per platform |
 | `app/src/cioMain` | Ktor CIO engine shared by Android, iOS and desktop |
-| `api/src/main/models` | Model definitions: prompts, sampling defaults, supported backends |
-| `api/src/main/backend` | Inference runtimes: llama.cpp (GGUF), transformers 4-bit (BIN) |
+| `api/src/main/models` | Model definitions: prompts, sampling defaults |
+| `api/src/main/backend` | Inference runtimes: llama.cpp (GGUF), transformers 4-bit (BIN) — being removed (transition) in favour of a single torchnative-based serving system |
 | `api/src/main/utils` | Tool implementations and the tool-calling loop |
 
 ## 📍 Status

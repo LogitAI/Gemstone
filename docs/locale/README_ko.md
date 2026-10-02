@@ -40,7 +40,7 @@
 - 🚀 **스트리밍 채팅** — 토큰이 생성되는 즉시 WebSocket 으로 도착하고, 그 자리에서 Markdown 으로 렌더링됩니다.
 - 🧠 **보이는 추론 과정** — 모델의 `<think>` 블록이 경과 시간과 함께 접을 수 있는 패널로 표시됩니다.
 - 🔌 **도구 호출** — 날씨, 공휴일, 환율, 계산기, 웹 검색을 서버에서 병렬로 실행하고 결과를 모델에 돌려줍니다.
-- 📦 **양자화된 공개 가중치 모델** — Qwen 3 14B 와 Llama 3.1 8B 를 4비트로, llama.cpp(GGUF) 또는 transformers + bitsandbytes 로 구동합니다.
+- 📦 **양자화된 공개 가중치 모델** — Qwen 3 14B 와 Llama 3.1 8B 를 4비트로 구동합니다. 현재는 llama.cpp(GGUF) 또는 transformers + bitsandbytes 로 돌지만, 이 백엔드들은 제거 중(전환기)이며 torchnative 위의 단일 서빙 시스템 — Ollama 대체 — 으로 옮겨갑니다. 연속 배칭(continuous batching)과 페이지드 어텐션(paged attention)은 예정입니다. 엔진 세부는 제안 단계이며 확정 대기 중입니다.
 - 🖥️ **네이티브 데스크톱 경험** — JetBrains Jewel 데코레이티드 윈도우와 Dmg / Msi / Deb 설치 파일.
 
 ## 🚀 빠른 시작
@@ -56,7 +56,7 @@ cd Gemstone
 uv sync
 ```
 
-선택 — CUDA 를 쓰는 llama.cpp:
+선택 — CUDA 를 쓰는 llama.cpp (전환기: llama.cpp 백엔드는 제거 중):
 
 ```bash
 CMAKE_ARGS="-DGGML_CUDA=on -DLLAVA_BUILD=off -DCMAKE_CUDA_ARCHITECTURES=native" \
@@ -112,7 +112,7 @@ flowchart LR
     end
     subgraph Server["api/ — Python 3.12"]
         EP["FastAPI<br/>/api/chat/streaming"] --> M["모델<br/>Qwen 3 · Llama 3.1"]
-        M --> B["백엔드<br/>GGUF · BIN"]
+        M --> B["백엔드 (제거 중)<br/>GGUF · BIN → torchnative"]
         M <--> T["도구<br/>날씨 · 검색 · …"]
     end
     WS -- "WebSocket :23100" --> EP
@@ -124,8 +124,8 @@ flowchart LR
 | `app/src/commonMain` | UI, 뷰모델, 네트워크 프로토콜 — 모든 타깃이 공유 |
 | `app/src/{android,ios,desktop,wasmJs}Main` | 플랫폼별 진입점 하나씩 |
 | `app/src/cioMain` | Android, iOS, 데스크톱이 공유하는 Ktor CIO 엔진 |
-| `api/src/main/models` | 모델 정의: 프롬프트, 샘플링 기본값, 지원 백엔드 |
-| `api/src/main/backend` | 추론 런타임: llama.cpp(GGUF), transformers 4비트(BIN) |
+| `api/src/main/models` | 모델 정의: 프롬프트, 샘플링 기본값 |
+| `api/src/main/backend` | 추론 런타임: llama.cpp(GGUF), transformers 4비트(BIN) — 제거 중(전환기), torchnative 기반 단일 서빙 시스템으로 대체 |
 | `api/src/main/utils` | 도구 구현과 도구 호출 루프 |
 
 ## 📍 현황

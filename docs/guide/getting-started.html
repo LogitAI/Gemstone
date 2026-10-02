@@ -49,7 +49,7 @@
 <pre><code>git clone https://github.com/LogitAI/Gemstone.git
 cd Gemstone
 uv sync</code></pre>
-  <p data-lang="en">Want llama.cpp on CUDA? Rebuild it with GPU support:</p><p data-lang="ko">llama.cpp 를 CUDA 로 돌리려면 GPU 지원으로 다시 빌드합니다:</p>
+  <p data-lang="en">Want llama.cpp on CUDA? (Transitional — the llama.cpp backend is being removed.) Rebuild it with GPU support:</p><p data-lang="ko">llama.cpp 를 CUDA 로 돌리려면(전환기 — llama.cpp 백엔드는 제거 중) GPU 지원으로 다시 빌드합니다:</p>
 <pre><code>CMAKE_ARGS="-DGGML_CUDA=on -DLLAVA_BUILD=off -DCMAKE_CUDA_ARCHITECTURES=native" \
 FORCE_CMAKE=1 uv pip install llama-cpp-python --no-cache-dir --force-reinstall --upgrade</code></pre>
 
@@ -68,7 +68,7 @@ python -m api run server 127.0.0.1 23100  <span class="c"># explicit host and po
   <ul>
     <li data-lang="en"><code>python -m api</code> without <code>run server</code> crashes with <code>IndexError</code> — always pass both words.</li><li data-lang="ko"><code>run server</code> 없이 <code>python -m api</code> 를 실행하면 <code>IndexError</code> 로 죽습니다 — 두 단어를 꼭 넘기세요.</li>
     <li data-lang="en">“transformers module is not installed” or “llama_cpp module is not installed” is a warning: that backend is disabled, the other still works.</li><li data-lang="ko">“transformers module is not installed” 나 “llama_cpp module is not installed” 는 경고입니다. 그 백엔드만 꺼지고 다른 쪽은 동작합니다.</li>
-    <li data-lang="en">The model failed to load on GPU? The GGUF backend retries with fewer GPU layers automatically, down to CPU only.</li><li data-lang="ko">GPU 로드에 실패했나요? GGUF 백엔드는 GPU 레이어 수를 줄여가며 CPU 전용까지 자동으로 재시도합니다.</li>
+    <li data-lang="en">The model failed to load on GPU? The GGUF backend (being removed) retries with fewer GPU layers automatically, down to CPU only.</li><li data-lang="ko">GPU 로드에 실패했나요? GGUF 백엔드(제거 중)는 GPU 레이어 수를 줄여가며 CPU 전용까지 자동으로 재시도합니다.</li>
   </ul>
   <nav class="pager" aria-label="Pages"><a href="index.html"><span data-lang="en">← Home</span><span data-lang="ko">← 홈</span></a><a href="concepts.html"><span data-lang="en">Concepts →</span><span data-lang="ko">개념 →</span></a></nav>
 </div></div>

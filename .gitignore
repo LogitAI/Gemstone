@@ -6,6 +6,8 @@
 .gradle/
 .kotlin/
 build/
+!docs/build/
+!docs/build/**
 **/build/
 !src/**/build/
 kotlin-js-store/
@@ -71,6 +73,8 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+!docs/build/
+!docs/build/**
 develop-eggs/
 dist/
 downloads/
