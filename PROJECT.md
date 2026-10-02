@@ -109,3 +109,17 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
    바꾸면 된다(`main` 푸시 때 배포).
 9. **Ollama 대체의 범위** — 모델 pull/list/rm/ps, keep-alive, 여러 모델 동시 상주, Ollama 호환 API 중
    어디까지 할지. 4비트 품질과 GGUF 읽기는 torchnative 쪽 작업에 달려 있다.
+
+## 7. 마일스톤 (2026-10-03 확정)
+
+서빙 전환(#57) 기준이다. GitHub 마일스톤과 같다. 날짜는 목표이며, torchnative 쪽 진척에 따라
+조정한다. 조정하면 이 표와 GitHub 마일스톤을 함께 고친다.
+
+| 마일스톤 | 목표일 | 범위 | 완료 기준 | 이슈 | 날짜 근거 |
+|---|---|---|---|---|---|
+| **M1 단일 torchnative 엔진** | 2026-11-30 | 실험(연속 배칭이 torchnative 에서 도는지)과 엔진안 확정. GGUF·BIN·GPTQ 제거. Python 3.13. q8_0. 스트리밍과 도구 호출 유지. 동시 요청 직렬화 | 작은 모델로 스트리밍 채팅 테스트 통과. `llama-cpp`·`bitsandbytes` import 0건 | #57 #36 #35 | Gemstone 쪽 작업이 대부분이다. Qwen3 은 torchnative 에서 미검증이라 Llama 3.2·SmolLM2 로 시작한다 |
+| **M2 연속 배칭·페이지드 어텐션** | 2027-01-31 | 동시 요청 배칭, 페이지드 KV 캐시, 세션 캐시 | 동시 두 요청의 출력이 순차 생성과 같다. 처리량 측정 기록 | #63 #64 #37 | 연속 배칭이 torchnative 에서 아직 돌아 본 적이 없다. 속도는 torchnative 의 paged attention 커널에 달려 있다 |
+| **M3 Ollama 대체** | 2027-03-31 | OpenAI 호환 API(tool call pass-through), Ollama 호환 API, 모델 pull/list/rm/ps·keep-alive, 4비트 가중치 | OpenAI·Ollama 클라이언트로 tool call 왕복 테스트 통과 | #65 #66 #67 #61 | 4비트 품질과 GGUF 읽기가 torchnative 작업에 달려 있다. 가장 불확실한 날짜다 |
+
+마일스톤 밖: GraalVM 데스크톱 빌드(`compose-multiplatform-extended` 소관), 온디바이스 실행(#42),
+클라이언트 기능(#38 #39 #41 #43). #40 은 백엔드 제거로 대상이 사라져 닫았다(not planned).
