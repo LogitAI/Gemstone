@@ -35,6 +35,9 @@ torchnative. That keeps D1 true: one codebase, two substrates.
 
 ### 3.1 vLLM is not a dependency
 
+This is not a separate decision by the maintainer. It follows from D1 and D2 (2026-10-02): vLLM
+assumes the CUDA PyTorch runtime and cannot run on torchnative. If D1 or D2 changes, revisit it.
+
 - vLLM's kernels (`vllm._C`, paged attention) link against the libtorch C++ ABI. torchnative
   replaces `torch._C` and has no libtorch ABI to link against.
 - vLLM relies on `torch.compile` and CUDA graphs. torchnative recommends refusing `torch.compile`

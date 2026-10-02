@@ -79,7 +79,8 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
   - 서빙 시스템은 **torchnative 에 의존**한다. 그래서 Python 요구 버전이 `>=3.13` 으로 오른다.
   - Gemstone 은 **Ollama 대체제**가 된다.
   - **연속 배칭(continuous batching)과 페이지드 어텐션(paged attention)을 도입**한다.
-  - vLLM 은 의존성으로 쓰지 않는다. torchnative 위에서 돌 수 없고(libtorch ABI·`torch.compile`
+  - vLLM 은 의존성으로 쓰지 않는다. 별도의 사용자 결정이 아니라 위 결정(torchnative 기반 단일 서빙)에서
+    따라 나오는 것이다. 방향이 바뀌면 함께 다시 본다. torchnative 위에서 돌 수 없고(libtorch ABI·`torch.compile`
     전제), 서버와 기기에 스택이 둘이 되기 때문이다.
 - **네이티브 데스크톱 (2026-10-02)**: GraalVM native-image 는 `compose-multiplatform-extended`
   (Compose Gradle 플러그인 포크)가 종합 관리한다. 플러그인에 아직 코드가 없어서, 그때까지는 Gemstone 의
