@@ -110,16 +110,36 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 9. **Ollama 대체의 범위** — 모델 pull/list/rm/ps, keep-alive, 여러 모델 동시 상주, Ollama 호환 API 중
    어디까지 할지. 4비트 품질과 GGUF 읽기는 torchnative 쪽 작업에 달려 있다.
 
-## 7. 마일스톤 (2026-10-03 확정)
+## 7. 마일스톤 (2026-10-03 재조정: 11월 말 실사용)
 
-서빙 전환(#57) 기준이다. GitHub 마일스톤과 같다. 날짜는 목표이며, torchnative 쪽 진척에 따라
-조정한다. 조정하면 이 표와 GitHub 마일스톤을 함께 고친다.
+서빙 전환(#57) 기준이다. GitHub 마일스톤과 같다. 사용자 지시에 따라 **실제로 쓸 수 있는 수준을
+2026-11-30 까지** 낸다. 실사용 수준이란 torchnative 단일 엔진으로 로컬 모델을 받아 스트리밍 채팅과
+도구 호출을 하고, 동시 요청을 처리하고, OpenAI·Ollama 호환 API 로 붙는 상태다. 날짜를 당기려고
+품질 기준을 낮추지는 않았다. 대신 범위를 줄였다.
 
-| 마일스톤 | 목표일 | 범위 | 완료 기준 | 이슈 | 날짜 근거 |
-|---|---|---|---|---|---|
-| **M1 단일 torchnative 엔진** | 2026-11-30 | 실험(연속 배칭이 torchnative 에서 도는지)과 엔진안 확정. GGUF·BIN·GPTQ 제거. Python 3.13. q8_0. 스트리밍과 도구 호출 유지. 동시 요청 직렬화 | 작은 모델로 스트리밍 채팅 테스트 통과. `llama-cpp`·`bitsandbytes` import 0건 | #57 #36 #35 | Gemstone 쪽 작업이 대부분이다. Qwen3 은 torchnative 에서 미검증이라 Llama 3.2·SmolLM2 로 시작한다 |
-| **M2 연속 배칭·페이지드 어텐션** | 2027-01-31 | 동시 요청 배칭, 페이지드 KV 캐시, 세션 캐시 | 동시 두 요청의 출력이 순차 생성과 같다. 샘플링도 같은 시드면 배칭 여부와 상관없이 같은 출력을 낸다(M3 API 가 요청별 `seed` 를 받기 때문, torchnative#15 와 같은 기준). 처리량 측정 기록 | #63 #64 #37 | 연속 배칭이 torchnative 에서 아직 돌아 본 적이 없다. 속도는 torchnative 의 paged attention 커널에 달려 있다 |
-| **M3 Ollama 대체** | 2027-03-31 | OpenAI 호환 API(tool call pass-through), Ollama 호환 API, 모델 pull/list/rm/ps·keep-alive, 4비트 가중치 | OpenAI·Ollama 클라이언트로 tool call 왕복 테스트 통과 | #65 #66 #67 #61 | 4비트 품질과 GGUF 읽기가 torchnative 작업에 달려 있다. 가장 불확실한 날짜다 |
+| 마일스톤 | 목표일 | 범위 | 완료 기준 | 이슈 |
+|---|---|---|---|---|
+| **M1 단일 torchnative 엔진** | 2026-11-16 | transformers `generate` 기반 엔진 하나(공개 torch API 만 사용). GGUF·BIN·GPTQ 제거. Python 3.13. q8_0. WebSocket 스트리밍 채팅과 서버 측 도구 유지. 요청 직렬화. 연결이 끊기면 생성 중단. 모델은 Llama 3.2 1B/3B, SmolLM2 | Llama 3.2 1B 로 torchnative(cpu, mps) 스트리밍 채팅 테스트 통과. `llama-cpp`·`bitsandbytes` import 0건 | #36 #35 |
+| **M2 동시 요청** | 2026-11-23 | transformers `generate_batch` 기반 연속 배칭과 페이지드 KV 캐시. attention 은 `sdpa_paged`/`eager_paged`(순수 torch op) | 동시 두 요청의 출력이 순차 생성과 같다. 같은 시드의 샘플링은 배칭 여부와 상관없이 같은 출력을 낸다. 처리량 측정 기록 | #63 #64 |
+| **M3 실사용 Ollama 대체** | 2026-11-30 | OpenAI 호환 `/v1/chat/completions`(스트리밍, tool call pass-through)·`/v1/models`. Ollama 핵심 엔드포인트(`/api/chat` `/api/generate` `/api/tags` `/api/show` `/api/pull` `/api/delete` `/api/ps`)와 `keep_alive`. 상주 모델 1개. Hugging Face 의 q8_0 | OpenAI·Ollama 클라이언트로 tool call 왕복 테스트 통과. Ollama 클라이언트로 작은 모델 pull·list·채팅·삭제 | #65 #66 #57 |
+| **M4 성능과 범위 확장** | 2027-02-26 | 아래 "11월에서 뺀 것" | 항목별 이슈에 적음 | #74 #75 #67 #37 |
 
-마일스톤 밖: GraalVM 데스크톱 빌드(`compose-multiplatform-extended` 소관), 온디바이스 실행(#42),
-클라이언트 기능(#38 #39 #41 #43). #40 은 백엔드 제거로 대상이 사라져 닫았다(not planned).
+**11월에서 뺀 것과 이유**
+
+| 뺀 것 | 이유 | 이슈 |
+|---|---|---|
+| 빠른 paged attention 커널 | 완전히 새로 만들어야 하는 torchnative 커널이다(TN-M2). 11월에는 순수 torch op 경로로 정확성만 맞춘다 | #74 |
+| 4비트(Q4) 가중치, GGUF 가져오기 | torchnative Q4_0 의 생성 품질이 떨어진다(logit RMS 29.5%). GGUF 리더도 없다(TN-M3). 11월에는 q8_0 만 낸다 | #67 |
+| 여러 모델 동시 상주와 축출, 나머지 Ollama 명령(create/copy/push, Modelfile, embeddings) | 실사용에 필요한 최소 범위 밖이다. 상주 모델 1개와 핵심 엔드포인트로 시작한다 | #75 |
+| 세션 프리픽스 캐시 | 체감 속도는 좋아지지만 정확성 기능은 아니다 | #37 |
+| Qwen3 와 큰 모델(8B 이상) | Qwen3 은 torchnative 에서 아직 검증되지 않았다. 4비트가 없으면 8B 는 메모리 부담이 크다 | — |
+| CUDA 서버 경로 | torchnative CUDA 는 연결만 돼 있고 실행해 본 적이 없다 | — |
+
+**위험**
+
+- torchnative TN-M1(스트리밍, q8_0)이 11-13 에 나온다. Gemstone M1(11-16)까지 사흘뿐이다. 그래서 엔진은
+  upstream torch 로 먼저 개발하고 11-13 이후 torchnative 로 옮긴다. 공개 API 만 쓰므로 코드는 같다.
+- 연속 배칭 경로가 torchnative 에서 한 번도 실행된 적이 없다. torchnative 가 11-16 까지 cpu·mps 에서
+  돌려야 M2(11-23)를 맞춘다. Native 런타임 설계자에게 요청했다(막히는 op 목록은 11-06 쯤 받기로 요청).
+- 커널 없이 순수 op 로 돌리면 긴 문맥이 느리다. 11월 실사용 범위는 1B–3B 모델이다.
+- 날짜가 밀리면 이 표와 GitHub 마일스톤을 함께 고친다.
