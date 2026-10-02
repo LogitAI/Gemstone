@@ -64,7 +64,8 @@ class BaseModel:
         chat_history: ChatHistory,
         tools: List[Dict[str, str]],
         stream: bool = True,
-        print_output: bool = False
+        print_output: bool = False,
+        tool_call_caches: Optional[dict] = None
     ) -> Union[Generator[str, None, None], str]:
         """ Parse tool calling from the model's output """
         result_obj = FunctionCallResult()
@@ -77,12 +78,13 @@ class BaseModel:
                 if self.special_tags.TOOLCALL in word:  # Start of a tool call
                     started = True
                     if buffer:
-                        buffer = 0
+                        buffer = ""
                 elif self.special_tags.TOOLCALL_END in word:  # End of a tool call
                     if buffer:
                         result_obj.stage(
                             buffer,
-                            (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END)
+                            (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END),
+                            tool_call_caches
                         )
                         state = result_obj.state
                         if state is not None:
@@ -106,7 +108,8 @@ class BaseModel:
                 outputs.replace(json_string, "")  # Remove the tool call from the output
                 result_obj.stage(
                     json_string,
-                    (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END)
+                    (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END),
+                    tool_call_caches
                 )
 
         # Finalize the tool calls
@@ -149,6 +152,7 @@ class BaseModel:
         max_new_tokens: int = 1024,
         repeat_penalty: float = 1.0,
         print_output: bool = False,
+        tool_call_caches: Optional[dict] = None,
         **kwargs
     ) -> Union[Generator[str, None, None], str]:
         """ Process a chat request
@@ -167,6 +171,7 @@ class BaseModel:
             max_new_tokens (int, optional): Max new tokens. Defaults to 1024.
             repeat_penalty (float, optional): Repeat penalty. Defaults to 1.0.
             print_output (bool, optional): Print output. Defaults to False.
+            tool_call_caches (dict, optional): The session's tool-result cache (call id -> result).
             **kwargs: Additional arguments
         """
         def adaptive_special_tag_buffering(outs, wait_tokens_for=6):
@@ -228,7 +233,8 @@ class BaseModel:
                 chat_history=chat_history,
                 tools=tools,
                 stream=stream,
-                print_output=print_output
+                print_output=print_output,
+                tool_call_caches=tool_call_caches
             )
 
             if stream:

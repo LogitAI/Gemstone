@@ -116,7 +116,8 @@ async def chat_with_streaming(websocket: WebSocket):
 
     try:
         session_id = json.loads(await websocket.receive_text()).get("session_id")
-        model = Session(session_id=session_id).model
+        session = Session(session_id=session_id)
+        model = session.model
     except Exception:
         traceback.print_exc()
         await websocket.close(code=1008, reason="Invalid session ID or model not found.")
@@ -129,7 +130,9 @@ async def chat_with_streaming(websocket: WebSocket):
     # Generation runs on worker threads so the event loop stays free; a client that goes away
     # sets `cancel`, which stops generation and frees the model for the next request.
     cancel = threading.Event()
-    tokens = model.chat(chat_history, user_prompt, print_output=True, cancel=cancel)
+    tokens = model.chat(
+        chat_history, user_prompt, print_output=True, cancel=cancel, tool_call_caches=session.tool_call_caches
+    )
     done = object()
     try:
         while (token := await run_in_threadpool(next, tokens, done)) is not done:
