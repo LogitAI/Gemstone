@@ -196,8 +196,12 @@ at: Gradle 8.13 cannot configure this build on JDK 25. A JDK 21 must be installe
 Verification follows rule 8: redirect Gradle output to a file and read `$?`; run each target's test
 task as its own invocation; delete `app/build/test-results/` before counting.
 
-**Current test reality.** Python tests live in `api/tests/` and cover the engine, the WebSocket
-stream and the backend removal; `api/src/test/` holds static web assets, not tests. The only Kotlin
+**Current test reality.** Python tests live in `api/tests/`: the engine and continuous batching
+(`test_engine.py`, `test_batching.py`), the WebSocket stream (`test_server.py`), the OpenAI and
+Ollama APIs, model residency and lease release, the tool-result cache, and the backend removal.
+Most API tests use a fake engine and need no model; the engine, batching and server tests load
+SmolLM2-135M in float32 (the equality criteria are stated for float32). `api/src/test/` holds
+static web assets, not tests. The only Kotlin
 test (`app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`) asserts `1 + 2 == 3`; do not
 report it as coverage. New behaviour starts with a real failing test (rule 5).
 

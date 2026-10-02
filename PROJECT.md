@@ -13,26 +13,31 @@ INTENT → SPEC 순으로 그쪽이 이깁니다.
 모든 플랫폼에서 같은 클라이언트로 쓰는 오픈소스 AI 채팅 시스템. 지금은 Python 서버가 모델을 돌리고,
 목표는 Python Multiplatform 으로 모델을 **앱 안에서** 돌리는 것이다.
 
-## 2. 현재 상태 (코드를 읽고 판정 — 테스트로 검증된 항목은 없음)
+## 2. 현재 상태 (2026-10-03, develop 기준)
+
+`api/tests/` 의 Python 테스트는 CI(GitHub Actions)에서 실제 모델(SmolLM2-135M, float32)로 돈다. 표에서
+"테스트 있음"은 그 검증을 뜻하고, 나머지는 코드를 읽고 판정했다.
 
 | 영역 | 상태 | 근거 |
 |---|---|---|
-| WebSocket 스트리밍 채팅 (`/api/chat/streaming`) | 구현 | `api/src/main/server.py` |
-| 도구 호출 (날씨·공휴일·환율·계산·웹검색) | 구현 | `api/src/main/utils/` |
-| 단일 서빙 엔진 (transformers, PyTorch 위) | 구현, 테스트 있음 | `api/src/main/engine.py`, `api/tests/`. torchnative 위 검증은 TN-M1(10-24) 이후 |
-| GGUF · BIN · GPTQ 백엔드, Llama 3.1 모델 | **제거됨** (#84) | Qwen3-0.6B 로 교체 |
-| torchnative 단일 서빙 시스템(Ollama 대체) | 예정 | 연속 배칭·페이지드 어텐션 포함. 엔진 세부는 제안 단계(transformers 5.x 연속 배칭 + 페이지드 KV 캐시, 커널은 torchnative), 확정 대기. [`docs/serving/engine.md`](docs/serving/engine.md) |
-| 모델 관리 · Ollama 호환 API · 4비트 가중치 | 예정 | Ollama 대체에서 따라 나오는 항목. 범위 확정 대기 (SPEC S1.14–S1.16) |
-| 비스트리밍 `POST /api/chat`, `GET /api/hello` | 부분 (결함) | `BaseModel.chat` 이 항상 제너레이터 |
-| 세션 API | 부분 (결함) | 오류를 `raise` 대신 `return`, 404 대신 500 |
+| 단일 서빙 엔진 (transformers) | 구현, 테스트 있음 | `engine.py` (#85). torchnative 위 검증은 TN-M1(10-24) 이후 (#84) |
+| 연속 배칭 · 페이지드 KV 캐시 | 구현, 테스트 있음 | `engine.py` (#91). 동일성 기준은 float32. 처리량 측정과 torchnative 검증은 남음 |
+| 모델 상주 (앱 · OpenAI · Ollama 공유, keep_alive) | 구현, 테스트 있음 | `registry.py`, `leases.py` (#92, #94) |
+| OpenAI 호환 API (`/v1`, tool call pass-through) | 부분, 테스트 있음 | `openai_api.py` (#88). n>1, logprobs, embeddings 없음 |
+| Ollama 호환 API (핵심 8개, pull/delete/ps) | 부분, 테스트 있음 | `ollama_api.py` (#90). 상주 모델 1개, create/copy/push·embed 는 M4 |
+| WebSocket 스트리밍 채팅 (`/api/chat/streaming`) | 구현, 테스트 있음 | `server.py`. 연결이 끊기면 생성 중단 |
+| 도구 호출과 세션별 결과 캐시 | 구현, 캐시는 테스트 있음 | `utils/` (#87, PR #53 기능 이식) |
+| 4비트 가중치 · GGUF | 예정 (M4) | torchnative TN-M3 에 달림 (#67) |
+| GGUF · BIN · GPTQ 백엔드, Llama 3.1, 옛 `POST /api/chat`·`/api/hello` | **제거됨** | #85, #90 |
+| 세션 API | 부분 (결함) | 오류를 `raise` 대신 `return`, 404 대신 500, 생성 시 모델 이름 미검증 |
 | Android · 데스크톱 · 웹 클라이언트 | 구현 | `app/build.gradle.kts` |
 | iOS | 부분 | Xcode 스크립트가 없는 `:composeApp` 모듈을 호출 |
 | 모델 선택 | 부분 | 클라이언트에 하드코딩, 서버 목록 미사용 |
 | 대화 기록 | 부분 | 메모리에만 |
 | 설정 화면, 도메인 계층(Clean Architecture) | 예정 | 빈 파일 |
-| 온디바이스 추론 · 오프라인 · 동기화 · OpenAI 호환 API | 예정 | 코드 없음 |
-| 네이티브 데스크톱 (GraalVM) | 진행 중 | 메인 체크아웃의 미커밋 작업. 장기적으로 compose-multiplatform-extended 가 관리 |
-| 테스트 | **없음** | Kotlin 테스트 1개가 `1 + 2 == 3` 만 확인 |
+| 온디바이스 추론 · 오프라인 · 동기화 | 예정 | 코드 없음 |
+| 네이티브 데스크톱 (GraalVM) | 구현 (Windows x64), 미실행 | #71. 장기적으로 compose-multiplatform-extended 가 관리 |
+| Kotlin 테스트 | **없음** | `1 + 2 == 3` 하나뿐 |
 
 ## 3. 구조
 
