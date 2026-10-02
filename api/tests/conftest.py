@@ -28,11 +28,16 @@ CHAT_TEMPLATE = (
 
 @pytest.fixture(scope="session")
 def engine():
+    import torch
     from api.src.main.engine import Engine
 
     try:
         return Engine(
             TEST_MODEL,
+            # float32: the equality tests (batched == sequential, seeded batch-invariance) are
+            # stated in float32. In the checkpoint's bfloat16, top logits tie exactly often enough
+            # that a one-ulp difference between batch shapes flips the argmax.
+            dtype=torch.float32,
             chat_template=CHAT_TEMPLATE,
             local_files_only=not ALLOW_DOWNLOAD,
         )
