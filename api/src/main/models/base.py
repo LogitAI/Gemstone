@@ -21,42 +21,21 @@ class Tags:
 
 class BaseModel:
     """
-    Base model class that can be extended by other models. (Singleton pattern)
+    Base model class that can be extended by other models: the system prompt, sampling defaults and
+    server-side tools around one engine. The registry (`registry.py`, SPEC S1.14) creates one per
+    loaded engine and owns its lifetime; a model class is not a singleton.
     """
-    __instance = None
-    _initialized = False
-
     model_id = ""
     context_length = 0
     engine_options: dict = {}  # extra keyword arguments for Engine (dtype, device, quantization, ...)
     supported_tools: FunctionCalling = FunctionCalling.DEFAULT
     special_tags = Tags()
 
-    def __new__(cls, *args, **kwargs):
-        """ Ensure only one instance of the model is created """
-        if cls.__instance is None:
-            cls.__instance = super(BaseModel, cls).__new__(cls)
-        return cls.__instance
-
     def __init__(self, engine: Engine | None = None):
-        if not self._initialized:
-            self._initialized = True
-            self.runtime = engine if engine is not None else self._create_engine()
-            print("INFO:     Model", self.model_id, "is LOADED")
+        self.runtime = engine if engine is not None else self._create_engine()
 
     def _create_engine(self) -> Engine:
         return Engine(self.model_id, context_length=self.context_length or None, **self.engine_options)
-
-    def __del__(self):
-        """ Clean up resources when the model is deleted """
-        if hasattr(self, 'runtime'):
-            del self.runtime
-        self._initialized = False
-        print("INFO:     Model", self.model_id, "is UNLOADED")
-
-    def clean_up(self):
-        """ Clean up resources for the model """
-        self.__class__.__instance = None
 
     def parse_tool_calling(
         self,

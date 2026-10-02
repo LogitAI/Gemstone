@@ -14,7 +14,8 @@ a status:
 **Evidence.** Each item names the code it was read from and its test. Python tests live in
 `api/tests/` (pytest) and cover the engine (S1.11), the WebSocket stream (S1.4), the
 OpenAI-compatible API (S1.10), the Ollama-compatible API with its model management (S1.14,
-S1.15), the tool-result cache (S1.6) and the backend removal (S1.8). Everything else has **no
+S1.15), the residency shared by all three (S1.14), the tool-result cache (S1.6) and the backend
+removal (S1.8). Everything else has **no
 behavioural test** yet: the only Kotlin test,
 `app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`, asserts `1 + 2 == 3`. So
 `implemented` without a named test means *read in code*, never *verified by a test*.
@@ -35,28 +36,34 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
 
 ### S1.2 Model catalogue — `implemented` · G5
 
-- `GET /api/models` returns the model table keyed by id: `qwen3`, and `default` (an alias of
-  `qwen3`), each with `model_name` and `model_description`. (`llama3` was removed with the
-  GGUF backend, #84.)
-- Code: `api/src/main/settings.py` (`MODEL_LIST`). Test: none.
+- `GET /api/models` returns the models the registry (S1.14) knows, keyed by id, each with
+  `model_name` and `model_description`: Gemstone's catalogue, `qwen3` and `default` (an alias of
+  `qwen3`), then every other model in the local store under its Hugging Face id. `GET /v1/models`
+  lists the same ids (S1.10). (`llama3` was removed with the GGUF backend, #84.)
+- Code: `api/src/main/registry.py` (`CATALOGUE`, `Registry.models`), `api/src/main/server.py`
+  (`models`). Test: `api/tests/test_residency.py` (`test_api_models_lists_the_registry_models_in_the_app_shape`,
+  `test_v1_models_lists_the_same_models`).
 
 ### S1.3 Sessions — `partial` · G5
 
 - `POST /api/models/{model_id}/sessions/` and `POST /api/sessions/` (model `default`) create a
   session and return `{model_id, session_id, message}`. The session id is
   `<model_id>_<YYYYmmddHHMMSS>_<8 hex>`, unique even within one second.
-- `DELETE /api/sessions/{session_id}` (also accepted as `POST`) closes a session and unloads the
-  model when nothing else holds it.
-- The model is loaded lazily on first use, and each model class is a process-wide singleton, so
-  sessions on the same model share one loaded model.
+- `DELETE /api/sessions/{session_id}` (also accepted as `POST`) closes a session and drops its
+  tool-result cache. It does not unload the model: the registry's keep_alive does (S1.14).
+- A session holds a model name, never an engine (#89). Creating one loads nothing; the first
+  WebSocket chat (S1.4) loads the model through the registry, so sessions on one model, the
+  OpenAI API and the Ollama API share one loaded engine. Model classes are not singletons; the
+  registry creates one model-class instance per loaded engine.
 - Defects found by reading:
   - An unknown `model_id` is not rejected at creation; it fails only when the model is first used.
   - Error paths `return` an `HTTPException` instead of raising it, so the client receives HTTP 200
     with an error body.
   - Deleting an unknown session raises `ValueError`, but the endpoint catches `KeyError`, so the
     response is HTTP 500 instead of 404.
-- Code: `api/src/main/server.py`, `api/src/main/settings.py` (`Session`). Test: session-id
-  uniqueness only (`api/tests/test_tool_cache.py`).
+- Code: `api/src/main/server.py`, `api/src/main/settings.py` (`Session`). Tests: session-id
+  uniqueness (`api/tests/test_tool_cache.py`); sessions share the registry's engine and closing
+  one keeps the model (`api/tests/test_residency.py`).
 
 ### S1.4 Streaming chat over WebSocket — `implemented` · G4
 
@@ -73,8 +80,14 @@ frames; tool activity arrives as `<tool_call> … </tool_call>` frames (S1.6). G
 the event loop; if the client disconnects mid-stream, generation stops and the model is free for
 the next request (#35).
 
+The model comes from the registry (S1.14): the chat holds a lease on it for the whole reply
+(tool-call rounds included), then the default keep_alive (5 minutes) applies. The model class's
+system prompt, sampling defaults and server-side tools wrap the engine. A catalogue model missing
+from the local cache is downloaded on first use; any other model must be pulled first
+(`POST /api/pull`), otherwise the socket closes with code `1008`.
+
 - Code: `api/src/main/server.py` (`chat_with_streaming`), `api/src/main/models/base.py`.
-  Test: `api/tests/test_server.py`.
+  Tests: `api/tests/test_server.py` (real model), `api/tests/test_residency.py` (fake engine).
 
 ### S1.5 Non-streaming chat — `removed` · G5
 
@@ -121,7 +134,10 @@ Test: `api/tests/test_ollama_api.py` (`test_legacy_chat_and_hello_routes_are_gon
 | `qwen3` (default) | `Qwen/Qwen3-0.6B` (Hugging Face, safetensors) | 40 960 | yes |
 
 Each model carries its own system prompt and sampling defaults, and runs on the engine of S1.11.
-Code: `api/src/main/models/qwen3/model.py`. Test: none for the Qwen3 checkpoint itself (it needs
+The registry maps a Hugging Face id to its model class (`registry.model_class_for`): a catalogue
+model's weights get its Gemstone class; any other Hugging Face id gets a plain `BaseModel` subclass
+with no tools and the base sampling defaults.
+Code: `api/src/main/models/qwen3/model.py`, `api/src/main/registry.py`. Test: none for the Qwen3 checkpoint itself (it needs
 a download; tests use SmolLM2-135M through the same model layer, `api/tests/test_server.py`).
 
 ### S1.8 Inference backends — `removed` · G5
@@ -154,8 +170,12 @@ Gemstone's built-in tools and streams the results. Both stay.
 
 Implemented (#65), `api/src/main/openai_api.py`:
 
-- `GET /v1/models` lists `MODEL_LIST` in OpenAI's list format (`object: "list"`, entries with
-  `id`, `object: "model"`, `created`, `owned_by: "gemstone"`).
+- `GET /v1/models` lists the registry's models (S1.2) in OpenAI's list format (`object: "list"`,
+  entries with `id`, `object: "model"`, `created`, `owned_by: "gemstone"`).
+- `model` is any name the registry resolves (S1.14). The engine is leased from the registry for
+  the whole reply, so it is the one the WebSocket and the Ollama API use. A catalogue model missing
+  from the cache is downloaded on first use; another model that is not pulled is a 404. The
+  extension `keep_alive` (as in Ollama, default 5 minutes) sets how long the model stays loaded.
 - `POST /v1/chat/completions` accepts `model`, `messages` (`system`, `user`, `assistant` with
   optional `tool_calls`, `tool` with `tool_call_id`; content as a string or a list of text parts),
   `tools`, `tool_choice` (`auto`, `none`, `required`, or one named function), `temperature`,
@@ -325,14 +345,24 @@ Implemented (M3 scope, #66), `api/src/main/registry.py`:
   `0` unloads at once; negative keeps it until another model replaces it). An idle model is never
   unloaded mid-generation. `GET /api/ps` lists the resident model with `expires_at`
   (`9999-12-31T23:59:59Z` when it never expires; `size_vram` is always 0).
-- The registry is separate from the chat app's sessions (S1.3): a session's model and the Ollama
-  API's resident model are distinct objects, so both can be in memory at once.
+- **One owner for every entry point (#89).** The registry is the only place engines are loaded.
+  The chat app's WebSocket (S1.4), the OpenAI API (S1.10) and the Ollama API (S1.15) all lease
+  the model from it, so at most one engine exists, one model is loaded once whichever API asks
+  first, `GET /api/ps` reports what is really in memory, and a model switch from any API waits for
+  the generations of every other API on the resident model. keep_alive (default 5 minutes)
+  applies to all three. Each loaded engine is wrapped in its model class (S1.7), which the
+  WebSocket uses for its system prompt, defaults and tools; the two compatible APIs use the
+  engine directly. Sessions (S1.3) hold only a model name.
+- **Catalogue.** `registry.CATALOGUE` holds Gemstone's models (`qwen3`, `default`) with their
+  display names and model class; it replaces `settings.MODEL_LIST`. `Registry.models()` lists it
+  plus the other local models, for `GET /api/models` and `GET /v1/models` (S1.2).
 
-Not yet: several resident models, eviction under memory pressure, pull progress per file, GGUF,
-and replacing the hard-coded `MODEL_LIST` (S1.2).
+Not yet: several resident models, eviction under memory pressure, pull progress per file, GGUF.
 
-Test: `api/tests/test_ollama_api.py` (fake engine and fake store; nothing is loaded or
-downloaded).
+Tests: `api/tests/test_ollama_api.py` (fake engine and fake store; nothing is loaded or
+downloaded); `api/tests/test_residency.py` (one engine for WebSocket, OpenAI and Ollama; switches
+wait for another API's generation; `/api/ps` after WebSocket and OpenAI loads; the catalogue
+listings; model-class mapping).
 
 ### S1.15 Ollama-compatible API — `partial` · G5
 
@@ -344,6 +374,7 @@ Implemented (M3 scope, #66):
 
 - `POST /api/chat`, `POST /api/generate`, `GET /api/tags`, `POST /api/show`, `POST /api/pull`,
   `DELETE /api/delete`, `GET /api/ps`, `GET /api/version` (the Gemstone package version).
+  `GET /api/ps` shows the model whichever API loaded it (S1.14).
 - Streaming is NDJSON by default; `"stream": false` returns one JSON object. Errors are
   `{"error": "..."}`: 400 for a malformed request, 404 for an unknown or not-pulled model, 500 for a
   failed pull. An error after streaming has started arrives as a final `{"error": ...}` line.
