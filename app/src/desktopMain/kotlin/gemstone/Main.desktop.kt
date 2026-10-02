@@ -19,7 +19,14 @@ import org.jetbrains.jewel.intui.standalone.theme.IntUiTheme
 import org.jetbrains.jewel.intui.window.DecoratedWindowIconKeys
 
 
-fun main(args: Array<String>) = application {
+fun main(args: Array<String>) {
+    configureNativeImageRuntime()
+    traceInputEventsIfRequested()
+    runApplication(args)
+}
+
+
+private fun runApplication(args: Array<String>) = application {
     parseCommandLineArgs(args) {
         exitApplication()
     }
