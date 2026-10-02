@@ -9,10 +9,13 @@ a status:
 | `implemented` | The behaviour exists in code that was read for this document. |
 | `partial` | Some of it exists, or it exists but reading the code shows a defect. |
 | `planned` | Stated as a goal; no code yet on `develop`. |
+| `removed` | Existed, and was removed on purpose; the item records what replaced it. |
 
 **Evidence.** Each item names the code it was read from and its test. Python tests live in
 `api/tests/` (pytest) and cover the engine (S1.11), the WebSocket stream (S1.4), the
-OpenAI-compatible API (S1.10) and the backend removal (S1.8). Everything else has **no behavioural test** yet: the only Kotlin test,
+OpenAI-compatible API (S1.10), the Ollama-compatible API with its model management (S1.14,
+S1.15), the tool-result cache (S1.6) and the backend removal (S1.8). Everything else has **no
+behavioural test** yet: the only Kotlin test,
 `app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`, asserts `1 + 2 == 3`. So
 `implemented` without a named test means *read in code*, never *verified by a test*.
 
@@ -73,14 +76,16 @@ the next request (#35).
 - Code: `api/src/main/server.py` (`chat_with_streaming`), `api/src/main/models/base.py`.
   Test: `api/tests/test_server.py`.
 
-### S1.5 Non-streaming chat — `partial` · G5
+### S1.5 Non-streaming chat — `removed` · G5
 
-- `POST /api/chat?user_prompt=…` with the session id in the `Authorization` header and an optional
-  history body; `GET /api/hello` loads the default model and answers "Hello?".
-- Defect found by reading: `BaseModel.chat` contains `yield`, so it is always a generator; with
-  `stream=False` it returns a generator object rather than a string. Both endpoints are therefore
-  expected to fail at serialisation. Unverified by execution.
-- Code: `api/src/main/server.py`, `api/src/main/models/base.py`. Test: none.
+The session-based `POST /api/chat?user_prompt=…` (session id in the `Authorization` header) and
+`GET /api/hello` were removed (decided 2026-10-03). Both were broken: `BaseModel.chat` is always a
+generator, so `stream=False` returned a generator object that could not be serialised. No client
+called them. `POST /api/chat` is now Ollama's chat endpoint (S1.15); the chat app keeps the
+WebSocket of S1.4.
+Test: `api/tests/test_ollama_api.py` (`test_legacy_chat_and_hello_routes_are_gone`, and
+`test_no_client_or_document_uses_the_legacy_routes`, which scans `app/src`, the READMEs and
+`docs/guide/` for callers or descriptions of the old form).
 
 ### S1.6 Tool calling — `implemented` · G6
 
@@ -241,20 +246,89 @@ per token in use, not per maximum context. Part of S1.11. The candidate implemen
 transformers' `sdpa_paged` / `eager_paged` (plain torch ops), with a torchnative kernel later for
 speed. No code.
 
-### S1.14 Model management — `planned` · G5
+### S1.14 Model management — `partial` · G5
 
-Follows from *Ollama replacement*. The exact scope is to be confirmed (`INTENT.md` § 5):
+Follows from *Ollama replacement*. Served through the Ollama-compatible API (S1.15); the local
+model store is the Hugging Face cache (`HF_HOME`).
 
-- pull a model from Hugging Face, list local models, show one, remove one;
-- list loaded models (`ps`), keep a model loaded for a configurable keep-alive, hold several
-  models at once, and evict under memory pressure.
+Implemented (M3 scope, #66), `api/src/main/registry.py`:
 
-Replaces the hard-coded `MODEL_LIST` (S1.2). No code.
+- **Names.** A request names a model by Gemstone id, Ollama name or Hugging Face id:
 
-### S1.15 Ollama-compatible API — `planned` · G5
+  | Name | Hugging Face id |
+  |---|---|
+  | `qwen3`, `default`, `qwen3:0.6b`, `qwen3:latest` | `Qwen/Qwen3-0.6B` |
+  | `smollm2:135m` | `HuggingFaceTB/SmolLM2-135M-Instruct` |
+  | `<org>/<repo>` (optional `:latest`) | itself |
+
+  Any other name, or another tag on a Hugging Face id (`…:q4_K_M`), is unknown (404).
+- **Pull** (`POST /api/pull`) downloads the repository's safetensors weights, config, tokenizer and
+  chat template files with `huggingface_hub.snapshot_download` into the cache.
+- **List** (`GET /api/tags`) and **show** (`POST /api/show`) read the cache: size on disk, revision
+  hash as `digest`, `model_type` as family, `max_position_embeddings` as context length, and the
+  chat template (capabilities `tools` / `thinking` are inferred from it).
+- **Remove** (`DELETE /api/delete`) unloads the model if resident and deletes its cached revisions.
+- **Residency.** One model is resident at a time; loading another waits until the resident model
+  has no generation in flight, then unloads it. A model is loaded only from the cache (no implicit
+  download); a model that is not there is a 404 asking to pull it first. After each request the
+  model stays loaded for `keep_alive` (seconds or a Go duration such as `5m`; default 5 minutes;
+  `0` unloads at once; negative keeps it until another model replaces it). An idle model is never
+  unloaded mid-generation. `GET /api/ps` lists the resident model with `expires_at`
+  (`9999-12-31T23:59:59Z` when it never expires; `size_vram` is always 0).
+- The registry is separate from the chat app's sessions (S1.3): a session's model and the Ollama
+  API's resident model are distinct objects, so both can be in memory at once.
+
+Not yet: several resident models, eviction under memory pressure, pull progress per file, GGUF,
+and replacing the hard-coded `MODEL_LIST` (S1.2).
+
+Test: `api/tests/test_ollama_api.py` (fake engine and fake store; nothing is loaded or
+downloaded).
+
+### S1.15 Ollama-compatible API — `partial` · G5
 
 Follows from *Ollama replacement*, so existing Ollama clients can use Gemstone. Served next to the
-OpenAI-compatible API (S1.10). The endpoint set is to be confirmed. No code.
+OpenAI-compatible API (S1.10). Code: `api/src/main/ollama_api.py` (an `APIRouter` included by
+`server.py`).
+
+Implemented (M3 scope, #66):
+
+- `POST /api/chat`, `POST /api/generate`, `GET /api/tags`, `POST /api/show`, `POST /api/pull`,
+  `DELETE /api/delete`, `GET /api/ps`, `GET /api/version` (the Gemstone package version).
+- Streaming is NDJSON by default; `"stream": false` returns one JSON object. Errors are
+  `{"error": "..."}`: 400 for a malformed request, 404 for an unknown or not-pulled model, 500 for a
+  failed pull. An error after streaming has started arrives as a final `{"error": ...}` line.
+- **Chat.** `messages` (`role`, `content`, `tool_calls`, `tool_name`); `images` are dropped (no
+  vision support). `tools` go to the chat template; a `<tool_call>{json}</tool_call>` block the
+  model emits becomes `message.tool_calls: [{function: {name, arguments}}]` and is never executed
+  (pass-through, S1.10). A block that is not valid JSON stays in the content as text.
+- **Thinking.** `think: true` returns the `<think>` block as `message.thinking`; `think: false`
+  drops it from the reply (the model still generates it); unset leaves it in the content as written.
+- **Options.** `temperature`, `top_p`, `top_k`, `min_p`, `typical_p`, `repeat_penalty` and `seed`
+  go to the engine unchanged; `num_predict` becomes `max_new_tokens` (unset or ≤ 0 means up to the
+  context length); `stop` cuts the output at the first stop string and stops generation (best
+  effort, on the raw text). `num_ctx` and the other Ollama options are accepted and ignored. Unset
+  options keep the engine's defaults, not Ollama's.
+- **Load / unload.** A chat with no messages (or a generate with no prompt) only loads the model
+  (`done_reason: "load"`), or with `keep_alive: 0` unloads it (`"unload"`).
+- **Generate.** `prompt` and `system` become a system and a user message through the chat
+  template. `raw: true` is refused (400): the engine always applies the chat template.
+  `suffix`, `template`, `context`, `images` and `format` are ignored.
+- **Final fields.** `done_reason` is `stop`, or `length` when `eval_count` reaches `num_predict`.
+  `prompt_eval_count` is the templated prompt's token count; `eval_count` re-tokenises the
+  generated text (it can differ from the generated token count by a token or two, and excludes the
+  end-of-sequence token). Durations are wall-clock nanoseconds: `load_duration` is the load done
+  for this request (0 when already resident), `prompt_eval_duration` runs to the first chunk,
+  `eval_duration` from the first chunk to the end. Counts are omitted when the engine has no
+  tokenizer.
+
+Not yet: `format` (JSON / schema output), `/api/embed`, `/api/create`, `/api/copy`, `/api/push`,
+blobs, `logprobs`, image input, and concurrent generation (requests on one model take turns until
+S1.12).
+
+Tests: `api/tests/test_ollama_api.py` — on a fake engine (streaming and non-streaming chat and
+generate, tool-call pass-through, option forwarding, stop, think, tags / show / ps, keep_alive,
+model switching and the no-unload-mid-generation rule, delete, pull with a mocked downloader, error
+format), and one test on the real engine (SmolLM2-135M, `test_chat_on_the_real_engine`).
 
 ### S1.16 4-bit quantised weights — `planned` · G5
 
