@@ -51,13 +51,21 @@ model's reasoning and its tool calls.
 ### G5 — A model-serving API in Python
 
 Until G2 lands, and for machines that are stronger than the phone in your pocket, a Python server
-loads open-weight models (Qwen 3, Llama 3.1) and serves them to the client. The goal is local,
-private LLM serving — an Ollama replacement — on torchnative, as a single serving system.
-Continuous batching and paged attention are planned. The multiple backends in the code today
-(llama.cpp GGUF, transformers + bitsandbytes, GPTQ) are being removed (transition); vLLM will not be
-used. The README says the API is *planned to become OpenAI-like*.
+loads open-weight models and serves them to the client.
 
-> Decision relayed by the maintainer, 2026-10-02.
+Decided by the maintainer on 2026-10-02:
+
+- **Gemstone is an Ollama replacement**: local, private LLM serving for the user's own machine,
+  not only a backend for the chat app.
+- **One serving system.** The multiple backends in the code today (llama.cpp GGUF, transformers +
+  bitsandbytes, GPTQ) are being removed (transition).
+- **The serving system depends on [torchnative](https://github.com/thisisthepy/torchnative)**, so the
+  same Python model code can later run on the device (G2).
+- **Continuous batching and paged attention will be introduced.**
+- vLLM is not a dependency.
+
+The README says the API is *planned to become OpenAI-like*. The rationale, the engine proposal and
+the risks are recorded in [`serving/engine.md`](serving/engine.md).
 
 ### G6 — Tool-using assistant
 
@@ -74,9 +82,12 @@ and answers from its result. Tool calls are part of the chat protocol, not an ad
 ### G8 — A native desktop app without a JVM
 
 The maintainer's native-build note: *"Compiles the desktop target to a standalone native
-executable — no JVM, no JDK on the target machine, no installer."* It also states the wider aim
-that the stack-level GraalVM metadata *"become a version-pinned bundle applications consume
-instead of regenerating"* — that bundle belongs to `compose-graal-hello`, not to Gemstone.
+executable — no JVM, no JDK on the target machine, no installer."*
+
+Decided by the maintainer on 2026-10-02: the native-image build is managed as a whole by
+`compose-multiplatform-extended`, the ecosystem's fork of the Compose Gradle plugin. Gemstone keeps
+its own path only until that plugin does the same job. After that, only Gemstone-specific
+reachability metadata stays here ([`serving/engine.md`](serving/engine.md) § 6).
 
 ### G9 — Clean Architecture in the client
 
@@ -119,5 +130,9 @@ with `domain/`, `adapter/` and `framework/` layers.
    feature list never mentions remote models and no such code exists.
 3. What does *sync* mean (G7)?
 4. What exactly is the torchnative serving engine? Current proposal, pending confirmation:
-   transformers 5.x continuous batching with a paged KV cache as the engine, kernels in torchnative.
-   (The choice of torchnative over llama.cpp is decided; this engine detail is not.)
+   transformers 5.x continuous batching with a paged KV cache as the engine, kernels in torchnative
+   ([`serving/engine.md`](serving/engine.md) § 2). The choice of torchnative over llama.cpp is
+   decided. This engine detail is not.
+5. How far does *Ollama replacement* reach? Model pull/list/remove, keep-alive, several resident
+   models and an Ollama-compatible API follow from it ([`serving/engine.md`](serving/engine.md) § 4),
+   but their exact scope has not been confirmed.

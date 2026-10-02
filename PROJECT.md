@@ -21,7 +21,8 @@ INTENT → SPEC 순으로 그쪽이 이깁니다.
 | 도구 호출 (날씨·공휴일·환율·계산·웹검색) | 구현 | `api/src/main/utils/` |
 | GGUF / BIN 백엔드, Qwen3 14B · Llama 3.1 8B | 구현됨, **제거 중(전환기)** | `api/src/main/backend/`, `models/` |
 | GPTQ 백엔드 | **폐기** | `gptq.py` 는 import 불가한 스크래치. 다중 백엔드 구조를 버림 |
-| torchnative 단일 서빙 시스템(Ollama 대체) | 예정 | 연속 배칭·페이지드 어텐션 포함. 엔진 세부는 제안 단계(transformers 5.x 연속 배칭 + 페이지드 KV 캐시, 커널은 torchnative), 확정 대기 |
+| torchnative 단일 서빙 시스템(Ollama 대체) | 예정 | 연속 배칭·페이지드 어텐션 포함. 엔진 세부는 제안 단계(transformers 5.x 연속 배칭 + 페이지드 KV 캐시, 커널은 torchnative), 확정 대기. [`docs/serving/engine.md`](docs/serving/engine.md) |
+| 모델 관리 · Ollama 호환 API · 4비트 가중치 | 예정 | Ollama 대체에서 따라 나오는 항목. 범위 확정 대기 (SPEC S1.14–S1.16) |
 | 비스트리밍 `POST /api/chat`, `GET /api/hello` | 부분 (결함) | `BaseModel.chat` 이 항상 제너레이터 |
 | 세션 API | 부분 (결함) | 오류를 `raise` 대신 `return`, 404 대신 500 |
 | Android · 데스크톱 · 웹 클라이언트 | 구현 | `app/build.gradle.kts` |
@@ -30,7 +31,7 @@ INTENT → SPEC 순으로 그쪽이 이깁니다.
 | 대화 기록 | 부분 | 메모리에만 |
 | 설정 화면, 도메인 계층(Clean Architecture) | 예정 | 빈 파일 |
 | 온디바이스 추론 · 오프라인 · 동기화 · OpenAI 호환 API | 예정 | 코드 없음 |
-| 네이티브 데스크톱 (GraalVM) | 진행 중 | 메인 체크아웃의 미커밋 작업 |
+| 네이티브 데스크톱 (GraalVM) | 진행 중 | 메인 체크아웃의 미커밋 작업. 장기적으로 compose-multiplatform-extended 가 관리 |
 | 테스트 | **없음** | Kotlin 테스트 1개가 `1 + 2 == 3` 만 확인 |
 
 ## 3. 구조
@@ -47,7 +48,7 @@ api/                Python 3.12 모델 서빙 서버
   src/main/backend/       추론 런타임 (gguf, bin — 제거 중, torchnative 로 대체 예정)
   src/main/utils/         도구 구현과 도구 호출 루프
   src/test/               정적 웹 자산 (빌드된 Wasm 클라이언트, Brython 테스트 페이지) — 테스트 코드 아님
-docs/               INTENT, SPEC, locale/, guide/ (GitHub Pages)
+docs/               INTENT, SPEC, locale/, guide/ (GitHub Pages), serving/ (서빙 엔진 결정 기록), build/
 ```
 
 ## 4. 빌드와 실행
@@ -72,6 +73,18 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
   README 는 develop 전용 파일(AGENTS, PROJECT, INTENT, SPEC)에 링크하지 않는다.
 - **`CLAUDE.md`** 는 `@AGENTS.md` 한 줄만 둔다.
 - **토치 버전**: `pyproject.toml` 에서 torch 계열에 버전을 고정하지 않는다 (Windows 는 cu128 인덱스).
+- **서빙 구조 (2026-10-02)**: 근거와 위험은 [`docs/serving/engine.md`](docs/serving/engine.md) 에 있다.
+  - 의미 없는 다중 백엔드를 걷어내고 **단일 서빙 시스템**으로 간다. GGUF·BIN·GPTQ 런타임과
+    `llama-cpp-python`·`bitsandbytes` 의존성을 제거한다.
+  - 서빙 시스템은 **torchnative 에 의존**한다. 그래서 Python 요구 버전이 `>=3.13` 으로 오른다.
+  - Gemstone 은 **Ollama 대체제**가 된다.
+  - **연속 배칭(continuous batching)과 페이지드 어텐션(paged attention)을 도입**한다.
+  - vLLM 은 의존성으로 쓰지 않는다. torchnative 위에서 돌 수 없고(libtorch ABI·`torch.compile`
+    전제), 서버와 기기에 스택이 둘이 되기 때문이다.
+- **네이티브 데스크톱 (2026-10-02)**: GraalVM native-image 는 `compose-multiplatform-extended`
+  (Compose Gradle 플러그인 포크)가 종합 관리한다. 플러그인에 아직 코드가 없어서, 그때까지는 Gemstone 의
+  현재 경로를 유지한다. JNA 의존성은 GraalVM 과 무관하므로 Gemstone 에 남긴다. 입력 디버그 프로브
+  (`GEMSTONE_INPUT_PROBE`)는 커밋하지 않는다.
 
 ## 6. 열린 질문
 
@@ -80,10 +93,18 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 2. **원격 모델 제공자**(OpenAI, Anthropic, HF Inference) — 옛 README 트리에만 있고 코드·의도에 없다.
 3. **동기화(sync)** 가 무엇을 무엇으로 동기화하는지.
 4. **서빙 엔진 세부** — 방향은 torchnative 단일 시스템으로 확정(다중 백엔드·vLLM 사용 안 함). 엔진 구성은 미확정: 현재 제안은 transformers 5.x 연속 배칭 + 페이지드 KV 캐시를 엔진으로, 커널은 torchnative.
+   확정 전에 할 일: 작은 모델로 torchnative 위에서 `generate_batch`(`sdpa_paged`/`eager_paged`)를
+   돌려 정확도와 처리량을 잰다 ([`docs/serving/engine.md`](docs/serving/engine.md) § 7).
 5. **Python 테스트의 위치** — `api/src/test/` 는 운영 중인 정적 자산이 차지하고 있다.
    테스트 디렉터리를 새로 정할지, 자산을 옮길지.
-6. **릴리스 흐름** — 공통 규정은 `release` 브랜치와 `tools/release/sync-release.sh` 를 전제하지만
-   이 저장소에는 `release/cnu` 브랜치만 있고 스크립트가 없다.
+6. **릴리스 흐름** — 스크립트(`tools/release/sync-release.sh`)와 워크플로(`release-sync.yml`)는 들어왔다.
+   그러나 첫 실행은 실패할 것으로 보인다. 원격에 `release/cnu` 가 있어 `release` 브랜치를 만들 수 없고
+   (git 은 `release` 와 `release/cnu` 를 함께 둘 수 없다), 저장소 Actions 설정상 GITHUB_TOKEN 으로는
+   PR 을 만들 수 없다(`RELEASE_PR_TOKEN` 시크릿 필요). `release/cnu` 정리 또는 브랜치 이름 변경, PAT
+   설정을 결정해야 한다.
 7. **줄바꿈** — 해결됨: LF 로 고정(`.gitattributes`, `.bat`/`.cmd`/`.ps1` 만 CRLF). `docs/build/` 는 추적한다.
 8. **GitHub Pages 배포** — "브랜치에서 배포" 는 `/` 또는 `/docs` 만 고를 수 있어 `docs/guide/` 를
-   바로 쓸 수 없다. Actions 워크플로를 둘지 결정이 필요하다.
+   바로 쓸 수 없다. `pages.yml` 워크플로가 들어왔으니, 저장소 설정에서 Pages 소스를 "GitHub Actions" 로
+   바꾸면 된다(`main` 푸시 때 배포).
+9. **Ollama 대체의 범위** — 모델 pull/list/rm/ps, keep-alive, 여러 모델 동시 상주, Ollama 호환 API 중
+   어디까지 할지. 4비트 품질과 GGUF 읽기는 torchnative 쪽 작업에 달려 있다.
