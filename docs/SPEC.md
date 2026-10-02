@@ -173,8 +173,10 @@ No code on `develop`. Test: none.
 
 Concurrent requests to a loaded model are scheduled into one running batch. A request joins and
 leaves the batch between decode steps, and its tokens stream back on its own connection. Part of
-S1.11. Unverified on torchnative: transformers' continuous-batching modules import there but have
-not run. No code.
+S1.11. Batching does not change results: greedy output equals sequential generation, and sampled
+output with the same seed is identical whether or not the request was batched, because the
+OpenAI- and Ollama-compatible APIs (S1.10, S1.15) accept a per-request `seed`. Unverified on
+torchnative: transformers' continuous-batching modules import there but have not run. No code.
 
 ### S1.13 Paged attention (paged KV cache) — `planned` · G5
 
@@ -297,11 +299,12 @@ No code. The meaning of sync is an open question in `INTENT.md` § 5.
 ### S3.4 Native desktop executable (GraalVM native-image) — `planned` · G8
 
 Managed long-term by `compose-multiplatform-extended` (decided 2026-10-02). That plugin has no code
-yet, so Gemstone keeps its own path in the meantime: Gradle tasks `generateNativeResourceConfig`,
+yet, so Gemstone keeps its own path in the meantime (on `develop` since #71): Gradle tasks `generateNativeResourceConfig`,
 `nativeCompile`, `nativeDist` and `metadataCopy`, plus `NativeRuntime.kt`, the reachability
 metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 only so far. Clicks
 are not yet registered in the native build (under investigation), and sending a chat message there
-is unverified. That work is not yet committed to `develop`. When the plugin takes over, the Gradle
+is unverified. `./gradlew :app:compileKotlinDesktop` succeeds; the native build itself has not been
+run on `develop`. When the plugin takes over, the Gradle
 tasks become plugin configuration and only Gemstone-specific metadata stays here.
 
 ---
