@@ -98,10 +98,10 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 5. **Python 테스트의 위치** — `api/src/test/` 는 운영 중인 정적 자산이 차지하고 있다.
    테스트 디렉터리를 새로 정할지, 자산을 옮길지.
 6. **릴리스 흐름** — 스크립트(`tools/release/sync-release.sh`)와 워크플로(`release-sync.yml`)는 들어왔다.
-   그러나 첫 실행은 실패할 것으로 보인다. 원격에 `release/cnu` 가 있어 `release` 브랜치를 만들 수 없고
-   (git 은 `release` 와 `release/cnu` 를 함께 둘 수 없다), 저장소 Actions 설정상 GITHUB_TOKEN 으로는
-   PR 을 만들 수 없다(`RELEASE_PR_TOKEN` 시크릿 필요). `release/cnu` 정리 또는 브랜치 이름 변경, PAT
-   설정을 결정해야 한다.
+   - 해결됨: 원격의 `release/cnu` 를 같은 커밋(`307bb22`)의 `release-cnu` 로 바꿔 보존했다. 이제 CI 가
+     `release` 브랜치를 만들 수 있다.
+   - 남은 것: 저장소 Actions 설정상 GITHUB_TOKEN 으로는 PR 을 만들 수 없다. 설정을 바꾸거나
+     `RELEASE_PR_TOKEN` 시크릿(PAT)을 둬야 한다.
 7. **줄바꿈** — 해결됨: LF 로 고정(`.gitattributes`, `.bat`/`.cmd`/`.ps1` 만 CRLF). `docs/build/` 는 추적한다.
 8. **GitHub Pages 배포** — "브랜치에서 배포" 는 `/` 또는 `/docs` 만 고를 수 있어 `docs/guide/` 를
    바로 쓸 수 없다. `pages.yml` 워크플로가 들어왔으니, 저장소 설정에서 Pages 소스를 "GitHub Actions" 로
