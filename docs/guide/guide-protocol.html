@@ -40,6 +40,8 @@
   <h2 data-lang="en">Endpoints</h2><h2 data-lang="ko">엔드포인트</h2>
   <div class="table-wrap"><table><thead><tr><th><span data-lang="en">Method</span><span data-lang="ko">메서드</span></th><th><span data-lang="en">Path</span><span data-lang="ko">경로</span></th><th><span data-lang="en">Purpose</span><span data-lang="ko">용도</span></th></tr></thead><tbody><tr><td><span data-i18n="none">GET</span></td><td><span data-i18n="none"><code>/api/models</code></span></td><td><span data-lang="en">List models</span><span data-lang="ko">모델 목록</span></td></tr><tr><td><span data-i18n="none">POST</span></td><td><span data-i18n="none"><code>/api/models/{id}/sessions/</code></span></td><td><span data-lang="en">Create a session → <code>session_id</code></span><span data-lang="ko">세션 생성 → <code>session_id</code></span></td></tr><tr><td><span data-i18n="none">DELETE</span></td><td><span data-i18n="none"><code>/api/sessions/{session_id}</code></span></td><td><span data-lang="en">Close a session, unload the model if unused</span><span data-lang="ko">세션 종료, 쓰이지 않으면 모델 언로드</span></td></tr><tr><td><span data-i18n="none">WS</span></td><td><span data-i18n="none"><code>/api/chat/streaming</code></span></td><td><span data-lang="en">Streaming chat</span><span data-lang="ko">스트리밍 채팅</span></td></tr></tbody></table></div>
 
+  <p data-lang="en">The same server also speaks the Ollama API (<code>/api/chat</code>, <code>/api/generate</code>, <code>/api/tags</code>, <code>/api/pull</code>, <code>/api/ps</code> and more), so Ollama clients can connect to it directly. That API passes tool calls back to the client instead of running them.</p><p data-lang="ko">같은 서버는 Ollama API(<code>/api/chat</code>, <code>/api/generate</code>, <code>/api/tags</code>, <code>/api/pull</code>, <code>/api/ps</code> 등)도 제공하므로 Ollama 클라이언트가 바로 연결할 수 있습니다. 이 API 는 도구 호출을 실행하지 않고 클라이언트에 그대로 돌려줍니다.</p>
+
   <h2 data-lang="en">The conversation</h2><h2 data-lang="ko">대화</h2>
   <p data-lang="en">After the socket opens, send exactly three text frames:</p><p data-lang="ko">소켓이 열리면 정확히 세 개의 텍스트 프레임을 보냅니다:</p>
 <pre><code>{"session_id": "qwen3_20260614125444"}
@@ -57,7 +59,7 @@ What is the weather in Daejeon today?</code></pre>
   <h2 data-lang="en">Errors</h2><h2 data-lang="ko">오류</h2>
   <ul>
     <li data-lang="en">Unknown session on the socket: closed with code <code>1008</code>.</li><li data-lang="ko">소켓에서 모르는 세션: 코드 <code>1008</code> 로 닫힘.</li>
-    <li data-lang="en">Known defects: session errors come back as HTTP 200 with an error body, and the non-streaming <code>POST /api/chat</code> does not work yet. Use the WebSocket.</li><li data-lang="ko">알려진 결함: 세션 오류가 HTTP 200 과 오류 본문으로 돌아오고, 비스트리밍 <code>POST /api/chat</code> 은 아직 동작하지 않습니다. WebSocket 을 쓰세요.</li>
+    <li data-lang="en">Known defect: session errors come back as HTTP 200 with an error body.</li><li data-lang="ko">알려진 결함: 세션 오류가 HTTP 200 과 오류 본문으로 돌아옵니다.</li>
   </ul>
   <nav class="pager" aria-label="Pages"><a href="guide-clients.html"><span data-lang="en">← Connect clients</span><span data-lang="ko">← 클라이언트 연결</span></a><a href="guide-tools.html"><span data-lang="en">Add a tool →</span><span data-lang="ko">도구 추가 →</span></a></nav>
 </div></div>

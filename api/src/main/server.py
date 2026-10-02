@@ -1,11 +1,9 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 import uvicorn
 
-from typing import List, Optional
 import traceback
 import threading
 import json
@@ -14,14 +12,11 @@ import os
 from .settings import STATIC_DIR, WEBPACK_DIR, MODEL_LIST, Session
 from .models.config import ChatHistory
 from .openai_api import router as openai_router
-
-
-class Message(BaseModel):
-    role: str
-    content: str
+from .ollama_api import router as ollama_router
 
 
 app = FastAPI()
+app.include_router(ollama_router)  # Ollama-compatible API (SPEC S1.15), including POST /api/chat
 app.mount("/static", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 app.mount("/webpack", StaticFiles(directory=WEBPACK_DIR, html=True), name="webpack")
 app.include_router(openai_router)  # /v1/*: OpenAI-compatible API (SPEC S1.10)
@@ -55,16 +50,6 @@ def models():
     return MODEL_LIST
 
 
-@app.get("/api/hello")
-def test_hello():
-    """ Test endpoint to check if the server is running """
-    temp_model = Session.load_model(model_name="default")
-    response = temp_model.chat(ChatHistory(), "Hello?", stream=False, print_output=True)
-    del temp_model
-    Session.clean_up()
-    return response
-
-
 @app.post("/api/models/{model_id}/sessions/")
 @app.post("/api/sessions/")
 def create_session(model_id: str = "default"):
@@ -87,28 +72,6 @@ def delete_session(session_id: str):
         return HTTPException(status_code=404, detail="The session is not found.")
 
     return dict(message="Session deleted successfully")
-
-
-@app.post("/api/chat")
-async def chat(request: Request, user_prompt: str, history: Optional[List[Message]] = None):
-    """ Chat endpoint """
-    try:
-        session_id = request.headers.get("authorization")
-        if not session_id:
-            raise HTTPException(status_code=400, detail="Session ID is required.")
-
-        model = Session(session_id=session_id).model
-    except ValueError:
-        traceback.print_exc()
-        raise HTTPException(status_code=404, detail="The session is not found.")
-
-    chat_history = ChatHistory()
-    if history:
-        chat_history.extend([h.model_dump() for h in history])
-
-    response = model.chat(chat_history, user_prompt, stream=False, print_output=True)
-    del model
-    return response
 
 
 @app.websocket("/api/chat/streaming")
