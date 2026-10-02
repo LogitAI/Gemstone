@@ -15,11 +15,13 @@ import json
 import threading
 import time
 
+import anyio
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from . import registry as registry_module
+from .leases import LeasedStreamingResponse, acquire, once
 from .registry import now_iso, parse_keep_alive, resolve_model_name
 
 
@@ -318,38 +320,33 @@ def _ns(seconds: float) -> int:
     return max(int(seconds * 1e9), 0)
 
 
-def _once(fn):
-    lock, done = threading.Lock(), []
-
-    def wrapper():
-        with lock:
-            if done:
-                return
-            done.append(True)
-        fn()
-    return wrapper
-
-
-async def _stream(items: Iterator[dict], cancel: Optional[threading.Event] = None, release=None):
+def _closer(items: Iterator, cancel: Optional[threading.Event] = None, release=None):
     """
-    Drive a blocking iterator off the event loop and send it as NDJSON. When the client goes away,
-    `cancel` stops the generation; `release` runs once the iterator is closed. If a worker is still
-    inside `next`, closing fails and the iterator's own cleanup releases when that call returns.
+    Ends a stream once: `cancel` stops the generation, the iterator is closed, then `release` runs
+    (it covers an iterator that never started). If a worker is still inside `next`, closing fails
+    and the iterator's own cleanup releases when that call returns.
     """
+    def close():
+        if cancel is not None:
+            cancel.set()
+        try:
+            items.close()
+        except ValueError:  # still running in a worker
+            return
+        if release is not None:
+            release()
+    return once(close)
+
+
+async def _stream(items: Iterator[dict], close):
+    """ Drive a blocking iterator off the event loop and send it as NDJSON; `close` ends it. """
     end = object()
     try:
         while (item := await run_in_threadpool(next, items, end)) is not end:
             yield json.dumps(item) + "\n"
     finally:
-        if cancel is not None:
-            cancel.set()
-        try:
-            await run_in_threadpool(items.close)
-        except ValueError:  # still running in a worker
-            pass
-        else:
-            if release is not None:
-                release()  # covers an iterator that never started
+        with anyio.CancelScope(shield=True):
+            await run_in_threadpool(close)
 
 
 async def _run(body: dict, messages: list, tools, render, finish):
@@ -368,13 +365,13 @@ async def _run(body: dict, messages: list, tools, render, finish):
         if keep_alive == 0:
             await run_in_threadpool(reg.unload, hf_id)
             return JSONResponse(finish(name, "unload"))
-        lease = await run_in_threadpool(reg.acquire, hf_id, keep_alive)
+        lease = await acquire(reg, hf_id, keep_alive)
         reg.release(lease)
         return JSONResponse(finish(name, "load"))
 
-    lease = await run_in_threadpool(reg.acquire, hf_id, keep_alive)
+    lease = await acquire(reg, hf_id, keep_alive)
     cancel = threading.Event()
-    release = _once(lambda: reg.release(lease))
+    release = once(lambda: reg.release(lease))
     events = _generate(lease, messages, tools, kwargs, stops, think, cancel, started, release)
 
     if body.get("stream", True) is False:
@@ -395,7 +392,11 @@ async def _run(body: dict, messages: list, tools, render, finish):
         finally:
             events.close()
 
-    return StreamingResponse(_stream(lines(), cancel, release), media_type=NDJSON)
+    # The response, not only its body, closes the stream: a body that never starts (the client went
+    # away first) or a response dropped unsent still releases the lease (#93).
+    items = lines()
+    close = _closer(items, cancel, release)
+    return LeasedStreamingResponse(_stream(items, close), close, media_type=NDJSON)
 
 
 def _merge(events) -> tuple:
@@ -564,7 +565,8 @@ async def pull(request: Request):
             return
         yield {"status": "success"}
 
-    return StreamingResponse(_stream(lines()), media_type=NDJSON)
+    items = lines()
+    return StreamingResponse(_stream(items, _closer(items)), media_type=NDJSON)
 
 
 @router.delete("/api/delete")

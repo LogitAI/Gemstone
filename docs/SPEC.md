@@ -173,7 +173,8 @@ Implemented (#65), `api/src/main/openai_api.py`:
 - `GET /v1/models` lists the registry's models (S1.2) in OpenAI's list format (`object: "list"`,
   entries with `id`, `object: "model"`, `created`, `owned_by: "gemstone"`).
 - `model` is any name the registry resolves (S1.14). The engine is leased from the registry for
-  the whole reply, so it is the one the WebSocket and the Ollama API use. A catalogue model missing
+  the whole reply, so it is the one the WebSocket and the Ollama API use. The lease is released
+  once the reply ends, also when a stream's client is gone before the response starts (S1.14). A catalogue model missing
   from the cache is downloaded on first use; another model that is not pulled is a 404. The
   extension `keep_alive` (as in Ollama, default 5 minutes) sets how long the model stays loaded.
 - `POST /v1/chat/completions` accepts `model`, `messages` (`system`, `user`, `assistant` with
@@ -353,6 +354,14 @@ Implemented (M3 scope, #66), `api/src/main/registry.py`:
   applies to all three. Each loaded engine is wrapped in its model class (S1.7), which the
   WebSocket uses for its system prompt, defaults and tools; the two compatible APIs use the
   engine directly. Sessions (S1.3) hold only a model name.
+- **Every lease is released exactly once (#93).** A request's lease ends when its reply ends,
+  however it ends: completed, failed, cancelled, or the client gone. A streaming reply (OpenAI
+  S1.10, Ollama S1.15) leases the model before its response starts; the response releases the
+  lease (and stops the generation) when it has been sent, when it ends without its body being read
+  (the client disconnected before the response started), or when it is discarded unsent, so a
+  later model switch never waits on a reply nobody receives. A request cancelled while it waits
+  for the model (behind a switch, say) releases the lease it is granted afterwards. Code:
+  `api/src/main/leases.py` (`acquire`, `LeasedStreamingResponse`).
 - **Catalogue.** `registry.CATALOGUE` holds Gemstone's models (`qwen3`, `default`) with their
   display names and model class; it replaces `settings.MODEL_LIST`. `Registry.models()` lists it
   plus the other local models, for `GET /api/models` and `GET /v1/models` (S1.2).
@@ -362,7 +371,9 @@ Not yet: several resident models, eviction under memory pressure, pull progress 
 Tests: `api/tests/test_ollama_api.py` (fake engine and fake store; nothing is loaded or
 downloaded); `api/tests/test_residency.py` (one engine for WebSocket, OpenAI and Ollama; switches
 wait for another API's generation; `/api/ps` after WebSocket and OpenAI loads; the catalogue
-listings; model-class mapping).
+listings; model-class mapping); `api/tests/test_lease_release.py` (the ASGI app driven by hand: a
+client gone before a stream starts, a stream dropped unsent, finished replies, and a
+cancelled acquire each release exactly once, and a switch to another model then completes).
 
 ### S1.15 Ollama-compatible API — `partial` · G5
 
@@ -378,6 +389,7 @@ Implemented (M3 scope, #66):
 - Streaming is NDJSON by default; `"stream": false` returns one JSON object. Errors are
   `{"error": "..."}`: 400 for a malformed request, 404 for an unknown or not-pulled model, 500 for a
   failed pull. An error after streaming has started arrives as a final `{"error": ...}` line.
+  A stream whose client is gone before it starts still releases the model (S1.14).
 - **Chat.** `messages` (`role`, `content`, `tool_calls`, `tool_name`); `images` are dropped (no
   vision support). `tools` go to the chat template; a `<tool_call>{json}</tool_call>` block the
   model emits becomes `message.tool_calls: [{function: {name, arguments}}]` and is never executed
