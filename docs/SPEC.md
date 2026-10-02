@@ -131,7 +131,21 @@ serving system (S1.11) replaces them.
 
 ### S1.10 OpenAI-compatible API — `planned` · G5
 
-The README states the plan. No code.
+The README states the plan. This API is how external clients attach to Gemstone, including agent
+harnesses (`INTENT.md` § 4).
+
+**Tool calls pass through (decided 2026-10-03).** When the request carries `tools` and the model
+emits a tool call, the response returns it as `tool_calls`. Streaming returns it as tool-call
+deltas. Gemstone does not execute it. The client runs the tool and sends the result back as a
+`tool` message in its next request, as with the OpenAI and Ollama APIs. A harness's tools (file
+edits, shell) live on the client's machine, so a provider that executed tool calls itself could
+not serve it.
+
+This differs on purpose from the chat app's WebSocket (S1.4, S1.6), where the server executes
+Gemstone's built-in tools and streams the results. Both stay.
+
+Concurrent requests from several clients are served by continuous batching (S1.12).
+No code.
 
 ### S1.11 torchnative serving engine — `planned` · G5
 
