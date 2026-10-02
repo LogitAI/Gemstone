@@ -11,7 +11,7 @@ English | [한국어](docs/locale/README_ko.md)
 [![License: MIT](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](gradle/libs.versions.toml)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.9-4285F4?logo=jetpackcompose&logoColor=white)](gradle/libs.versions.toml)
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Desktop%20%7C%20Web-5b6270)](#-status)
 
 [Guide](https://logitai.github.io/Gemstone/) ·
@@ -40,27 +40,20 @@ separate server and no network at all.
 - 🚀 **Streaming chat** — tokens arrive over a WebSocket as they are generated and render as Markdown on the fly.
 - 🧠 **Visible reasoning** — the model's `<think>` block appears as a collapsible panel with elapsed time.
 - 🔌 **Tool calling** — weather, public holidays, exchange rates, a calculator and web search, run server-side in parallel and fed back to the model.
-- 📦 **Quantised open-weight models** — Qwen 3 14B and Llama 3.1 8B in 4-bit. Today they run through llama.cpp (GGUF) or transformers + bitsandbytes; those backends are being removed (transition) in favour of a single serving system built on torchnative — an Ollama replacement, with continuous batching and paged attention planned. The engine detail is a proposal, pending confirmation.
+- 📦 **Open-weight models on one engine** — Qwen 3 0.6B served by a single transformers-based engine that runs on PyTorch or on [torchnative](https://github.com/thisisthepy/torchnative). Gemstone is becoming a local Ollama replacement: concurrent requests (continuous batching), OpenAI- and Ollama-compatible APIs and 8-bit weights are planned for November 2026.
 - 🖥️ **Native desktop feel** — a JetBrains Jewel decorated window, with Dmg / Msi / Deb installers.
 
 ## 🚀 Quick start
 
-You need Git, Python 3.12, [uv](https://docs.astral.sh/uv/) and JDK 21+. A CUDA GPU is recommended
-for the 14B model.
+You need Git, Python 3.13, [uv](https://docs.astral.sh/uv/) and JDK 21. The default model (Qwen 3
+0.6B) runs on a CPU.
 
 **1. Clone and install the server**
 
 ```bash
 git clone https://github.com/LogitAI/Gemstone.git
 cd Gemstone
-uv sync
-```
-
-Optional — llama.cpp with CUDA (transitional: the llama.cpp backend is being removed):
-
-```bash
-CMAKE_ARGS="-DGGML_CUDA=on -DLLAVA_BUILD=off -DCMAKE_CUDA_ARCHITECTURES=native" \
-FORCE_CMAKE=1 uv pip install llama-cpp-python --no-cache-dir --force-reinstall --upgrade
+uv sync --extra torch          # or --extra torchnative (the two cannot be installed together)
 ```
 
 **2. Start the model server** (port `23100`; the model downloads on first use)
@@ -110,9 +103,9 @@ flowchart LR
     subgraph Client["app/ — Compose Multiplatform"]
         UI["Chat UI<br/>commonMain"] --> VM["ChatViewModel"] --> WS["ChatWebSocketClient<br/>(Ktor)"]
     end
-    subgraph Server["api/ — Python 3.12"]
-        EP["FastAPI<br/>/api/chat/streaming"] --> M["Model<br/>Qwen 3 · Llama 3.1"]
-        M --> B["Backend (being removed)<br/>GGUF · BIN → torchnative"]
+    subgraph Server["api/ — Python 3.13"]
+        EP["FastAPI<br/>/api/chat/streaming"] --> M["Model<br/>Qwen 3"]
+        M --> B["Engine<br/>transformers on PyTorch / torchnative"]
         M <--> T["Tools<br/>weather · search · …"]
     end
     WS -- "WebSocket :23100" --> EP
@@ -125,7 +118,7 @@ flowchart LR
 | `app/src/{android,ios,desktop,wasmJs}Main` | One entry point per platform |
 | `app/src/cioMain` | Ktor CIO engine shared by Android, iOS and desktop |
 | `api/src/main/models` | Model definitions: prompts, sampling defaults |
-| `api/src/main/backend` | Inference runtimes: llama.cpp (GGUF), transformers 4-bit (BIN) — being removed (transition) in favour of a single torchnative-based serving system |
+| `api/src/main/engine.py` | The serving engine: one transformers-based engine for every model, on PyTorch or torchnative |
 | `api/src/main/utils` | Tool implementations and the tool-calling loop |
 
 ## 📍 Status
@@ -173,10 +166,9 @@ open a pull request.
 ## 🙏 Acknowledgements
 
 [JetBrains](https://www.jetbrains.com/) for Kotlin, Compose Multiplatform and Jewel ·
-[llama.cpp](https://github.com/ggml-org/llama.cpp) and
-[llama-cpp-python](https://github.com/abetlen/llama-cpp-python) ·
+[PyTorch](https://pytorch.org/) ·
 [Hugging Face](https://huggingface.co/) Transformers ·
-the [Qwen](https://github.com/QwenLM) and [Llama](https://www.llama.com/) model teams ·
+the [Qwen](https://github.com/QwenLM) model team ·
 [Open-Meteo](https://open-meteo.com/) and [Nager.Date](https://date.nager.at/) for free public APIs.
 
 ## 📄 License

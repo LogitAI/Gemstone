@@ -147,7 +147,7 @@ Gemstone is a multiplatform AI chat system made of two programs that live side b
 | Directory | Language | What it is |
 |---|---|---|
 | `app/` | Kotlin, Compose Multiplatform | The chat client. Targets Android, iOS, desktop (JVM) and web (Wasm). |
-| `api/` | Python 3.12 | The model-serving API: FastAPI + WebSocket server, model wrappers, inference backends (being removed in favour of a torchnative-based serving system), tools. |
+| `api/` | Python 3.13 | The model-serving API: FastAPI + WebSocket server, model wrappers, one transformers-based serving engine (on PyTorch or torchnative), tools. |
 
 The client talks to the API over HTTP and a WebSocket. The two are versioned together; a protocol
 change touches both and is specified in `docs/SPEC.md` first (rule 5).
@@ -159,13 +159,18 @@ status, decisions and open questions.
 
 Gradle and Python are independent toolchains. Neither needs the other to build.
 
-**Python API** (requires Python `>=3.12,<3.13`, managed with `uv`):
+**Python API** (requires Python `>=3.13`, managed with `uv`):
 
 ```bash
-uv sync                                   # install dependencies from pyproject.toml
-python -m api run server                  # serve on 0.0.0.0:23100
-python -m api run server 127.0.0.1 23100  # explicit host and port
+uv sync --extra torch                     # upstream PyTorch; or --extra torchnative (never both)
+uv run --extra torch python -m api run server   # serve on 0.0.0.0:23100
+uv run --extra torch pytest                     # api/tests, on SmolLM2-135M from the HF cache
 ```
+
+The tests load a real model. `GEMSTONE_TEST_MODEL` picks it (default `HuggingFaceTB/SmolLM2-135M`);
+it is read from the local Hugging Face cache and never downloaded unless
+`GEMSTONE_TEST_ALLOW_DOWNLOAD=1` (CI sets it). Model inference is heavy: run at most one such job
+at a time on a shared machine, and let CI verify pull requests.
 
 `python -m api` with no arguments crashes (`api/__main__.py` reads `sys.argv[1]` unguarded); always
 pass `run server`.
@@ -187,18 +192,18 @@ at: Gradle 8.13 cannot configure this build on JDK 25. A JDK 21 must be installe
 Verification follows rule 8: redirect Gradle output to a file and read `$?`; run each target's test
 task as its own invocation; delete `app/build/test-results/` before counting.
 
-**Current test reality.** The only Kotlin test (`app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`)
-asserts `1 + 2 == 3`. The Python API has no tests; `api/src/test/` holds static web assets, not tests.
-Do not report either as coverage. New behaviour starts with a real failing test (rule 5); where the
-test belongs for Python code is an open decision recorded in `PROJECT.md`.
+**Current test reality.** Python tests live in `api/tests/` and cover the engine, the WebSocket
+stream and the backend removal; `api/src/test/` holds static web assets, not tests. The only Kotlin
+test (`app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`) asserts `1 + 2 == 3`; do not
+report it as coverage. New behaviour starts with a real failing test (rule 5).
 
 ## 13. Generated and large files
 
 - `api/src/test/webpack/` is a **committed build output** of the Wasm client, served by the API at
   `/`. Do not hand-edit it. Regenerate it from `app/` with Gradle and say so in the report.
-- Model weights are downloaded from Hugging Face at first use (several GB per model). The
-  transformers backend caches quantised weights in `api/src/main/backend/.cache/`. Never commit
-  weights or caches, and do not trigger a model download from a test or a script without asking.
+- Model weights are downloaded from Hugging Face at first use into the Hugging Face cache
+  (`HF_HOME`). Never commit weights or caches, and do not trigger a model download from a test or
+  a script without asking.
 - `.idea/` is partly tracked; leave IDE files alone unless the task is about them.
 
 ## 14. Secrets and configuration
@@ -211,10 +216,11 @@ test belongs for Python code is an open decision recorded in `PROJECT.md`.
 
 ## 15. Dependencies
 
-- Do not add a version pin to `torch`, `torchvision` or `torchaudio` in `pyproject.toml`; the file
-  says so, and the Windows wheels come from the CUDA index configured under `[tool.uv.sources]`.
-- `llama-cpp-python` is pulled from prebuilt wheels per OS and Python version. Changing those URLs
-  changes what every Windows and Linux user installs; treat it as a rule-7 change.
+- `torch` and `torchnative` are mutually exclusive extras (torchnative replaces `import torch`).
+  Do not add a version pin to `torch`; the Windows wheels come from the CUDA index configured under
+  `[tool.uv.sources]`.
+- The engine uses only the public `torch` / `transformers` API. Custom kernels cannot be registered
+  from Gemstone (`torch.library` is a no-op on torchnative); they belong in torchnative.
 - Kotlin and library versions live in `gradle/libs.versions.toml`. Bump them there, not inline.
 
 ## 16. Line endings and encoding

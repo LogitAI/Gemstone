@@ -1,0 +1,44 @@
+name: API tests
+
+# Runs the Python tests (api/tests) on a real model. The model is downloaded once into a cached
+# HF_HOME, so every run uses the same checkpoint as a local run reading the Hugging Face cache.
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HF_HOME: ${{ github.workspace }}/.hf-cache
+      GEMSTONE_TEST_MODEL: HuggingFaceTB/SmolLM2-135M
+      GEMSTONE_TEST_ALLOW_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Cache the Hugging Face model
+        uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: hf-${{ env.GEMSTONE_TEST_MODEL }}-v1
+
+      - name: Install (upstream PyTorch, CPU)
+        run: uv sync --extra torch
+
+      - name: Test
+        run: uv run --extra torch pytest -v

@@ -19,8 +19,8 @@ INTENT → SPEC 순으로 그쪽이 이깁니다.
 |---|---|---|
 | WebSocket 스트리밍 채팅 (`/api/chat/streaming`) | 구현 | `api/src/main/server.py` |
 | 도구 호출 (날씨·공휴일·환율·계산·웹검색) | 구현 | `api/src/main/utils/` |
-| GGUF / BIN 백엔드, Qwen3 14B · Llama 3.1 8B | 구현됨, **제거 중(전환기)** | `api/src/main/backend/`, `models/` |
-| GPTQ 백엔드 | **폐기** | `gptq.py` 는 import 불가한 스크래치. 다중 백엔드 구조를 버림 |
+| 단일 서빙 엔진 (transformers, PyTorch 위) | 구현, 테스트 있음 | `api/src/main/engine.py`, `api/tests/`. torchnative 위 검증은 TN-M1(10-24) 이후 |
+| GGUF · BIN · GPTQ 백엔드, Llama 3.1 모델 | **제거됨** (#84) | Qwen3-0.6B 로 교체 |
 | torchnative 단일 서빙 시스템(Ollama 대체) | 예정 | 연속 배칭·페이지드 어텐션 포함. 엔진 세부는 제안 단계(transformers 5.x 연속 배칭 + 페이지드 KV 캐시, 커널은 torchnative), 확정 대기. [`docs/serving/engine.md`](docs/serving/engine.md) |
 | 모델 관리 · Ollama 호환 API · 4비트 가중치 | 예정 | Ollama 대체에서 따라 나오는 항목. 범위 확정 대기 (SPEC S1.14–S1.16) |
 | 비스트리밍 `POST /api/chat`, `GET /api/hello` | 부분 (결함) | `BaseModel.chat` 이 항상 제너레이터 |
@@ -41,11 +41,12 @@ app/                Kotlin Compose Multiplatform 클라이언트 (모듈 :app)
   src/commonMain    UI · 뷰모델 · 네트워크 프로토콜 (모든 타깃 공유)
   src/cioMain       Android · iOS · 데스크톱 공유 Ktor CIO 엔진
   src/*Main         플랫폼 진입점 (android, ios, desktop, wasmJs)
-api/                Python 3.12 모델 서빙 서버
+api/                Python 3.13 모델 서빙 서버
   src/main/server.py      FastAPI 엔드포인트
   src/main/settings.py    모델 목록, 세션 관리
   src/main/models/        모델 정의 (qwen3, llama3)
-  src/main/backend/       추론 런타임 (gguf, bin — 제거 중, torchnative 로 대체 예정)
+  src/main/engine.py      서빙 엔진 (transformers, PyTorch 또는 torchnative 위)
+  tests/                  pytest (실제 모델 SmolLM2-135M 사용)
   src/main/utils/         도구 구현과 도구 호출 루프
   src/test/               정적 웹 자산 (빌드된 Wasm 클라이언트, Brython 테스트 페이지) — 테스트 코드 아님
 docs/               INTENT, SPEC, locale/, guide/ (GitHub Pages), serving/ (서빙 엔진 결정 기록), build/
@@ -54,7 +55,8 @@ docs/               INTENT, SPEC, locale/, guide/ (GitHub Pages), serving/ (서�
 ## 4. 빌드와 실행
 
 ```bash
-uv sync                          # Python 의존성 (Python >=3.12,<3.13)
+uv sync --extra torch            # Python 의존성 (Python >=3.13). torchnative 는 --extra torchnative
+uv run --extra torch pytest      # Python 테스트 (api/tests)
 python -m api run server         # 0.0.0.0:23100
 ./gradlew :app:run               # 데스크톱
 ./gradlew :app:installDebug      # Android
@@ -96,8 +98,8 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 4. **서빙 엔진 세부** — 방향은 torchnative 단일 시스템으로 확정(다중 백엔드·vLLM 사용 안 함). 엔진 구성은 미확정: 현재 제안은 transformers 5.x 연속 배칭 + 페이지드 KV 캐시를 엔진으로, 커널은 torchnative.
    확정 전에 할 일: 작은 모델로 torchnative 위에서 `generate_batch`(`sdpa_paged`/`eager_paged`)를
    돌려 정확도와 처리량을 잰다 ([`docs/serving/engine.md`](docs/serving/engine.md) § 7).
-5. **Python 테스트의 위치** — `api/src/test/` 는 운영 중인 정적 자산이 차지하고 있다.
-   테스트 디렉터리를 새로 정할지, 자산을 옮길지.
+5. **Python 테스트의 위치** — 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산을
+   `api/src/test/` 밖으로 옮기는 일은 #83(M4).
 6. **릴리스 흐름** — 스크립트(`tools/release/sync-release.sh`)와 워크플로(`release-sync.yml`)는 들어왔다.
    - 해결됨: 원격의 `release/cnu` 를 같은 커밋(`307bb22`)의 `release-cnu` 로 바꿔 보존했다. 이제 CI 가
      `release` 브랜치를 만들 수 있다.
