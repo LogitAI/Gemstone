@@ -15,6 +15,7 @@ compose-multiplatform = "1.9.0"
 compose-navigation = "2.9.2"
 compose-webview = "2.0.3"
 jewel = "0.34.0-253.32098.37"
+jna = "5.14.0"
 junit = "4.13.2"
 kotlin = "2.3.20"
 kotlinx-coroutines = "1.10.2"
@@ -28,6 +29,8 @@ compose-webview-multiplatform = { module = "io.github.kevinnzou:compose-webview-
 jewel-standalone = { module = "org.jetbrains.jewel:jewel-int-ui-standalone", version.ref = "jewel" }
 jewel-decorated-window = { module = "org.jetbrains.jewel:jewel-int-ui-decorated-window", version.ref = "jewel" }
 jewel-foundation = { module = "org.jetbrains.jewel:jewel-foundation", version.ref = "jewel" }
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
+jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jna" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-testJunit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 junit = { module = "junit:junit", version.ref = "junit" }
