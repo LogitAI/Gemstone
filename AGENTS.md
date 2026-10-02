@@ -172,6 +172,9 @@ pass `run server`.
 
 **Kotlin client** (module `:app`):
 
+The Gradle daemon runs on JDK 21 (`gradle/gradle-daemon-jvm.properties`), whatever `JAVA_HOME` points
+at: Gradle 8.13 cannot configure this build on JDK 25. A JDK 21 must be installed locally.
+
 | Goal | Command |
 |---|---|
 | Desktop app | `./gradlew :app:run` |
