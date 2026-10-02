@@ -2,6 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+import anyio
 import uvicorn
 
 import traceback
@@ -11,6 +12,7 @@ import os
 
 from .settings import STATIC_DIR, WEBPACK_DIR, Session
 from . import registry as registry_module
+from .leases import acquire
 from .registry import DEFAULT_KEEP_ALIVE, in_catalogue, resolve_model_name
 from .models.config import ChatHistory
 from .openai_api import router as openai_router
@@ -102,20 +104,22 @@ async def chat_with_streaming(websocket: WebSocket):
     # fetched on first use, as the app always did.
     registry = registry_module.registry
     try:
-        lease = await run_in_threadpool(registry.acquire, hf_id, DEFAULT_KEEP_ALIVE, in_catalogue(session.model_id))
+        lease = await acquire(registry, hf_id, DEFAULT_KEEP_ALIVE, in_catalogue(session.model_id))
     except Exception:
         traceback.print_exc()
         await websocket.close(code=1008, reason="Model not found or failed to load.")
         return
 
     # Generation runs on worker threads so the event loop stays free; a client that goes away
-    # sets `cancel`, which stops generation and frees the model for the next request.
+    # sets `cancel`, which stops generation and frees the model for the next request. Everything
+    # after the lease is granted runs inside the `try`, so the lease is released however it ends.
     cancel = threading.Event()
-    tokens = lease.model.chat(  # a generator: nothing runs until the first `next`
-        chat_history, user_prompt, print_output=True, cancel=cancel, tool_call_caches=session.tool_call_caches
-    )
+    tokens = None
     done = object()
     try:
+        tokens = lease.model.chat(  # a generator: nothing runs until the first `next`
+            chat_history, user_prompt, print_output=True, cancel=cancel, tool_call_caches=session.tool_call_caches
+        )
         while (token := await run_in_threadpool(next, tokens, done)) is not done:
             await websocket.send_text(token)
         await websocket.send_text("<EOS>")  # EOS token to signal the end of the conversation
@@ -125,7 +129,9 @@ async def chat_with_streaming(websocket: WebSocket):
     finally:
         cancel.set()
         try:
-            await run_in_threadpool(tokens.close)
+            if tokens is not None:
+                with anyio.CancelScope(shield=True):
+                    await run_in_threadpool(tokens.close)
         finally:
             registry.release(lease)
 

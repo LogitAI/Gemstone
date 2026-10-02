@@ -18,11 +18,12 @@ import uuid
 
 import anyio
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel as Schema, ConfigDict, ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from . import registry as registry_module
+from .leases import LeasedStreamingResponse, acquire, once
 from .registry import in_catalogue, parse_keep_alive, resolve_model_name
 
 
@@ -403,11 +404,11 @@ async def _chat_completions(request: Request):
     # is fetched on first use.
     registry = registry_module.registry
     try:
-        lease = await run_in_threadpool(registry.acquire, hf_id, keep_alive, in_catalogue(req.model))
+        lease = await acquire(registry, hf_id, keep_alive, in_catalogue(req.model))
     except LookupError:
         raise APIError(404, f"The model '{req.model}' does not exist locally; pull it first.",
                        param="model", code="model_not_found")
-    release = _once(lambda: registry.release(lease))
+    release = once(lambda: registry.release(lease))
     try:
         return await _complete(req, lease, release, messages, tools)
     except BaseException:
@@ -415,21 +416,11 @@ async def _chat_completions(request: Request):
         raise
 
 
-def _once(fn):
-    """ `fn` runs on the first call only, from whichever path ends the request first. """
-    lock, done = threading.Lock(), []
-
-    def wrapper():
-        with lock:
-            if done:
-                return
-            done.append(True)
-        fn()
-    return wrapper
-
-
 async def _complete(req: ChatCompletionRequest, lease, release, messages, tools):
-    """ Run the completion on the leased model. Returns a response that calls `release` once done. """
+    """
+    Run the completion on the leased model. `release` runs exactly once: before a non-streaming or
+    failed reply returns, or, for a stream, once the response is done with however it ends (#93).
+    """
     model, engine = lease.model, lease.engine
 
     parameters = _model_defaults(model)
@@ -442,6 +433,24 @@ async def _complete(req: ChatCompletionRequest, lease, release, messages, tools)
     stops = [req.stop] if isinstance(req.stop, str) else list(req.stop or [])
 
     generation = Generation(engine, messages, tools, parameters, stops)
+
+    def finish():
+        try:
+            generation.close()
+        finally:
+            release()
+    finish = once(finish)  # stop generation and free the engine, then release the lease
+
+    try:
+        return await _respond(req, generation, finish)
+    except BaseException:
+        with anyio.CancelScope(shield=True):
+            await run_in_threadpool(finish)
+        raise
+
+
+async def _respond(req: ChatCompletionRequest, generation: Generation, finish):
+    """ The reply: a `chat.completion`, or a stream whose response runs `finish` once it ends. """
     completion_id = f"chatcmpl-{uuid.uuid4().hex}"
     created = int(time.time())
 
@@ -452,8 +461,7 @@ async def _complete(req: ChatCompletionRequest, lease, release, messages, tools)
             raise _engine_error(e)
         finally:
             with anyio.CancelScope(shield=True):
-                await run_in_threadpool(generation.close)
-            release()
+                await run_in_threadpool(finish)
         content = "".join(v for k, v in events if k == "content")
         reasoning = "".join(v for k, v in events if k == "reasoning")
         message: Dict[str, Any] = {"role": "assistant", "content": content or None}
@@ -472,10 +480,7 @@ async def _complete(req: ChatCompletionRequest, lease, release, messages, tools)
     # (an over-long prompt, say) is still an HTTP error.
     try:
         first = await run_in_threadpool(generation.step)
-    except Exception as e:
-        with anyio.CancelScope(shield=True):
-            await run_in_threadpool(generation.close)
-        release()
+    except Exception as e:  # `_complete` releases
         raise _engine_error(e)
 
     include_usage = bool((req.stream_options or {}).get("include_usage"))
@@ -513,9 +518,10 @@ async def _complete(req: ChatCompletionRequest, lease, release, messages, tools)
             yield f"data: {json.dumps({'error': _engine_error(e).body}, ensure_ascii=False)}\n\n"
         finally:
             # Also reached when the client disconnects: stop generation and free the engine (#35).
+            # A body that never starts is covered by the response itself (#93).
             with anyio.CancelScope(shield=True):
-                await run_in_threadpool(generation.close)
-            release()
+                await run_in_threadpool(finish)
         yield "data: [DONE]\n\n"
 
-    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+    return LeasedStreamingResponse(stream(), finish, media_type="text/event-stream",
+                                   headers={"Cache-Control": "no-cache"})
