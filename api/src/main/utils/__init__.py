@@ -2,6 +2,7 @@ from json import dumps, loads, JSONDecodeError
 from typing import ClassVar, Union
 from dataclasses import dataclass
 from datetime import datetime
+from uuid import uuid4
 from copy import deepcopy
 
 from concurrent.futures import ThreadPoolExecutor
@@ -12,6 +13,7 @@ from . import calendar
 from . import currency
 from . import calculator
 from . import web_search
+from . import cache
 #from . import embedding
 
 
@@ -131,9 +133,16 @@ class FunctionCallResult(list):
                 self.__message_queue = []
                 return result
 
-    def stage(self, calling: str, tag: tuple[str, str] = ("<tool_call>", "</tool_call>")):
+    def stage(
+        self,
+        calling: str,
+        tag: tuple[str, str] = ("<tool_call>", "</tool_call>"),
+        tool_call_caches: dict | None = None
+    ):
         with self.__queue_mutex:
-            job_id = datetime.now().strftime("call_%Y%m%d%H%M%S")
+            # Unique within a session: the cache is keyed by this id (the timestamp alone has
+            # one-second resolution, so calls staged in the same second used to collide).
+            job_id = datetime.now().strftime("call_%Y%m%d%H%M%S_") + uuid4().hex[:8]
             try:
                 params = loads(calling)
             except JSONDecodeError:
@@ -148,22 +157,30 @@ class FunctionCallResult(list):
                 name=name, arguments=deepcopy(arguments)
             ))), ensure_ascii=False) + "\n" + tag[1])
 
-            self.__thread_pool.submit(self.do, job_id, name, arguments, tag)
+            self.__thread_pool.submit(self.do, job_id, name, arguments, tag, tool_call_caches)
 
     def do(
         self,
         job_id: str,
         name: str,
         arguments: dict,
-        tag: tuple[str, str] = ("<tool_call>", "</tool_call>")
+        tag: tuple[str, str] = ("<tool_call>", "</tool_call>"),
+        tool_call_caches: dict | None = None
     ):
         # Execute the function
         try:
             if name not in self.implementations:
                 raise ValueError(f"Function '{name}' is not registered.")
-            result = self.implementations[name](**arguments)
+            if name == "get_cache_data":
+                result = self.implementations[name](**arguments, tool_call_caches=tool_call_caches)
+            else:
+                result = self.implementations[name](**arguments)
         except Exception as e:
             result = str(e)
+
+        # Keep the full result server side; the client history only gets a placeholder
+        if tool_call_caches is not None:
+            tool_call_caches[job_id] = result
 
         # History and result handling
         with self.__queue_mutex:
@@ -375,6 +392,20 @@ FunctionCalling.DEFAULT = FunctionCalling(
                 },
                 "required": ["url"]
             }
+        ),
+        FunctionSchema(
+            name="get_cache_data",
+            description="Get the result of a previous tool call from the session cache",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "tool_call_cache_id": {
+                        "type": "string",
+                        "description": "The id of the previous tool call (from <cached_result:ID>)"
+                    }
+                },
+                "required": ["tool_call_cache_id"]
+            }
         )
     ],
 
@@ -387,6 +418,7 @@ FunctionCalling.DEFAULT = FunctionCalling(
         calculate=calculator.calculate,
         search_web=web_search.search_web,
         search_website=web_search.search_website,
-        fetch_webpage=web_search.fetch_webpage
+        fetch_webpage=web_search.fetch_webpage,
+        get_cache_data=cache.get_cache_data
     )
 )

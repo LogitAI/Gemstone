@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from uuid import uuid4
 import gc
 import os
 
@@ -43,11 +44,13 @@ class Session:
             if model_id is None:
                 raise ValueError("Model ID must be specified")
             self.model_id = model_id
-            self.session_id = f"{model_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            # The random suffix keeps sessions created in the same second apart (each has its own cache)
+            self.session_id = f"{model_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
             print("INFO:     Session", self.session_id, "is CREATED for model", model_id)
             self.__sessions[self.session_id] = self
             print("INFO:     Current sessions:", list(self.__sessions))
             self._model = None
+            self.tool_call_caches: dict[str, str] = {}  # tool call id -> result (S1.6)
 
     @property
     def model(self):
@@ -73,6 +76,7 @@ class Session:
             if sys.getrefcount(cls.__sessions[session_id]._model) <= 3:
                 cls.__sessions[session_id]._model.clean_up()
                 cls.__sessions[session_id]._model = None  # Clear the model reference
+            cls.__sessions[session_id].tool_call_caches.clear()
             del cls.__sessions[session_id]
             print("INFO:     Current sessions:", list(cls.__sessions))
             cls.clean_up()

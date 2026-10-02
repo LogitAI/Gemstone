@@ -41,7 +41,7 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
 
 - `POST /api/models/{model_id}/sessions/` and `POST /api/sessions/` (model `default`) create a
   session and return `{model_id, session_id, message}`. The session id is
-  `<model_id>_<YYYYmmddHHMMSS>`.
+  `<model_id>_<YYYYmmddHHMMSS>_<8 hex>`, unique even within one second.
 - `DELETE /api/sessions/{session_id}` (also accepted as `POST`) closes a session and unloads the
   model when nothing else holds it.
 - The model is loaded lazily on first use, and each model class is a process-wide singleton, so
@@ -52,8 +52,8 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
     with an error body.
   - Deleting an unknown session raises `ValueError`, but the endpoint catches `KeyError`, so the
     response is HTTP 500 instead of 404.
-  - Two sessions created for the same model within one second get the same id.
-- Code: `api/src/main/server.py`, `api/src/main/settings.py` (`Session`). Test: none.
+- Code: `api/src/main/server.py`, `api/src/main/settings.py` (`Session`). Test: session-id
+  uniqueness only (`api/tests/test_tool_cache.py`).
 
 ### S1.4 Streaming chat over WebSocket — `implemented` · G4
 
@@ -94,11 +94,20 @@ the next request (#35).
 - Default tools: `get_weather`, `get_weather_forecast` (Open-Meteo), `get_calendar_events`,
   `get_upcoming_holidays` (Nager.Date), `get_exchange_rate` (exchangerate-api.com), `calculate`
   (local), `search_web`, `search_website`, `fetch_webpage` (SerpApi with `SERPAPI_KEY`, Bing
-  scraping fallback).
-- Defect found by reading: call ids have one-second resolution, so two tool calls staged in the
-  same second share an id.
+  scraping fallback), `get_cache_data` (local).
+- Tool-result cache (#82; idea and first implementation from PR #53 by @Mir47-47): each `Session`
+  holds `tool_call_caches` (call id -> full result). The server stores every tool result there when
+  the tool finishes; the client's history keeps only the `<cached_result:<call id>>` placeholder.
+  `get_cache_data(tool_call_cache_id)` (default tool, `utils/cache.py`) returns the cached result,
+  or `Cache '<id>' not found`, so a later turn answers from an earlier result without calling the
+  original tool again. The Qwen3 system prompt tells the model to check the cache first. The cache
+  is passed to `BaseModel.chat(tool_call_caches=…)` by `chat_with_streaming` and is emptied when the
+  session closes. It lives in memory only and is not shared between sessions.
+- Call ids are `call_<YYYYmmddHHMMSS>_<8 hex>`, unique even within one second (the former
+  one-second-resolution id made same-second calls share an id and would have overwritten each
+  other's cache entry). Session ids are unique too (S1.3), so sessions never share a cache.
 - Code: `api/src/main/utils/__init__.py`, `api/src/main/utils/*.py`, `api/src/main/models/base.py`.
-  Test: none.
+  Test: `api/tests/test_tool_cache.py` (cache only).
 
 ### S1.7 Models — `implemented` · G5
 
