@@ -270,8 +270,12 @@ Unverified:
 
 - Bit-level batch invariance of the forward pass. Batched and sequential runs push the same rows
   through matrix products of different shapes, and torch does not promise the same rounding for
-  them. The sampler itself is row-independent; the tests check that results agree on SmolLM2-135M,
-  not that they always will.
+  them. The sampler itself is row-independent; the tests check that results agree on SmolLM2-135M
+  **in float32**, not that they always will. In bfloat16 (SmolLM2's checkpoint dtype) the top two
+  logits tie exactly often enough that a one-ulp difference between batch shapes flips the token:
+  CI saw a greedy reply diverge at a step where both candidates scored exactly 21.375. The
+  equality criteria are therefore stated for float32; upstream PyTorch is not self-consistent in
+  bfloat16 either.
 - torchnative: transformers' continuous-batching modules import there but have not run.
 - Prefix sharing (reusing the KV blocks of an identical prompt prefix) is off, so that a reply does
   not depend on earlier requests. Turning it on is a later, measured decision.
