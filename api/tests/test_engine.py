@@ -1,6 +1,7 @@
 """
 The serving engine (SPEC S1.11): one transformers-based engine, streaming, seeded sampling,
-one generation at a time per model (#36), and cancellation (#35).
+cancellation (#35), and the exclusive path, which runs one `generate` at a time (#36).
+Concurrent batched requests are covered by `test_batching.py` (S1.12).
 """
 import threading
 import time
@@ -42,8 +43,11 @@ def test_same_seed_gives_same_sample(engine):
     assert first == second
 
 
-def test_concurrent_requests_run_one_at_a_time_and_match_sequential(engine, monkeypatch):
-    expected = generate(engine)
+def test_unbatchable_requests_run_one_at_a_time_and_match_sequential(engine, monkeypatch):
+    # Extra `generate` keyword arguments (here `min_new_tokens`) take the exclusive path, which
+    # runs one `generate` at a time with no batched request alongside it.
+    unbatchable = dict(min_new_tokens=16)
+    expected = generate(engine, **unbatchable)
 
     active = 0
     peak = 0
@@ -69,7 +73,7 @@ def test_concurrent_requests_run_one_at_a_time_and_match_sequential(engine, monk
 
     def run(i):
         try:
-            results[i] = generate(engine)
+            results[i] = generate(engine, **unbatchable)
         except Exception as e:  # surfaced below
             errors.append(e)
 

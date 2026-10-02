@@ -13,7 +13,8 @@ dependencies = [
     "serpapi>=0.1.5",
     "python-dotenv>=1.1.0",
     "huggingface_hub>=0.31.2",
-    "transformers>=5.15",
+    "transformers>=5.18",  # the continuous-batching API the engine uses was read and tested against 5.18
+    "psutil>=7.0",  # transformers sizes the paged KV cache on CPU from psutil; without it continuous batching cannot start
 ]
 
 
