@@ -11,8 +11,8 @@ a status:
 | `planned` | Stated as a goal; no code yet on `develop`. |
 
 **Evidence.** Each item names the code it was read from and its test. Python tests live in
-`api/tests/` (pytest) and cover the engine (S1.11), the WebSocket stream (S1.4) and the backend
-removal (S1.8). Everything else has **no behavioural test** yet: the only Kotlin test,
+`api/tests/` (pytest) and cover the engine (S1.11), the WebSocket stream (S1.4), the
+OpenAI-compatible API (S1.10) and the backend removal (S1.8). Everything else has **no behavioural test** yet: the only Kotlin test,
 `app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`, asserts `1 + 2 == 3`. So
 `implemented` without a named test means *read in code*, never *verified by a test*.
 
@@ -133,10 +133,9 @@ Test: `api/tests/test_backends_removed.py`.
 - `GET /chat` serves a minimal Brython test page (`api/src/test/static/`).
 - Code: `api/src/main/server.py`. Test: none.
 
-### S1.10 OpenAI-compatible API — `planned` · G5
+### S1.10 OpenAI-compatible API — `partial` · G5
 
-The README states the plan. This API is how external clients attach to Gemstone, including agent
-harnesses (`INTENT.md` § 4).
+This API is how external clients attach to Gemstone, including agent harnesses (`INTENT.md` § 4).
 
 **Tool calls pass through (decided 2026-10-03).** When the request carries `tools` and the model
 emits a tool call, the response returns it as `tool_calls`. Streaming returns it as tool-call
@@ -148,8 +147,44 @@ not serve it.
 This differs on purpose from the chat app's WebSocket (S1.4, S1.6), where the server executes
 Gemstone's built-in tools and streams the results. Both stay.
 
-Concurrent requests from several clients are served by continuous batching (S1.12).
-No code.
+Implemented (#65), `api/src/main/openai_api.py`:
+
+- `GET /v1/models` lists `MODEL_LIST` in OpenAI's list format (`object: "list"`, entries with
+  `id`, `object: "model"`, `created`, `owned_by: "gemstone"`).
+- `POST /v1/chat/completions` accepts `model`, `messages` (`system`, `user`, `assistant` with
+  optional `tool_calls`, `tool` with `tool_call_id`; content as a string or a list of text parts),
+  `tools`, `tool_choice` (`auto`, `none`, `required`, or one named function), `temperature`,
+  `top_p`, `max_tokens` / `max_completion_tokens`, `seed`, `stop`, `stream` and
+  `stream_options.include_usage`. The messages go to the model's engine as they are: the model's
+  own system prompt and Gemstone's built-in tools are not added. Unset sampling parameters take the
+  model's defaults; an unset token limit means "up to the context length".
+- Non-streaming returns a `chat.completion`; streaming returns server-sent events, one
+  `chat.completion.chunk` per `data:` line (the first carries `role: "assistant"`), ending with
+  `data: [DONE]`. With `include_usage`, a last chunk with empty `choices` carries `usage`.
+- The model's `<tool_call>{"name": …, "arguments": …}</tool_call>` blocks become `tool_calls`
+  (`id` `call_<24 hex>`, `type: "function"`, `function.arguments` a JSON string); streaming sends
+  each as one tool-call delta carrying the whole call. Tags split across engine chunks are
+  recognised. `finish_reason` is `tool_calls` when any call was returned, else `length` when the
+  token limit was reached, else `stop`. With `tool_choice: "none"` the tools are not sent and no
+  output is parsed as a call. A block that is not valid JSON is returned as content.
+- Reasoning between `<think>` and `</think>` is removed from `content` and returned as
+  `reasoning_content` (message field, or delta field when streaming), the extension used by
+  DeepSeek, vLLM and others. Leading and trailing whitespace around content and reasoning is
+  dropped.
+- `stop` (a string or a list) ends the reply at the first match in the raw model output,
+  best effort; the match is not returned.
+- A streaming client that disconnects stops its generation (the engine's `cancel` is set and its
+  stream closed), as on the WebSocket (#35).
+- Errors use OpenAI's shape `{"error": {"message", "type", "param", "code"}}`: an unknown model is
+  HTTP 404 (`model_not_found`), a malformed request HTTP 400 (`invalid_request_error`), an
+  engine failure before streaming starts HTTP 500.
+
+Not yet: `n` > 1, `logprobs`, `response_format`, `/v1/completions`, `/v1/embeddings`.
+`usage` counts tokens by re-tokenising with the engine's tokenizer. Concurrent requests from
+several clients wait for one another until continuous batching (S1.12) lands.
+
+Test: `api/tests/test_openai_api.py` (a scripted fake engine, plus one SmolLM2-135M test that
+streams a greedy completion and compares it with the engine's own output).
 
 ### S1.11 torchnative serving engine — `partial` · G5
 

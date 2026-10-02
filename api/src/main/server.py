@@ -13,6 +13,7 @@ import os
 
 from .settings import STATIC_DIR, WEBPACK_DIR, MODEL_LIST, Session
 from .models.config import ChatHistory
+from .openai_api import router as openai_router
 
 
 class Message(BaseModel):
@@ -23,6 +24,7 @@ class Message(BaseModel):
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 app.mount("/webpack", StaticFiles(directory=WEBPACK_DIR, html=True), name="webpack")
+app.include_router(openai_router)  # /v1/*: OpenAI-compatible API (SPEC S1.10)
 
 
 @app.get("/")
