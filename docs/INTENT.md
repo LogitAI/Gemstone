@@ -117,8 +117,10 @@ with `domain/`, `adapter/` and `framework/` layers.
   server is for the user's own machine or network.
 - **Not the Python runtime.** Embedding CPython in Kotlin is Python Multiplatform's job. Gemstone
   consumes it; it does not reimplement it.
-- **Not a general LLM SDK.** The Python serving system exists to serve the chat app, not as a library for
-  other applications.
+- **Not an agent harness.** The serving system serves the chat app *and* external clients through
+  its OpenAI- and Ollama-compatible APIs. Agent harnesses (coding agents and the like) are among
+  those clients, and their tool calls pass through to them (`SPEC.md` S1.10). Building or
+  maintaining a harness is outside Gemstone. (Decided by the maintainer, 2026-10-03.)
 
 ## 5. Questions the intent does not yet answer
 
