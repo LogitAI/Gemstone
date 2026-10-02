@@ -10,11 +10,11 @@ a status:
 | `partial` | Some of it exists, or it exists but reading the code shows a defect. |
 | `planned` | Stated as a goal; no code yet on `develop`. |
 
-**Evidence.** Each item names the code it was read from and its test. As of this revision there are
-**no behavioural tests**: the only Kotlin test, `app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`,
-asserts `1 + 2 == 3`, and the Python API has none (`api/src/test/` holds static web assets). So
-`implemented` below means *read in code*, never *verified by a test*. Closing that gap is the
-first TDD task; the test column says `none` until then.
+**Evidence.** Each item names the code it was read from and its test. Python tests live in
+`api/tests/` (pytest) and cover the engine (S1.11), the WebSocket stream (S1.4) and the backend
+removal (S1.8). Everything else has **no behavioural test** yet: the only Kotlin test,
+`app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`, asserts `1 + 2 == 3`. So
+`implemented` without a named test means *read in code*, never *verified by a test*.
 
 Status was established by reading the `develop` branch at commit `2be0e37` (2026-10-02). S1.11–S1.16
 and S3.4 also record the maintainer's decisions of the same day ([`serving/engine.md`](serving/engine.md)).
@@ -32,8 +32,9 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
 
 ### S1.2 Model catalogue — `implemented` · G5
 
-- `GET /api/models` returns the model table keyed by id: `llama3`, `qwen3`, and `default` (an alias
-  of `qwen3`), each with `model_name` and `model_description`.
+- `GET /api/models` returns the model table keyed by id: `qwen3`, and `default` (an alias of
+  `qwen3`), each with `model_name` and `model_description`. (`llama3` was removed with the
+  GGUF backend, #84.)
 - Code: `api/src/main/settings.py` (`MODEL_LIST`). Test: none.
 
 ### S1.3 Sessions — `partial` · G5
@@ -65,9 +66,12 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
 
 The server then sends one text frame per generated chunk, then `<EOS>`, then closes. An unknown
 session closes the socket with code `1008`. Reasoning arrives between `<think>` and `</think>`
-frames; tool activity arrives as `<tool_call> … </tool_call>` frames (S1.6).
+frames; tool activity arrives as `<tool_call> … </tool_call>` frames (S1.6). Generation runs off
+the event loop; if the client disconnects mid-stream, generation stops and the model is free for
+the next request (#35).
 
-- Code: `api/src/main/server.py` (`chat_with_streaming`), `api/src/main/models/base.py`. Test: none.
+- Code: `api/src/main/server.py` (`chat_with_streaming`), `api/src/main/models/base.py`.
+  Test: `api/tests/test_server.py`.
 
 ### S1.5 Non-streaming chat — `partial` · G5
 
@@ -96,31 +100,22 @@ frames; tool activity arrives as `<tool_call> … </tool_call>` frames (S1.6).
 - Code: `api/src/main/utils/__init__.py`, `api/src/main/utils/*.py`, `api/src/main/models/base.py`.
   Test: none.
 
-### S1.7 Models — `implemented` (weights format changes with the backend transition) · G5
+### S1.7 Models — `implemented` · G5
 
-| Id | Weights | Backend (being removed) | Context | Tools |
-|---|---|---|---|---|
-| `qwen3` (default) | `Qwen/Qwen3-14B-GGUF`, `*Q4_K_M.gguf` | GGUF (default) or BIN | 40 960 | yes |
-| `llama3` | `lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF`, `*Q4_K_M.gguf` | GGUF | 131 072 | no |
+| Id | Weights | Context | Tools |
+|---|---|---|---|
+| `qwen3` (default) | `Qwen/Qwen3-0.6B` (Hugging Face, safetensors) | 40 960 | yes |
 
-Each model carries its own system prompt and sampling defaults. Code:
-`api/src/main/models/qwen3/model.py`, `api/src/main/models/llama3/model.py`. Test: none.
+Each model carries its own system prompt and sampling defaults, and runs on the engine of S1.11.
+Code: `api/src/main/models/qwen3/model.py`. Test: none for the Qwen3 checkpoint itself (it needs
+a download; tests use SmolLM2-135M through the same model layer, `api/tests/test_server.py`).
 
-### S1.8 Inference backends — `being removed` (transition) · G5
+### S1.8 Inference backends — `removed` · G5
 
-The multiple-backend structure is dropped. These backends stay in the code until the torchnative
-serving system (S1.11) replaces them.
-
-
-- **GGUF** (`llama-cpp-python`) — `being removed` (works today). Downloads from the Hugging Face Hub; tries GPU
-  layer counts `-1, 50, 45, … 0` until one fits; on Windows always uses CPU (0 layers).
-  Default backend. Code: `api/src/main/backend/gguf.py`.
-- **BIN** (`transformers` + `bitsandbytes`) — `being removed` (works today). Quantises to 4-bit NF4 on first load
-  and caches the result under `api/src/main/backend/.cache/`. Code: `api/src/main/backend/bin.py`.
-- **GPTQ** — `being removed` (never worked). `api/src/main/backend/gptq.py` is a scratch script (it
-  contains a bare `pip install` line) and is not importable; it will not be completed.
-- A backend whose library is missing is replaced by a dummy and a warning is printed.
-- Test: none.
+The GGUF (`llama-cpp-python`), BIN (`transformers` + `bitsandbytes`) and GPTQ backends, the
+`CoreRuntime` registry and `BackendType` were removed in #84, along with the `llama3` model and the
+unused `utils/embedding.py`. The engine of S1.11 replaces them.
+Test: `api/tests/test_backends_removed.py`.
 
 ### S1.9 Bundled web clients — `implemented` · G1
 
@@ -147,7 +142,7 @@ Gemstone's built-in tools and streams the results. Both stay.
 Concurrent requests from several clients are served by continuous batching (S1.12).
 No code.
 
-### S1.11 torchnative serving engine — `planned` · G5
+### S1.11 torchnative serving engine — `partial` · G5
 
 One serving system built on torchnative replaces S1.8. The goal is local, private LLM serving: an
 Ollama replacement.
@@ -157,9 +152,26 @@ Decided (2026-10-02):
 - One engine. `CoreRuntime`, `BackendType` and the GGUF / BIN / GPTQ runtimes are removed, along
   with `llama-cpp-python` and `bitsandbytes`.
 - Models load through `transformers` (`from_pretrained`) on torchnative.
-- The Python requirement becomes `>=3.13` (torchnative's floor). Today it is `>=3.12,<3.13`.
+- The Python requirement is `>=3.13` (torchnative's floor).
 - vLLM is not a dependency: a consequence of the torchnative decision, because vLLM assumes the
   CUDA PyTorch runtime and cannot run on torchnative.
+
+Implemented (#84), `api/src/main/engine.py`:
+
+- `Engine(model_id, dtype=, device=, quantization=, chat_template=, ...)` loads a causal LM with
+  `from_pretrained`. `quantization="q8_0"` goes through torchnative's `TorchnativeConfig`.
+- Calling it with chat messages streams the reply as text chunks. Temperature 0 is greedy and
+  equals `transformers` `generate`; `seed` makes sampling reproducible.
+- One generation runs at a time per engine; concurrent callers wait and get the same output as
+  sequential calls (#36).
+- A generation stops when its `cancel` event is set or its stream is closed; the WebSocket
+  endpoint does both when the client disconnects (#35).
+- The substrate is chosen at install time: `uv sync --extra torch` (upstream PyTorch) or
+  `--extra torchnative`.
+
+Tests: `api/tests/test_engine.py`, `api/tests/test_server.py`, on upstream PyTorch with
+SmolLM2-135M. Still open for M1: the same tests on torchnative (cpu, mps) once torchnative TN-M1
+lands (2026-10-24).
 
 Proposal, pending confirmation: the engine is transformers 5.x continuous batching with a paged KV
 cache, kernels live in torchnative, and the engine uses only the public `torch` / `transformers`
@@ -256,7 +268,7 @@ navigates to the chat, with a swipe-back gesture to return. Code: `.../screen/ch
 ### S2.5 Model selection — `partial` · G5
 
 The sidebar lists models and selecting one opens a new server session for it. The list is
-hard-coded in the client (`Qwen3`, `Llama3`) instead of read from `GET /api/models`.
+hard-coded in the client (`Qwen3`) instead of read from `GET /api/models`.
 Code: `.../ui/viewmodel/AIModelViewModel.kt`, `.../screen/chat/SideScreen.kt`. Test: none.
 
 ### S2.6 Chat list and history — `partial` · G4

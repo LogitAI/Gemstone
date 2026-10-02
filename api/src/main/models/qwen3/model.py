@@ -1,12 +1,10 @@
 from typing import List, Dict, Union, Generator, Optional
 
 from ..base import ChatHistory, FunctionCalling, BaseModel
-from ...backend import BackendType, CoreRuntime
 
 
 # Set model id
-model_id = "Qwen/Qwen3-14B-Instruct"
-gguf_model_id = "Qwen/Qwen3-14B-GGUF"
+model_id = "Qwen/Qwen3-0.6B"
 context_length = 40960  # Set context length to 40960 tokens (max 40960)
 
 
@@ -43,35 +41,12 @@ print("INFO:     Use default system prompt -", system_prompt)
 
 class Qwen3Model(BaseModel):
     """
-    Qwen 3 14B 4bitQ Instruct model implementation.
+    Qwen 3 0.6B model implementation.
     This class extends BaseModel and provides methods for chatting and token streaming.
     """
     model_id = model_id
-    gguf_model_id = gguf_model_id
     context_length = context_length
-    supported_backends = tuple([BackendType.GGUF, BackendType.BIN])
     supported_tools: FunctionCalling = BaseModel.supported_tools
-
-    def _get_runtime(self, backend: BackendType | None = None):
-        if backend is None:  # Default to GGUF backend
-            backend = self.supported_backends[0]
-        super()._get_runtime(backend)
-
-        if backend == BackendType.GGUF:
-            return CoreRuntime(
-                model_id=self.gguf_model_id,
-                context_length=self.context_length,
-                filename="*Q4_K_M.gguf",  # 4bit quantized model
-                verbose=False,
-                backend=backend.value
-            )
-        elif backend == BackendType.BIN:
-            return CoreRuntime(
-                model_id=self.model_id,
-                context_length=self.context_length,
-                device_map="cuda:0",
-                backend=backend.value
-            )
 
     def chat(
         self,

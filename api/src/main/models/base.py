@@ -1,10 +1,10 @@
 import traceback
 from re import finditer, DOTALL
 from dataclasses import dataclass
-from typing import Generator, Tuple, Optional, List, Dict, Union
+from typing import Generator, Optional, List, Dict, Union
 
 from .config import ChatHistory
-from ..backend import BackendType
+from ..engine import Engine
 from ..utils import FunctionCalling, FunctionCallResult
 
 
@@ -28,7 +28,7 @@ class BaseModel:
 
     model_id = ""
     context_length = 0
-    supported_backends: Tuple[BackendType] = tuple([BackendType.DEFAULT])
+    engine_options: dict = {}  # extra keyword arguments for Engine (dtype, device, quantization, ...)
     supported_tools: FunctionCalling = FunctionCalling.DEFAULT
     special_tags = Tags()
 
@@ -38,15 +38,14 @@ class BaseModel:
             cls.__instance = super(BaseModel, cls).__new__(cls)
         return cls.__instance
 
-    def __init__(self, backend: BackendType | None = None):
+    def __init__(self, engine: Engine | None = None):
         if not self._initialized:
             self._initialized = True
-            self.runtime = self._get_runtime(backend)
+            self.runtime = engine if engine is not None else self._create_engine()
             print("INFO:     Model", self.model_id, "is LOADED")
 
-    def _get_runtime(self, backend: BackendType | None = None):
-        if backend not in self.supported_backends:
-            raise ValueError(f"Unsupported backend: {backend}. Supported backends are: {self.supported_backends}")
+    def _create_engine(self) -> Engine:
+        return Engine(self.model_id, context_length=self.context_length or None, **self.engine_options)
 
     def __del__(self):
         """ Clean up resources when the model is deleted """

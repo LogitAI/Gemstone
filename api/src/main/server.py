@@ -1,12 +1,13 @@
-from fastapi import FastAPI, WebSocket, Request, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 import uvicorn
 
 from typing import List, Optional
 import traceback
-import asyncio
+import threading
 import json
 import os
 
@@ -125,14 +126,22 @@ async def chat_with_streaming(websocket: WebSocket):
     chat_history.extend(json.loads(await websocket.receive_text()))
     user_prompt = await websocket.receive_text()
 
-    for token in model.chat(chat_history, user_prompt, print_output=True):
-        await websocket.send_text(token)
-        await asyncio.sleep(0.0001)  # 0.1ms delay between tokens
-
-    del model
-
-    await websocket.send_text("<EOS>")  # EOS toke to signal the end of the conversation
-    await websocket.close()
+    # Generation runs on worker threads so the event loop stays free; a client that goes away
+    # sets `cancel`, which stops generation and frees the model for the next request.
+    cancel = threading.Event()
+    tokens = model.chat(chat_history, user_prompt, print_output=True, cancel=cancel)
+    done = object()
+    try:
+        while (token := await run_in_threadpool(next, tokens, done)) is not done:
+            await websocket.send_text(token)
+        await websocket.send_text("<EOS>")  # EOS token to signal the end of the conversation
+        await websocket.close()
+    except WebSocketDisconnect:
+        pass  # the client went away mid-stream
+    finally:
+        cancel.set()
+        await run_in_threadpool(tokens.close)
+        del model
 
 
 if __name__ == '__main__':

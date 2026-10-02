@@ -12,13 +12,9 @@ class ModelSettings:
 
 
 MODEL_LIST = dict(
-    llama3=ModelSettings(
-        model_name="Llama 3.1",
-        model_description="Llama 3.1 8B 4bitQ Instruct"
-    ),
     qwen3=ModelSettings(
         model_name="Qwen 3",
-        model_description="Qwen 3 14B 4bitQ IT"
+        model_description="Qwen 3 0.6B"
     ),
 )
 MODEL_LIST['default'] = MODEL_LIST['qwen3']

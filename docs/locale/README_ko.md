@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](../../LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](../../gradle/libs.versions.toml)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.9-4285F4?logo=jetpackcompose&logoColor=white)](../../gradle/libs.versions.toml)
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](../../pyproject.toml)
+[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](../../pyproject.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Desktop%20%7C%20Web-5b6270)](#-현황)
 
 [가이드](https://logitai.github.io/Gemstone/?lang=ko) ·
@@ -40,27 +40,20 @@
 - 🚀 **스트리밍 채팅** — 토큰이 생성되는 즉시 WebSocket 으로 도착하고, 그 자리에서 Markdown 으로 렌더링됩니다.
 - 🧠 **보이는 추론 과정** — 모델의 `<think>` 블록이 경과 시간과 함께 접을 수 있는 패널로 표시됩니다.
 - 🔌 **도구 호출** — 날씨, 공휴일, 환율, 계산기, 웹 검색을 서버에서 병렬로 실행하고 결과를 모델에 돌려줍니다.
-- 📦 **양자화된 공개 가중치 모델** — Qwen 3 14B 와 Llama 3.1 8B 를 4비트로 구동합니다. 현재는 llama.cpp(GGUF) 또는 transformers + bitsandbytes 로 돌지만, 이 백엔드들은 제거 중(전환기)이며 torchnative 위의 단일 서빙 시스템 — Ollama 대체 — 으로 옮겨갑니다. 연속 배칭(continuous batching)과 페이지드 어텐션(paged attention)은 예정입니다. 엔진 세부는 제안 단계이며 확정 대기 중입니다.
+- 📦 **엔진 하나로 도는 공개 가중치 모델** — Qwen 3 0.6B 를 transformers 기반 단일 엔진이 서빙합니다. 이 엔진은 PyTorch 위에서도, [torchnative](https://github.com/thisisthepy/torchnative) 위에서도 돕니다. Gemstone 은 로컬 Ollama 대체제가 되어 가는 중이며, 동시 요청 처리(연속 배칭), OpenAI·Ollama 호환 API, 8비트 가중치를 2026년 11월 목표로 준비하고 있습니다.
 - 🖥️ **네이티브 데스크톱 경험** — JetBrains Jewel 데코레이티드 윈도우와 Dmg / Msi / Deb 설치 파일.
 
 ## 🚀 빠른 시작
 
-Git, Python 3.12, [uv](https://docs.astral.sh/uv/), JDK 21 이상이 필요합니다. 14B 모델에는 CUDA GPU 를
-권장합니다.
+Git, Python 3.13, [uv](https://docs.astral.sh/uv/), JDK 21 이 필요합니다. 기본 모델(Qwen 3 0.6B)은
+CPU 에서 돕니다.
 
 **1. 저장소를 받고 서버 의존성 설치**
 
 ```bash
 git clone https://github.com/LogitAI/Gemstone.git
 cd Gemstone
-uv sync
-```
-
-선택 — CUDA 를 쓰는 llama.cpp (전환기: llama.cpp 백엔드는 제거 중):
-
-```bash
-CMAKE_ARGS="-DGGML_CUDA=on -DLLAVA_BUILD=off -DCMAKE_CUDA_ARCHITECTURES=native" \
-FORCE_CMAKE=1 uv pip install llama-cpp-python --no-cache-dir --force-reinstall --upgrade
+uv sync --extra torch          # 또는 --extra torchnative (둘은 함께 설치할 수 없습니다)
 ```
 
 **2. 모델 서버 실행** (포트 `23100`, 모델은 처음 쓸 때 내려받습니다)
@@ -110,9 +103,9 @@ flowchart LR
     subgraph Client["app/ — Compose Multiplatform"]
         UI["채팅 UI<br/>commonMain"] --> VM["ChatViewModel"] --> WS["ChatWebSocketClient<br/>(Ktor)"]
     end
-    subgraph Server["api/ — Python 3.12"]
-        EP["FastAPI<br/>/api/chat/streaming"] --> M["모델<br/>Qwen 3 · Llama 3.1"]
-        M --> B["백엔드 (제거 중)<br/>GGUF · BIN → torchnative"]
+    subgraph Server["api/ — Python 3.13"]
+        EP["FastAPI<br/>/api/chat/streaming"] --> M["모델<br/>Qwen 3"]
+        M --> B["엔진<br/>PyTorch / torchnative 위의 transformers"]
         M <--> T["도구<br/>날씨 · 검색 · …"]
     end
     WS -- "WebSocket :23100" --> EP
@@ -125,7 +118,7 @@ flowchart LR
 | `app/src/{android,ios,desktop,wasmJs}Main` | 플랫폼별 진입점 하나씩 |
 | `app/src/cioMain` | Android, iOS, 데스크톱이 공유하는 Ktor CIO 엔진 |
 | `api/src/main/models` | 모델 정의: 프롬프트, 샘플링 기본값 |
-| `api/src/main/backend` | 추론 런타임: llama.cpp(GGUF), transformers 4비트(BIN) — 제거 중(전환기), torchnative 기반 단일 서빙 시스템으로 대체 |
+| `api/src/main/engine.py` | 서빙 엔진: 모든 모델을 맡는 transformers 기반 엔진 하나. PyTorch 또는 torchnative 위에서 돈다 |
 | `api/src/main/utils` | 도구 구현과 도구 호출 루프 |
 
 ## 📍 현황
@@ -172,10 +165,9 @@ Gemstone 은 의도 우선, 테스트 우선으로 개발합니다 — 풀 리�
 ## 🙏 감사의 말
 
 Kotlin, Compose Multiplatform, Jewel 을 만든 [JetBrains](https://www.jetbrains.com/) ·
-[llama.cpp](https://github.com/ggml-org/llama.cpp) 와
-[llama-cpp-python](https://github.com/abetlen/llama-cpp-python) ·
+[PyTorch](https://pytorch.org/) ·
 [Hugging Face](https://huggingface.co/) Transformers ·
-[Qwen](https://github.com/QwenLM) 과 [Llama](https://www.llama.com/) 모델 팀 ·
+[Qwen](https://github.com/QwenLM) 모델 팀 ·
 무료 공개 API 를 제공하는 [Open-Meteo](https://open-meteo.com/) 와 [Nager.Date](https://date.nager.at/).
 
 ## 📄 라이선스
