@@ -16,7 +16,8 @@ asserts `1 + 2 == 3`, and the Python API has none (`api/src/test/` holds static 
 `implemented` below means *read in code*, never *verified by a test*. Closing that gap is the
 first TDD task; the test column says `none` until then.
 
-Status was established by reading the `develop` branch at commit `2be0e37` (2026-10-02).
+Status was established by reading the `develop` branch at commit `2be0e37` (2026-10-02). S1.11–S1.16
+and S3.4 also record the maintainer's decisions of the same day ([`serving/engine.md`](serving/engine.md)).
 
 ---
 
@@ -134,18 +135,60 @@ The README states the plan. No code.
 
 ### S1.11 torchnative serving engine — `planned` · G5
 
-A single serving system built on torchnative replaces S1.8; the goal is local, private LLM serving
-— an Ollama replacement. vLLM will not be used. Engine detail is a proposal, pending confirmation:
-transformers 5.x continuous batching with a paged KV cache as the engine, kernels in torchnative.
-No code on `develop`.
+One serving system built on torchnative replaces S1.8. The goal is local, private LLM serving: an
+Ollama replacement.
+
+Decided (2026-10-02):
+
+- One engine. `CoreRuntime`, `BackendType` and the GGUF / BIN / GPTQ runtimes are removed, along
+  with `llama-cpp-python` and `bitsandbytes`.
+- Models load through `transformers` (`from_pretrained`) on torchnative.
+- The Python requirement becomes `>=3.13` (torchnative's floor). Today it is `>=3.12,<3.13`.
+- vLLM is not a dependency.
+
+Proposal, pending confirmation: the engine is transformers 5.x continuous batching with a paged KV
+cache, kernels live in torchnative, and the engine uses only the public `torch` / `transformers`
+API so a GPU server can run the same code on upstream PyTorch. Constraint: custom kernels cannot be
+registered from Gemstone, because `torch.library` registrations are no-ops on torchnative. They
+must be torchnative operators. See [`serving/engine.md`](serving/engine.md).
+
+No code on `develop`. Test: none.
 
 ### S1.12 Continuous batching — `planned` · G5
 
-Serve concurrent requests in one batch. Part of S1.11; no code.
+Concurrent requests to a loaded model are scheduled into one running batch. A request joins and
+leaves the batch between decode steps, and its tokens stream back on its own connection. Part of
+S1.11. Unverified on torchnative: transformers' continuous-batching modules import there but have
+not run. No code.
 
 ### S1.13 Paged attention (paged KV cache) — `planned` · G5
 
-Paged KV cache for the serving engine. Part of S1.11; no code.
+The KV cache is allocated in fixed-size blocks shared by all requests of a model, so memory is held
+per token in use, not per maximum context. Part of S1.11. The candidate implementations are
+transformers' `sdpa_paged` / `eager_paged` (plain torch ops), with a torchnative kernel later for
+speed. No code.
+
+### S1.14 Model management — `planned` · G5
+
+Follows from *Ollama replacement*. The exact scope is to be confirmed (`INTENT.md` § 5):
+
+- pull a model from Hugging Face, list local models, show one, remove one;
+- list loaded models (`ps`), keep a model loaded for a configurable keep-alive, hold several
+  models at once, and evict under memory pressure.
+
+Replaces the hard-coded `MODEL_LIST` (S1.2). No code.
+
+### S1.15 Ollama-compatible API — `planned` · G5
+
+Follows from *Ollama replacement*, so existing Ollama clients can use Gemstone. Served next to the
+OpenAI-compatible API (S1.10). The endpoint set is to be confirmed. No code.
+
+### S1.16 4-bit quantised weights — `planned` · G5
+
+An Ollama replacement has to run models at roughly 4-bit quality. Today torchnative offers
+`TorchnativeConfig("q8_0")` through transformers' `HfQuantizer` slot. Its Q4_0 shows 29.5% logit
+RMS error and degrades generation, and it has no GGUF reader. This item depends on torchnative.
+No code in Gemstone.
 
 ## 2. Client (`app/`)
 
@@ -238,10 +281,13 @@ No code. The meaning of sync is an open question in `INTENT.md` § 5.
 
 ### S3.4 Native desktop executable (GraalVM native-image) — `planned` · G8
 
-Not on `develop`. The maintainer has uncommitted work for it (Gradle tasks
-`generateNativeResourceConfig`, `nativeCompile`, `nativeDist`, `metadataCopy`; Windows x64 only so
-far; sending a chat message in the native build is unverified). Status changes when that work is
-committed.
+Managed long-term by `compose-multiplatform-extended` (decided 2026-10-02). That plugin has no code
+yet, so Gemstone keeps its own path in the meantime: Gradle tasks `generateNativeResourceConfig`,
+`nativeCompile`, `nativeDist` and `metadataCopy`, plus `NativeRuntime.kt`, the reachability
+metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 only so far. Clicks
+are not yet registered in the native build (under investigation), and sending a chat message there
+is unverified. That work is not yet committed to `develop`. When the plugin takes over, the Gradle
+tasks become plugin configuration and only Gemstone-specific metadata stays here.
 
 ---
 
