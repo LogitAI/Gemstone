@@ -3,18 +3,47 @@ The serving engine (SPEC S1.11): one transformers-based engine for every model.
 
 It uses only the public `torch` / `transformers` API, so it runs on whatever `import torch`
 resolves to: upstream PyTorch, or torchnative, which replaces `import torch` on device.
+
+Concurrent requests are served by continuous batching (S1.12) on a paged KV cache (S1.13):
+transformers' `ContinuousBatchingManager` with the `paged|sdpa` (default) or `paged|eager`
+attention, both plain torch ops. Sampling is done per request by Gemstone's own logits
+processors (`_SAMPLERS` below), so temperature / top-k / top-p / min-p / seed are per request and a
+seeded sample does not depend on which other requests share the batch.
+
+Requests the batch cannot serve take the exclusive path, which is the M1 engine unchanged: one
+`model.generate` at a time, with no batched request running. See `Engine.__call__`.
 """
+from contextlib import contextmanager
 from typing import Dict, Generator, List, Optional, Union
-import threading
+import itertools
+import logging
 import os
+import queue
+import random
+import threading
+
+
+logger = logging.getLogger(__name__)
+
+# Attention implementations of the batched path. Both are plain torch ops (gather + SDPA, or
+# gather + matmul/softmax), so they are the ones torchnative can run.
+PAGED_ATTENTION = {
+    "sdpa_paged": "paged|sdpa",
+    "eager_paged": "paged|eager",
+}
+
+# Logits-processor kwargs of a greedy request: neutral values for every sampler, and a negative
+# seed, which makes the final draw keep the scores so the manager's argmax picks the top token.
+_GREEDY = dict(temperature=1.0, top_k=0, top_p=1.0, min_p=0.0, seed=-1)
 
 
 class Engine:
     """
     Loads one causal LM and streams chat completions from it.
 
-    One generation runs at a time per engine; concurrent callers wait their turn (#36).
-    A generation stops when its `cancel` event is set or its stream is closed (#35).
+    Concurrent callers are batched together (continuous batching); see `__call__` for the
+    requests that instead run alone. A generation stops when its `cancel` event is set or its
+    stream is closed (#35); in a batch only that request is removed.
     """
 
     def __init__(
@@ -29,7 +58,20 @@ class Engine:
         context_length: Optional[int] = None,
         cache_dir: Optional[Union[str, os.PathLike[str]]] = None,
         local_files_only: bool = False,
+        batching: bool = True,
+        attn_implementation: str = "sdpa_paged",
+        kv_cache_tokens: int = 8192,
+        page_size: int = 64,
+        max_batch_tokens: int = 256,
+        max_batch_requests: int = 16,
     ):
+        """
+        `batching=False` turns continuous batching off: every request takes the exclusive path.
+        `attn_implementation` is `"sdpa_paged"` or `"eager_paged"`. `kv_cache_tokens` is the size of
+        the paged KV cache shared by all batched requests, in tokens, allocated in pages of
+        `page_size` tokens. `max_batch_tokens` caps the tokens of one forward pass (longer prompts are
+        prefilled in chunks) and `max_batch_requests` the requests decoded together.
+        """
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         hub_kwargs = dict(revision=revision, cache_dir=cache_dir, local_files_only=local_files_only)
@@ -44,7 +86,39 @@ class Engine:
         self.model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs).to(device).eval()
         self.chat_template = chat_template
         self.context_length = context_length or getattr(self.model.config, "max_position_embeddings", None)
-        self._lock = threading.Lock()
+        self._gate = _Gate()
+
+        # Continuous batching, or the reason it is off.
+        self._batcher: Optional[_Batcher] = None
+        self.batching_unavailable: Optional[str] = None
+        if not batching:
+            self.batching_unavailable = "turned off (batching=False)"
+        else:
+            try:
+                self._batcher = _Batcher(
+                    self.model,
+                    self.tokenizer,
+                    self._gate,
+                    attn_implementation=attn_implementation,
+                    kv_cache_tokens=kv_cache_tokens,
+                    page_size=page_size,
+                    max_batch_tokens=max_batch_tokens,
+                    max_batch_requests=max_batch_requests,
+                )
+            except _BatchingUnavailable as e:
+                self.batching_unavailable = str(e)
+                logger.warning("Continuous batching is off for %s: %s", model_id, e)
+
+    @property
+    def batching(self) -> bool:
+        """ Whether concurrent requests are batched (False: every request runs alone). """
+        return self._batcher is not None
+
+    def close(self):
+        """ Stop the batching loop and release its KV cache. The engine keeps serving on the exclusive path. """
+        if self._batcher is not None:
+            batcher, self._batcher = self._batcher, None
+            batcher.close()
 
     def __call__(
         self,
@@ -67,8 +141,60 @@ class Engine:
 
         `stream` is accepted for compatibility with the model layer and ignored: the reply is
         always produced as a stream. `max_new_tokens <= 0` means "up to the context length".
-        Extra keyword arguments go to `generate` unchanged.
+
+        The request joins the running batch unless it needs something the batch does not do, in
+        which case it takes the exclusive path (`model.generate`, alone, as in M1):
+        batching is off or unavailable (`batching_unavailable` says why); `typical_p != 1` or
+        `repeat_penalty != 1`; extra keyword arguments (they go to `generate` unchanged); or the
+        prompt plus `max_new_tokens` does not fit in the paged KV cache.
         """
+        prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tools=tools or None,
+            chat_template=self.chat_template,
+            add_generation_prompt=True,
+            tokenize=False,
+        )
+        input_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
+        prompt_length = len(input_ids)
+        if max_new_tokens <= 0:
+            if self.context_length is None:
+                raise ValueError("max_new_tokens must be positive when the context length is unknown.")
+            max_new_tokens = self.context_length - prompt_length
+        if max_new_tokens <= 0:
+            raise ValueError(f"The prompt ({prompt_length} tokens) exceeds the token limit ({self.context_length}).")
+
+        batcher = self._batcher
+        if (
+            batcher is not None
+            and typical_p == 1.0
+            and repeat_penalty == 1.0
+            and not kwargs
+            and batcher.fits(prompt_length + max_new_tokens)
+        ):
+            if temperature > 0:
+                params = dict(
+                    temperature=float(temperature),
+                    top_k=int(top_k or 0),
+                    top_p=float(top_p if top_p is not None else 1.0),
+                    min_p=float(min_p or 0.0),
+                    seed=int(seed) if seed is not None else random.SystemRandom().randrange(2**62),
+                )
+            else:
+                params = dict(_GREEDY)
+            yield from batcher.stream(input_ids, max_new_tokens, params, cancel)
+            return
+
+        yield from self._generate_exclusive(
+            input_ids, max_new_tokens, temperature, top_p, top_k, min_p, typical_p, repeat_penalty, seed, cancel,
+            kwargs,
+        )
+
+    def _generate_exclusive(
+        self, input_ids, max_new_tokens, temperature, top_p, top_k, min_p, typical_p, repeat_penalty, seed, cancel,
+        kwargs,
+    ) -> Generator[str, None, None]:
+        """ One `model.generate`, with no other generation running (the M1 engine). """
         import torch
         from transformers import StoppingCriteria, StoppingCriteriaList, TextIteratorStreamer
 
@@ -78,27 +204,13 @@ class Engine:
             def __call__(self, input_ids, scores, **_):
                 return stop.is_set() or (cancel is not None and cancel.is_set())
 
-        with self._lock:
-            prompt = self.tokenizer.apply_chat_template(
-                messages,
-                tools=tools or None,
-                chat_template=self.chat_template,
-                add_generation_prompt=True,
-                tokenize=False,
-            )
-            inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.model.device)
-            prompt_length = inputs["input_ids"].shape[1]
-            if max_new_tokens <= 0:
-                if self.context_length is None:
-                    raise ValueError("max_new_tokens must be positive when the context length is unknown.")
-                max_new_tokens = self.context_length - prompt_length
-            if max_new_tokens <= 0:
-                raise ValueError(f"The prompt ({prompt_length} tokens) exceeds the token limit ({self.context_length}).")
-
+        with self._gate.exclusive():
+            inputs = torch.tensor([input_ids], dtype=torch.long, device=self.model.device)
             streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
             do_sample = temperature > 0
             generation_kwargs = dict(
-                **inputs,
+                input_ids=inputs,
+                attention_mask=torch.ones_like(inputs),
                 max_new_tokens=max_new_tokens,
                 do_sample=do_sample,
                 repetition_penalty=repeat_penalty,
@@ -140,6 +252,406 @@ class Engine:
                 worker.join()
             if failure:
                 raise failure[0]
+
+
+class _Gate:
+    """
+    Shared/exclusive access to the model. Batched requests share it; an exclusive request waits
+    until no batched request runs (and the batching loop has stopped), and holds off new ones.
+    """
+
+    def __init__(self):
+        self._cond = threading.Condition()
+        self._shared = 0
+        self._exclusive = False
+        self._exclusive_waiting = 0
+
+    @contextmanager
+    def exclusive(self):
+        with self._cond:
+            self._exclusive_waiting += 1
+            try:
+                self._cond.wait_for(lambda: not self._exclusive and self._shared == 0)
+            finally:
+                self._exclusive_waiting -= 1
+            self._exclusive = True
+        try:
+            yield
+        finally:
+            with self._cond:
+                self._exclusive = False
+                self._cond.notify_all()
+
+    @contextmanager
+    def shared(self, on_first, on_last):
+        """ `on_first` runs when the first sharer enters, `on_last` when the last one leaves (under the lock). """
+        with self._cond:
+            self._cond.wait_for(lambda: not self._exclusive and self._exclusive_waiting == 0)
+            if self._shared == 0:
+                on_first()
+            self._shared += 1
+        try:
+            yield
+        finally:
+            with self._cond:
+                self._shared -= 1
+                if self._shared == 0:
+                    try:
+                        on_last()
+                    finally:
+                        self._cond.notify_all()
+
+
+class _BatchingUnavailable(Exception):
+    pass
+
+
+class _Batcher:
+    """
+    One `ContinuousBatchingManager` per engine.
+
+    The manager's loop runs only while batched requests are in flight. When the last one leaves,
+    the loop stops (its paged KV cache is kept for the next session) and the model's original
+    attention implementation is restored, so `model.generate` works again on the exclusive path.
+    """
+
+    def __init__(
+        self, model, tokenizer, gate: _Gate, *, attn_implementation: str, kv_cache_tokens: int, page_size: int,
+        max_batch_tokens: int, max_batch_requests: int,
+    ):
+        from transformers import ContinuousBatchingConfig, GenerationConfig
+
+        if attn_implementation not in PAGED_ATTENTION:
+            raise ValueError(f"attn_implementation must be one of {sorted(PAGED_ATTENTION)}, got {attn_implementation!r}.")
+        if not hasattr(model, "init_continuous_batching"):
+            raise _BatchingUnavailable(f"{type(model).__name__} has no continuous-batching support in transformers.")
+        if model.device.type == "cpu":
+            try:
+                import psutil  # noqa: F401  transformers sizes the CPU cache from it
+            except ImportError as e:
+                raise _BatchingUnavailable("psutil is not installed; transformers cannot size a CPU KV cache.") from e
+
+        self.model = model
+        self.tokenizer = tokenizer
+        self._gate = gate
+        self._paged = PAGED_ATTENTION[attn_implementation]
+        self._original = model.config._attn_implementation
+        self.kv_cache_tokens = kv_cache_tokens
+
+        eos = model.generation_config.eos_token_id
+        self._eos = eos if eos is not None else tokenizer.eos_token_id
+        generation_config = GenerationConfig(do_sample=False, eos_token_id=self._eos, max_new_tokens=256)
+        cb_config = ContinuousBatchingConfig(
+            page_size=page_size,
+            num_blocks=max(1, -(-kv_cache_tokens // page_size)),
+            max_batch_tokens=max_batch_tokens,
+            max_requests_per_batch=max_batch_requests,
+            max_blocks_per_request=0,  # the block-table decode path is flash-attention on CUDA only
+            max_memory_percent=0.9,
+            allow_block_sharing=False,  # prefix reuse would make a reply depend on earlier requests
+            use_cuda_graph=False,  # no CUDA graphs, streams or compile: the same code runs on torchnative
+            use_async_batching=False,
+            default_compile_level=0,
+        )
+
+        self._set_attention(self._paged)
+        try:
+            if model.config._attn_implementation != self._paged:
+                raise _BatchingUnavailable(f"{type(model).__name__} cannot switch to {self._paged} attention.")
+            self.manager = model.init_continuous_batching(
+                generation_config=generation_config, continuous_batching_config=cb_config
+            )
+            self.manager.logit_processor = _sampling_processors()
+            self.manager.warmup()  # creates the batch processor and allocates the paged KV cache now
+        except _BatchingUnavailable:
+            raise
+        except Exception as e:
+            raise _BatchingUnavailable(f"could not set up continuous batching: {e!r}") from e
+        finally:
+            self._set_attention(self._original)
+
+        self._queues: Dict[str, queue.Queue] = {}
+        self._queues_lock = threading.Lock()
+        self._dispatcher: Optional[threading.Thread] = None
+
+    def fits(self, total_tokens: int) -> bool:
+        """ Whether one request of this many tokens fits in the paged KV cache by itself. """
+        return total_tokens <= self.kv_cache_tokens
+
+    def close(self):
+        with self._gate.exclusive():  # waits until no batched request runs and the loop has stopped
+            self.manager.destroy()
+            self.manager.batch_processor = None  # drops the paged KV cache
+            self.model.destroy_cached_continuous_batching_manager()
+
+    # ------------------------------------------------------------------------------------------ #
+
+    def _set_attention(self, implementation: str):
+        if self.model.config._attn_implementation != implementation:
+            self.model.set_attn_implementation(implementation)
+
+    def _start(self):
+        """ First batched request: switch to paged attention and start the loop and the dispatcher. """
+        self._set_attention(self._paged)
+        try:
+            self.manager.start()
+        except BaseException:
+            self._set_attention(self._original)
+            raise
+        self._dispatcher = threading.Thread(target=self._dispatch, args=(self.manager,), daemon=True)
+        self._dispatcher.start()
+
+    def _stop(self):
+        """ Last batched request left: stop the loop (keeping its cache) and restore the attention. """
+        try:
+            self.manager.stop(block=True, keep_for_next_session=True)
+            if self._dispatcher is not None:
+                self._dispatcher.join()
+                self._dispatcher = None
+        finally:
+            self._set_attention(self._original)
+
+    def _dispatch(self, manager):
+        """ Route the manager's outputs to the queue of the request they belong to. """
+        while True:
+            result = manager.get_result(timeout=0.1)
+            if result is None:
+                if not manager.is_running():
+                    return
+                continue
+            with self._queues_lock:
+                target = self._queues.get(result.request_id)
+            if target is not None:
+                target.put(result)
+
+    def stream(self, input_ids, max_new_tokens, params, cancel) -> Generator[str, None, None]:
+        with self._gate.shared(self._start, self._stop):
+            request_id = f"gemstone-{next(_REQUEST_IDS)}"  # unique across engines: the sampler state is shared
+            with self._queues_lock:
+                outputs = self._queues[request_id] = queue.Queue()
+            finished = False
+            try:
+                added = self.manager.add_request(
+                    input_ids=list(input_ids),
+                    request_id=request_id,
+                    max_new_tokens=max_new_tokens,
+                    streaming=True,
+                    eos_token_id=self._eos,
+                    **params,
+                )
+                if added is None:
+                    raise RuntimeError("The continuous-batching loop did not accept the request.")
+
+                sent = ""
+                while True:
+                    if cancel is not None and cancel.is_set():
+                        break
+                    try:
+                        result = outputs.get(timeout=0.05)
+                    except queue.Empty:
+                        if not self.manager.is_running():
+                            raise RuntimeError("The continuous-batching loop stopped before the request finished.")
+                        continue
+                    if result.error is not None:
+                        finished = True  # failed requests are already out of the batch
+                        raise RuntimeError(f"Generation failed: {result.error}")
+                    text = self.tokenizer.decode(result.generated_tokens, skip_special_tokens=True)
+                    done = result.is_finished()
+                    # Hold back an incomplete UTF-8 sequence until its next token arrives.
+                    if (done or not text.endswith("�")) and text.startswith(sent) and len(text) > len(sent):
+                        chunk, sent = text[len(sent):], text
+                        yield chunk
+                    if done:
+                        finished = True
+                        break
+            finally:
+                if not finished:
+                    self.manager.cancel_request(request_id)
+                with self._queues_lock:
+                    self._queues.pop(request_id, None)
+                _SAMPLER_STATE.forget(request_id)
+
+
+# --------------------------------------------------------------------------------------------- #
+# Per-request sampling inside the batch.
+#
+# transformers' own continuous-batching sampler (`ModelRunner._sample`) draws every row of the
+# batch with one `torch.multinomial` on the global RNG, seeded once per manager. A request's
+# sample therefore depends on its neighbours and its row position, and there is no per-request
+# seed. Gemstone runs the manager greedily (`do_sample=False`, so it takes an argmax) and does the
+# sampling in these per-request logits processors instead: the last one draws each row's token
+# from that request's own `torch.Generator` and leaves only that token selectable.
+# --------------------------------------------------------------------------------------------- #
+
+def _sampling_processors():
+    from transformers import LogitsProcessorList
+    from transformers.generation.continuous_batching.cb_logits_processors import (
+        ContinuousBatchingLogitsProcessorList,
+    )
+
+    processors = [cls() for cls in _SAMPLERS]
+    batch = ContinuousBatchingLogitsProcessorList(LogitsProcessorList(processors), per_request_processors=False)
+    batch.tensors_required = len(processors)  # one int32 argument row per processor
+    batch.do_processing = True
+    return batch
+
+
+class _SamplerState:
+    """ The uniform draws of each seeded request, generated from its seed, indexed by token. """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._draws: Dict[str, tuple] = {}
+
+    def draw(self, request_id: str, seed: int, index: int) -> float:
+        import torch
+
+        with self._lock:
+            entry = self._draws.get(request_id)
+            if entry is None:
+                entry = self._draws[request_id] = (torch.Generator(device="cpu").manual_seed(seed), [])
+            generator, draws = entry
+            while len(draws) <= index:
+                draws.extend(torch.rand(64, generator=generator, dtype=torch.float64).tolist())
+            return draws[index]
+
+    def forget(self, request_id: str):
+        with self._lock:
+            self._draws.pop(request_id, None)
+
+
+_SAMPLER_STATE = _SamplerState()
+_REQUEST_IDS = itertools.count(1)
+
+
+def _define_samplers():
+    import torch
+    from transformers.generation.continuous_batching.cb_logits_processors import ContinuousBatchingLogitsProcessor
+
+    def as_float(values):
+        return torch.tensor(values, dtype=torch.float32, device="cpu").view(dtype=torch.int32)
+
+    def float_arg(tensor_arg, rows):
+        return tensor_arg[:rows].view(dtype=torch.float32).unsqueeze(-1)  # [B, 1]
+
+    class Temperature(ContinuousBatchingLogitsProcessor):
+        supported_kwargs = {"temperature": float}
+        ignored_kwargs = ()
+
+        def fill_defaults(self, int32_tensor):
+            int32_tensor.copy_(torch.ones_like(int32_tensor, dtype=torch.float32).view(dtype=torch.int32))
+
+        def prepare_tensor_args(self, requests):
+            return as_float([r.state.logit_processor_kwargs.get("temperature", 1.0) for r in requests])
+
+        def __call__(self, scores, tensor_arg):
+            return scores / float_arg(tensor_arg, scores.size(0))
+
+    class TopK(ContinuousBatchingLogitsProcessor):
+        supported_kwargs = {"top_k": int}
+        ignored_kwargs = ()
+
+        def fill_defaults(self, int32_tensor):
+            int32_tensor.fill_(0)
+
+        def prepare_tensor_args(self, requests):
+            return torch.tensor(
+                [r.state.logit_processor_kwargs.get("top_k", 0) for r in requests], dtype=torch.int32, device="cpu"
+            )
+
+        def __call__(self, scores, tensor_arg):
+            vocab = scores.size(-1)
+            k = tensor_arg[: scores.size(0)].to(torch.int64)
+            k = torch.where(k <= 0, torch.full_like(k, vocab), k.clamp(max=vocab))  # 0 = off
+            sorted_scores = torch.sort(scores, dim=-1, descending=True)[0]
+            thresholds = sorted_scores.gather(-1, (k - 1).unsqueeze(-1))
+            return scores.masked_fill(scores < thresholds, float("-inf"))
+
+    class TopP(ContinuousBatchingLogitsProcessor):
+        supported_kwargs = {"top_p": float}
+        ignored_kwargs = ()
+
+        def fill_defaults(self, int32_tensor):
+            int32_tensor.copy_(torch.ones_like(int32_tensor, dtype=torch.float32).view(dtype=torch.int32))
+
+        def prepare_tensor_args(self, requests):
+            return as_float([r.state.logit_processor_kwargs.get("top_p", 1.0) for r in requests])
+
+        def __call__(self, scores, tensor_arg):
+            top_p = float_arg(tensor_arg, scores.size(0))
+            sorted_logits, sorted_indices = torch.sort(scores, descending=False, dim=-1)
+            cumulative = sorted_logits.softmax(dim=-1).cumsum(dim=-1)
+            remove = (cumulative <= 1 - top_p) & (top_p < 1)
+            remove[..., -1:] = False  # always keep the most likely token
+            remove = remove.scatter(-1, sorted_indices, remove)
+            return scores.masked_fill(remove, float("-inf"))
+
+    class MinP(ContinuousBatchingLogitsProcessor):
+        supported_kwargs = {"min_p": float}
+        ignored_kwargs = ()
+
+        def fill_defaults(self, int32_tensor):
+            int32_tensor.copy_(torch.zeros_like(int32_tensor, dtype=torch.float32).view(dtype=torch.int32))
+
+        def prepare_tensor_args(self, requests):
+            return as_float([r.state.logit_processor_kwargs.get("min_p", 0.0) for r in requests])
+
+        def __call__(self, scores, tensor_arg):
+            min_p = float_arg(tensor_arg, scores.size(0))
+            probs = scores.softmax(dim=-1)
+            remove = probs < min_p * probs.max(dim=-1, keepdim=True).values
+            return scores.masked_fill(remove, float("-inf"))
+
+    class Draw(ContinuousBatchingLogitsProcessor):
+        """ Inverse-CDF draw with the request's own uniform number; a negative seed means greedy. """
+        supported_kwargs = {"seed": int}
+        ignored_kwargs = ()
+
+        def fill_defaults(self, int32_tensor):
+            int32_tensor.copy_(torch.full_like(int32_tensor, -1.0, dtype=torch.float32).view(dtype=torch.int32))
+
+        def prepare_tensor_args(self, requests):
+            uniforms = []
+            for r in requests:
+                state = r.state
+                seed = state.logit_processor_kwargs.get("seed", -1)
+                if seed < 0:
+                    uniforms.append(-1.0)
+                    continue
+                # Index of the token being drawn. A request the cache had to evict restarts with its
+                # tokens so far folded into the prompt; count them so its draws stay aligned.
+                true_prompt = getattr(state, "_true_initial_tokens", 0)
+                folded = len(state.initial_tokens) - true_prompt if true_prompt else 0
+                index = state.generated_len() + folded
+                uniforms.append(_SAMPLER_STATE.draw(state.request_id, seed, index))
+            return as_float(uniforms)
+
+        def __call__(self, scores, tensor_arg):
+            u = float_arg(tensor_arg, scores.size(0))  # [B, 1]
+            probs = scores.softmax(dim=-1)
+            cdf = probs.cumsum(dim=-1)
+            target = u.clamp(min=0.0, max=1.0 - 2.0**-24) * cdf[..., -1:]
+            # First token whose cumulative probability exceeds the target: it has non-zero probability.
+            token = (cdf <= target).sum(dim=-1, keepdim=True).clamp(max=scores.size(-1) - 1)
+            chosen = torch.full_like(scores, float("-inf")).scatter(-1, token, 0.0)
+            return torch.where(u < 0, scores, chosen)
+
+    return [Temperature, TopK, TopP, MinP, Draw]
+
+
+class _LazySamplers:
+    """ The sampler classes, defined on first use so importing this module does not import torch. """
+
+    def __init__(self):
+        self._classes = None
+
+    def __iter__(self):
+        if self._classes is None:
+            self._classes = _define_samplers()
+        return iter(self._classes)
+
+
+_SAMPLERS = _LazySamplers()
 
 
 def _quantization_config(name: str):

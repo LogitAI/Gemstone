@@ -211,8 +211,13 @@ Implemented (#84), `api/src/main/engine.py`:
   `from_pretrained`. `quantization="q8_0"` goes through torchnative's `TorchnativeConfig`.
 - Calling it with chat messages streams the reply as text chunks. Temperature 0 is greedy and
   equals `transformers` `generate`; `seed` makes sampling reproducible.
-- One generation runs at a time per engine; concurrent callers wait and get the same output as
-  sequential calls (#36).
+- Concurrent callers are batched (S1.12). A request the batch cannot serve takes the exclusive
+  path, where one `generate` runs at a time and concurrent callers wait and get the same output as
+  sequential calls (#36). The exclusive path is used when batching is off (`batching=False`) or
+  unavailable (`Engine.batching_unavailable` gives the reason: the model has no
+  continuous-batching support, cannot switch to paged attention, or `psutil` is missing on CPU),
+  or when the request uses `typical_p != 1`, `repeat_penalty != 1`, extra `generate` keyword
+  arguments, or more tokens (prompt + `max_new_tokens`) than the paged KV cache holds.
 - A generation stops when its `cancel` event is set or its stream is closed; the WebSocket
   endpoint does both when the client disconnects (#35).
 - The substrate is chosen at install time: `uv sync --extra torch` (upstream PyTorch) or
@@ -230,21 +235,62 @@ must be torchnative operators. See [`serving/engine.md`](serving/engine.md).
 
 No code on `develop`. Test: none.
 
-### S1.12 Continuous batching — `planned` · G5
+### S1.12 Continuous batching — `partial` · G5
 
 Concurrent requests to a loaded model are scheduled into one running batch. A request joins and
 leaves the batch between decode steps, and its tokens stream back on its own connection. Part of
 S1.11. Batching does not change results: greedy output equals sequential generation, and sampled
 output with the same seed is identical whether or not the request was batched, because the
-OpenAI- and Ollama-compatible APIs (S1.10, S1.15) accept a per-request `seed`. Unverified on
-torchnative: transformers' continuous-batching modules import there but have not run. No code.
+OpenAI- and Ollama-compatible APIs (S1.10, S1.15) accept a per-request `seed`.
 
-### S1.13 Paged attention (paged KV cache) — `planned` · G5
+Implemented (#63), `api/src/main/engine.py`:
+
+- One transformers `ContinuousBatchingManager` per engine (`_Batcher`). Its loop runs while
+  batched requests are in flight and stops when the last one leaves, keeping its KV cache; the
+  model's own attention is restored then, so `model.generate` works between batches.
+- Cancelling (`cancel` event) or closing one stream cancels that request in the manager; the other
+  requests continue.
+- Sampling is per request: `temperature`, `top_k`, `top_p`, `min_p` and `seed`. transformers'
+  own batched sampler cannot do this: it draws all rows with one `torch.multinomial` on the global
+  RNG, seeded once per manager (`generation/continuous_batching/model_runner.py`,
+  `ModelRunner._sample`; `distributed.py`, `set_tp_seed`), so a sample depends on the other
+  requests in the batch. The engine runs the manager greedily and samples in its own per-request
+  logits processors instead: the last one draws each row's token from that request's own
+  `torch.Generator`, so the draw sequence of a request depends only on its seed.
+- Requests the batch does not serve take the exclusive path (S1.11).
+- No CUDA graphs, CUDA streams, async batching or `torch.compile` are used (all turned off in the
+  `ContinuousBatchingConfig`), so the same code is meant to run on torchnative.
+
+Tests: `api/tests/test_batching.py` (two and four concurrent greedy requests equal sequential
+ones; requests overlap in time; a seeded sample is the same batched or alone, next to a greedy
+neighbour; cancelling or closing one stream leaves the others correct).
+Benchmark: `benchmarks/batching_throughput.py` (1 versus N concurrent requests); not yet measured.
+
+Unverified:
+
+- Bit-level batch invariance of the forward pass. Batched and sequential runs push the same rows
+  through matrix products of different shapes, and torch does not promise the same rounding for
+  them. The sampler itself is row-independent; the tests check that results agree on SmolLM2-135M,
+  not that they always will.
+- torchnative: transformers' continuous-batching modules import there but have not run.
+- Prefix sharing (reusing the KV blocks of an identical prompt prefix) is off, so that a reply does
+  not depend on earlier requests. Turning it on is a later, measured decision.
+
+### S1.13 Paged attention (paged KV cache) — `partial` · G5
 
 The KV cache is allocated in fixed-size blocks shared by all requests of a model, so memory is held
-per token in use, not per maximum context. Part of S1.11. The candidate implementations are
-transformers' `sdpa_paged` / `eager_paged` (plain torch ops), with a torchnative kernel later for
-speed. No code.
+per token in use, not per maximum context. Part of S1.11.
+
+Implemented (#64), `api/src/main/engine.py`: batched requests run on transformers'
+`PagedAttentionCache` with `paged|sdpa` attention (`Engine(attn_implementation="sdpa_paged")`,
+the default) or `paged|eager` (`"eager_paged"`); both are plain torch ops (gather, matmul or
+`scaled_dot_product_attention`, softmax). The cache holds `kv_cache_tokens` tokens (default 8192)
+in pages of `page_size` tokens (default 64); one forward pass takes at most `max_batch_tokens`
+tokens (default 256; longer prompts are prefilled in chunks) and `max_batch_requests` requests
+(default 16). On CPU transformers sizes the cache with `psutil`, which is therefore a dependency.
+
+Tests: `api/tests/test_batching.py` runs on `sdpa_paged`. `eager_paged` has no test on the real
+model. A torchnative paged-attention kernel for speed is still to come.
 
 ### S1.14 Model management — `partial` · G5
 
