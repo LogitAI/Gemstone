@@ -29,8 +29,8 @@
 **공개 가중치 모델을, 내가 있는 곳에서, 모든 기기에 들고 다닐 수 있는 하나의 인터페이스로.**
 
 지금은 Android, iOS, 데스크톱, 웹을 위한 Kotlin
-[Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/) 클라이언트가, 내 GPU 에서
-직접 띄운 Python 서버와 대화하는 형태입니다. 다음 단계에서는 같은 Python 모델 코드가
+[Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/) 클라이언트가, 내 머신에서
+직접 띄운 Python 서버(엔진은 아직 CPU 에서 돕니다. GPU 지원은 예정)와 대화하는 형태입니다. 다음 단계에서는 같은 Python 모델 코드가
 [Python Multiplatform](https://github.com/thisisthepy/python-multiplatform) 을 통해 앱 *안으로*
 들어가, 별도 서버도 네트워크도 없이 채팅할 수 있게 됩니다.
 
@@ -40,7 +40,7 @@
 - 🚀 **스트리밍 채팅** — 토큰이 생성되는 즉시 WebSocket 으로 도착하고, 그 자리에서 Markdown 으로 렌더링됩니다.
 - 🧠 **보이는 추론 과정** — 모델의 `<think>` 블록이 경과 시간과 함께 접을 수 있는 패널로 표시됩니다.
 - 🔌 **도구 호출** — 날씨, 공휴일, 환율, 계산기, 웹 검색을 서버에서 병렬로 실행하고 결과를 모델에 돌려줍니다.
-- 📦 **엔진 하나로 도는 공개 가중치 모델** — Qwen 3 0.6B 를 transformers 기반 단일 엔진이 서빙합니다. 이 엔진은 PyTorch 위에서도, [torchnative](https://github.com/thisisthepy/torchnative) 위에서도 돕니다. Gemstone 은 로컬 Ollama 대체제가 되어 가는 중이며, 동시 요청 처리(연속 배칭), OpenAI·Ollama 호환 API, 8비트 가중치를 2026년 11월 목표로 준비하고 있습니다.
+- 📦 **엔진 하나로 도는 공개 가중치 모델** — Qwen 3 0.6B 를 transformers 기반 단일 엔진이 서빙합니다. 이 엔진은 PyTorch 위에서도, [torchnative](https://github.com/thisisthepy/torchnative) 위에서도 돕니다. Gemstone 은 로컬 Ollama 대체제가 되어 가는 중입니다. 동시 요청 처리(페이지드 KV 캐시를 쓰는 연속 배칭)와 OpenAI·Ollama 호환 API 는 이미 동작하고, 4비트 가중치와 GGUF 는 예정입니다.
 - 🖥️ **네이티브 데스크톱 경험** — JetBrains Jewel 데코레이티드 윈도우와 Dmg / Msi / Deb 설치 파일.
 
 ## 🚀 빠른 시작
@@ -152,16 +152,22 @@ Gemstone 은 초기 단계의, 동작하는 프로토타입입니다. 각 부분
 | 영역 | 상태 |
 |---|---|
 | 스트리밍 채팅, 추론 표시, 도구 호출 | ✅ 동작 |
+| transformers 단일 엔진, 연속 배칭, 페이지드 KV 캐시 (기본은 CPU) | ✅ PyTorch 에서 동작, 🟡 torchnative 위 검증은 아직 |
+| 여러 모델 상주, 축출, `keep_alive` | ✅ 동작 |
+| OpenAI 호환 API (`/v1`, 도구 호출은 클라이언트로 전달) | 🟡 부분 — `n` > 1, logprobs, embeddings 없음 |
+| Ollama 호환 API (chat, generate, tags, show, pull, delete, ps, copy, create, embed) | 🟡 부분 — `push` 는 501, Modelfile · template · blobs 없음 |
+| 보안 기본값 (루프백 바인드, 오리진 검사, API 키) | ✅ 동작 |
 | Android, 데스크톱, 웹 클라이언트 | ✅ 동작 |
+| 클라이언트의 모델 선택과 서버 주소 | ✅ 모델은 서버에서 읽음. Android 는 아직 주소 설정이 없음 |
 | iOS 클라이언트 | 🟡 프레임워크 타깃은 구성됨, Xcode 빌드 스크립트 수정 필요 |
-| 클라이언트의 모델 선택 | 🟡 하드코딩된 목록, 아직 서버에서 읽지 않음 |
 | 대화 기록 | 🟡 메모리에만 보관 |
+| 자동화된 테스트 | 🟡 Python 테스트(실제 모델 포함)와 네트워크 계층의 Kotlin 테스트가 CI 에서 돎. UI 는 테스트 없음 |
+| 네이티브 데스크톱 실행 파일 (GraalVM, JVM 없음) | ⏳ 예정 — Windows x64 빌드 경로는 있으나 아직 실행해 보지 않음 |
+| GPU(CUDA) 추론 | ⏳ 예정 |
+| 4비트 가중치, GGUF | ⏳ 예정 |
 | 설정 화면 | ⏳ 예정 |
 | Python Multiplatform 을 통한 온디바이스 추론 | ⏳ 예정 |
 | 오프라인 모드, 기기 간 동기화 | ⏳ 예정 |
-| OpenAI 호환 API | ⏳ 예정 |
-| 네이티브 데스크톱 실행 파일 (GraalVM, JVM 없음) | ⏳ 진행 중 |
-| 자동화된 테스트 | ⏳ 아직 없음 — 최우선 과제 |
 
 ## 📖 문서
 

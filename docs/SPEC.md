@@ -16,13 +16,14 @@ a status:
 OpenAI-compatible API (S1.10), the Ollama-compatible API with its model management (S1.14,
 S1.15), the residency shared by all three, with several resident models and derived models
 (S1.14, `test_multi_resident.py`), the tool-result cache (S1.6) and the backend
-removal (S1.8). Everything else has **no
-behavioural test** yet: the only Kotlin test,
-`app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`, asserts `1 + 2 == 3`. So
-`implemented` without a named test means *read in code*, never *verified by a test*.
+removal (S1.8), plus batching, queue limits, first-use download, errors, tool robustness, security
+and client compatibility (each item names its module). Real-model tests (marker `real_model`) run in
+CI. Kotlin tests in `app/src/commonTest` cover the network layer (`ModelCatalogTest`,
+`ServerAddressTest`, `ChatCloseEventTest`); the UI has none. `implemented` without a named test means
+*read in code*, never *verified by a test*.
 
-Status was established by reading the `develop` branch at commit `2be0e37` (2026-10-02). S1.11–S1.16
-and S3.4 also record the maintainer's decisions of the same day ([`serving/engine.md`](serving/engine.md)).
+Status was first established by reading `develop` at commit `2be0e37` (2026-10-02) and is updated
+with every change since. S1.11–S1.16 and S3.4 also record the maintainer's decisions of that day ([`serving/engine.md`](serving/engine.md)).
 
 ---
 
@@ -274,7 +275,8 @@ Decided (2026-10-02):
 Implemented (#84), `api/src/main/engine.py`:
 
 - `Engine(model_id, dtype=, device=, quantization=, chat_template=, ...)` loads a causal LM with
-  `from_pretrained`. `quantization="q8_0"` goes through torchnative's `TorchnativeConfig`.
+  `from_pretrained`. `quantization="q8_0"` goes through torchnative's `TorchnativeConfig`; this is the
+  November weight format but is unverified until torchnative's #15 gate measures q8_0 with batching.
 - Calling it with chat messages streams the reply as text chunks. Temperature 0 is greedy and
   equals `transformers` `generate`; `seed` makes sampling reproducible.
 - Concurrent callers are batched (S1.12). A request the batch cannot serve takes the exclusive
@@ -307,13 +309,11 @@ timeout and its 503 / 1013 mapping), `api/tests/test_engine.py`, `api/tests/test
 SmolLM2-135M. Still open for M1: the same tests on torchnative (cpu, mps) once torchnative TN-M1
 lands (2026-10-24).
 
-Proposal, pending confirmation: the engine is transformers 5.x continuous batching with a paged KV
+The 2026-10-02 proposal, now implemented (#85, #91) and awaiting verification on torchnative: the engine is transformers 5.x continuous batching with a paged KV
 cache, kernels live in torchnative, and the engine uses only the public `torch` / `transformers`
 API so a GPU server can run the same code on upstream PyTorch. Constraint: custom kernels cannot be
 registered from Gemstone, because `torch.library` registrations are no-ops on torchnative. They
 must be torchnative operators. See [`serving/engine.md`](serving/engine.md).
-
-No code on `develop`. Test: none.
 
 ### S1.12 Continuous batching — `partial` · G5
 
