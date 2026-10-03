@@ -129,8 +129,7 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
    남은 것은 4비트 품질과 GGUF 읽기(#67)로, torchnative 작업에 달려 있다.
 10. **torchnative 버전 하한**: PyPI 최신은 `0.1.0b4` 이고 배칭 수정이 없다. 수정이 든 `0.1.0b5` 를
     언제 올릴지, Gemstone 이 어떤 하한(`>=0.1.0b5` 등)을 걸지 사용자 결정을 기다린다.
-11. **`script/` 의 자리**: GraalVM 데스크톱 UI 구동 스크립트(`script/drive-desktop.ps1`) 하나만 있다.
-    개발 도구를 모아 둔 `tools/` 로 합칠지 정해야 한다. 지금은 AGENTS §2 승인 목록에 들어 있다.
+11. **`script/` 의 자리**: 해결됨(2026-10-04). `tools/drive-desktop.ps1` 로 옮겼다. `.idea/` 도 추적을 끊었다.
 
 ## 7. 마일스톤 (2026-10-03 재조정: 11월 말 실사용)
 

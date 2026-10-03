@@ -46,18 +46,16 @@ Approved tracked root entries (`api/tests/test_repo_layout.py` fails on anything
 |---|---|
 | `api/`, `app/` | The model-serving API (Python) and the client (Kotlin) |
 | `docs/` | Documents and the GitHub Pages guide |
-| `tools/` | Developer tooling (release sync, web bundle sync) |
+| `tools/` | Developer tooling (release sync, web bundle sync, desktop UI driver for the native-image build) |
 | `benchmarks/` | Measurement scripts |
-| `script/` | Desktop UI driving script for the native-image build (`script/drive-desktop.ps1`) |
 | `gradle/`, `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat` | Gradle build |
 | `pyproject.toml` | Python project (uv) |
 | `.github/` | CI workflows |
-| `.idea/` | Shared IDE settings (partly tracked) |
 | `README.md`, `AGENTS.md`, `PROJECT.md`, `LICENSE.md` | Root documents |
 | `.gitignore`, `.gitattributes`, `.env.example` | Git and environment templates |
 
 Local, git-ignored entries that tools create are fine: `.tmp/`, `.worktrees/`, `.venv/`, `.gradle/`,
-`.kotlin/`, `.env`, `local.properties`, `uv.lock`, `.claude/`, `.DS_Store`.
+`.kotlin/`, `.idea/`, `.env`, `local.properties`, `uv.lock`, `.claude/`, `.DS_Store`.
 
 ## 3. Worktrees link large artefacts instead of copying them
 
@@ -265,7 +263,7 @@ report it as coverage. New behaviour starts with a real failing test (rule 5).
 - Model weights are downloaded from Hugging Face at first use into the Hugging Face cache
   (`HF_HOME`). Never commit weights or caches, and do not trigger a model download from a test or
   a script without asking.
-- `.idea/` is partly tracked; leave IDE files alone unless the task is about them.
+- `.idea/` is not tracked (git-ignored); IDE settings stay local.
 
 ## 14. Secrets and configuration
 

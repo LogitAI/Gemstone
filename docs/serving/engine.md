@@ -105,7 +105,7 @@ there today.
 
 - **Kept in Gemstone for now:** the `nativeCompile` / `nativeDist` tasks in `app/build.gradle.kts`,
   `NativeRuntime.kt`, `app/native-metadata/`, `META-INF/native-image/`,
-  [`docs/build/native-desktop.md`](../build/native-desktop.md), `script/drive-desktop.ps1`.
+  [`docs/build/native-desktop.md`](../build/native-desktop.md), `tools/drive-desktop.ps1`.
 - **Moves later:** once the plugin does the same job, the Gradle tasks become plugin configuration.
   Reachability metadata for the Compose/Skiko stack goes to the plugin, and only Gemstone-specific
   metadata stays here.
