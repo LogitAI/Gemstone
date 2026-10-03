@@ -277,7 +277,9 @@ Implemented (#63), `api/src/main/engine.py`:
   `ModelRunner._sample`; `distributed.py`, `set_tp_seed`), so a sample depends on the other
   requests in the batch. The engine runs the manager greedily and samples in its own per-request
   logits processors instead: the last one draws each row's token from that request's own
-  `torch.Generator`, so the draw sequence of a request depends only on its seed.
+  random stream (`random.Random(seed)`, plain Python, so no torch RNG is needed — torchnative has
+  no `torch.Generator` yet), so the draw sequence of a request depends only on its seed.
+  Test: `api/tests/test_sampler_rng.py`.
 - Requests the batch does not serve take the exclusive path (S1.11).
 - No CUDA graphs, CUDA streams, async batching or `torch.compile` are used (all turned off in the
   `ContinuousBatchingConfig`), so the same code is meant to run on torchnative.

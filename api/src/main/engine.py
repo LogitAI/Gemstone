@@ -480,7 +480,9 @@ class _Batcher:
 # sample therefore depends on its neighbours and its row position, and there is no per-request
 # seed. Gemstone runs the manager greedily (`do_sample=False`, so it takes an argmax) and does the
 # sampling in these per-request logits processors instead: the last one draws each row's token
-# from that request's own `torch.Generator` and leaves only that token selectable.
+# from that request's own random stream (`random.Random(seed)`) and leaves only that token
+# selectable. The stream is plain Python, so it needs no torch RNG (torchnative has no
+# `torch.Generator` yet).
 # --------------------------------------------------------------------------------------------- #
 
 def _sampling_processors():
@@ -504,15 +506,13 @@ class _SamplerState:
         self._draws: Dict[str, tuple] = {}
 
     def draw(self, request_id: str, seed: int, index: int) -> float:
-        import torch
-
         with self._lock:
             entry = self._draws.get(request_id)
             if entry is None:
-                entry = self._draws[request_id] = (torch.Generator(device="cpu").manual_seed(seed), [])
+                entry = self._draws[request_id] = (random.Random(seed), [])
             generator, draws = entry
             while len(draws) <= index:
-                draws.extend(torch.rand(64, generator=generator, dtype=torch.float64).tolist())
+                draws.append(generator.random())
             return draws[index]
 
     def forget(self, request_id: str):
