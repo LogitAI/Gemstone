@@ -68,4 +68,9 @@ pythonpath = ["."]
 # Real-model tests are heavy and the machine is shared: they run in CI (`-m "real_model or not real_model"`),
 # not by default. `api/tests/conftest.py` marks every test that uses the `engine` fixture.
 addopts = ["-m", "not real_model"]
-markers = ["real_model: loads or downloads a real model (deselected by default; CI runs it)"]
+markers = [
+    "real_model: loads or downloads a real model (deselected by default; CI runs it)",
+    "needs_batching: needs continuous batching; skipped (reason given) on torchnative when engine.batching is False, never skipped on upstream PyTorch",
+    "needs_quantization: needs torchnative's q8_0 quantisation; skipped (reason given) on torchnative when it is missing, never skipped on upstream PyTorch",
+    "torchnative_only: not collected when `import torch` is upstream PyTorch",
+]

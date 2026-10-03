@@ -304,6 +304,15 @@ Implemented (#84), `api/src/main/engine.py`:
 - The substrate is chosen at install time: `uv sync --extra torch` (upstream PyTorch) or
   `--extra torchnative`.
 
+Capability-based skips: the CI job `.github/workflows/torchnative-tests.yml` (manual with a
+torchnative version input, weekly, non-blocking) runs `api/tests` on torchnative. `conftest.py`
+detects the substrate (torchnative and its version, or upstream PyTorch). On torchnative only,
+`needs_batching` skips when `engine.batching` is False (reason: `engine.batching_unavailable` and the
+torchnative version; all of `test_batching.py` and the concurrent q8_0 test) and `needs_quantization`
+skips when `torchnative.quant` has no `TorchnativeConfig` or q8_0 (`test_quantization.py`, which is
+`torchnative_only`: not collected on upstream). On upstream PyTorch nothing skips for a capability
+(`test_substrate.py` guards it); every other failure is loud.
+
 Tests: `api/tests/test_queue_budget.py` (fake tokenizer and batcher: the budget rule, the queue
 timeout and its 503 / 1013 mapping), `api/tests/test_engine.py`, `api/tests/test_server.py`, on upstream PyTorch with
 SmolLM2-135M. Still open for M1: the same tests on torchnative (cpu, mps) once torchnative TN-M1

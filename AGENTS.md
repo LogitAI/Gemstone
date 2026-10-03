@@ -173,6 +173,14 @@ uv run --extra torch pytest                     # api/tests without the real-mod
 uv run --extra torch pytest -m "real_model or not real_model"   # all, as CI runs them (SmolLM2-135M)
 ```
 
+Run on torchnative by the non-blocking `.github/workflows/torchnative-tests.yml` (manual, with a
+torchnative version input, and weekly; `-rs` lists skips). There a test marked `needs_batching`
+(`engine.batching` is False; the reason is `engine.batching_unavailable`) or `needs_quantization`
+(`torchnative.quant` lacks `TorchnativeConfig` / q8_0) skips with a reason naming that capability and
+the torchnative version, and `torchnative_only` tests (q8_0 engine) exist only there. On upstream
+PyTorch nothing skips and `torchnative_only` tests are not collected (`api/tests/test_substrate.py`).
+Any other failure on torchnative is a real failure.
+
 The tests load a real model. `GEMSTONE_TEST_MODEL` picks it (default `HuggingFaceTB/SmolLM2-135M`);
 it is read from the local Hugging Face cache and never downloaded unless
 `GEMSTONE_TEST_ALLOW_DOWNLOAD=1` (CI sets it). Model inference is heavy: run at most one such job
