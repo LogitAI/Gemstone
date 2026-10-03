@@ -30,7 +30,7 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
 
 ### S1.1 Server process — `implemented` · G5
 
-- `python -m api run server [host] [port] [--reload]` starts a uvicorn server on `127.0.0.1:23100` by
+- `uv run --extra torch python -m api run server [host] [port] [--reload]` starts a uvicorn server on `127.0.0.1:23100` by
   default, with a 300 s WebSocket ping interval and timeout. `GEMSTONE_HOST=host[:port]` overrides the
   default (arguments win over it). Auto-reload only with `--reload` or `GEMSTONE_DEV=1` (#116).
 - CORS and the WebSocket accept localhost, `127.0.0.1`, `[::1]` origins (any port) and the server's own

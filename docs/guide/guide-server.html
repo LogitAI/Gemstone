@@ -38,13 +38,13 @@
 </div></div>
 <div class="wrap content"><div class="prose">
   <h2 data-lang="en">Host and port</h2><h2 data-lang="ko">호스트와 포트</h2>
-<pre><code>python -m api run server [host] [port] [--reload]   <span class="c"># defaults: 127.0.0.1 23100</span>
-GEMSTONE_HOST=0.0.0.0:11434 python -m api run server  <span class="c"># host[:port], like OLLAMA_HOST</span></code></pre>
+<pre><code>uv run --extra torch python -m api run server [host] [port] [--reload]   <span class="c"># defaults: 127.0.0.1 23100</span>
+GEMSTONE_HOST=0.0.0.0:11434 uv run --extra torch python -m api run server  <span class="c"># host[:port], like OLLAMA_HOST</span></code></pre>
   <p data-lang="en">The server listens on loopback only. <code>GEMSTONE_HOST</code> overrides the address; the <code>host</code> and <code>port</code> arguments win over it. It reloads on code changes only with <code>--reload</code> or <code>GEMSTONE_DEV=1</code>, and keeps WebSockets alive for 300 seconds of silence — long enough for a slow first token.</p><p data-lang="ko">서버는 loopback 에서만 듣습니다. <code>GEMSTONE_HOST</code> 로 주소를 바꾸며, <code>host</code>·<code>port</code> 인자가 우선합니다. 코드가 바뀔 때의 재시작은 <code>--reload</code> 또는 <code>GEMSTONE_DEV=1</code> 일 때만 하고, WebSocket 을 300초 침묵까지 유지합니다 — 느린 첫 토큰에도 충분합니다.</p>
 
   <h2 data-lang="en">Origins and API key</h2><h2 data-lang="ko">Origin 과 API 키</h2>
   <p data-lang="en">Browsers may call the server from <code>localhost</code>, <code>127.0.0.1</code>, <code>[::1]</code> (any port) and the server's own origin. Add others with <code>GEMSTONE_ORIGINS</code> (comma-separated, <code>*</code> allowed). A foreign origin gets no CORS headers, a state-changing request from it is answered 403, and its WebSocket is refused. Requests without an <code>Origin</code> header (the Ollama CLI, the SDKs) always pass.</p><p data-lang="ko">브라우저는 <code>localhost</code>, <code>127.0.0.1</code>, <code>[::1]</code> (모든 포트)과 서버 자신의 origin 에서 서버를 부를 수 있습니다. 다른 origin 은 <code>GEMSTONE_ORIGINS</code> (쉼표로 구분, <code>*</code> 허용)로 더합니다. 외부 origin 에는 CORS 헤더가 붙지 않고, 상태를 바꾸는 요청은 403, WebSocket 은 거절됩니다. <code>Origin</code> 헤더가 없는 요청(Ollama CLI, SDK)은 항상 통과합니다.</p>
-<pre><code>GEMSTONE_API_KEY=s3cret python -m api run server
+<pre><code>GEMSTONE_API_KEY=s3cret uv run --extra torch python -m api run server
 curl -H "Authorization: Bearer s3cret" http://127.0.0.1:23100/api/models</code></pre>
   <p data-lang="en">With <code>GEMSTONE_API_KEY</code> set, every route needs <code>Authorization: Bearer &lt;key&gt;</code>; a WebSocket may instead pass <code>?api_key=&lt;key&gt;</code>. The web assets, <code>HEAD /</code> and <code>GET /api/version</code> stay open. Without a key on a non-loopback bind the server logs one warning at start-up and still serves, for Ollama compatibility.</p><p data-lang="ko">API 키를 설정하면 모든 경로에 <code>Authorization: Bearer &lt;key&gt;</code> 가 필요하며, WebSocket 은 대신 <code>?api_key=&lt;key&gt;</code> 를 쓸 수 있습니다. 웹 에셋, <code>HEAD /</code>, <code>GET /api/version</code> 은 열려 있습니다. loopback 이 아닌 주소에 키 없이 띄우면 시작 시 경고를 한 번 남기고 Ollama 호환을 위해 그대로 서비스합니다.</p>
 
