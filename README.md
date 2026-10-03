@@ -8,7 +8,7 @@ English | [한국어](docs/locale/README_ko.md)
 
 **One AI chat client for every platform — built to run the model on your own device.**
 
-[![License: MIT](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](LICENSE.md)
+[![License: Apache-2.0](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](gradle/libs.versions.toml)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.9-4285F4?logo=jetpackcompose&logoColor=white)](gradle/libs.versions.toml)
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](pyproject.toml)
@@ -203,4 +203,4 @@ the [Qwen](https://github.com/QwenLM) model team ·
 
 ## 📄 License
 
-[MIT](LICENSE.md) © 2025 thisisthepy
+[Apache-2.0](LICENSE.md) © 2025 thisisthepy

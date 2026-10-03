@@ -98,7 +98,7 @@ with `domain/`, `adapter/` and `framework/` layers.
 
 ## 3. Principles
 
-- **Open source, MIT-licensed.** (`LICENSE.md`.)
+- **Open source, Apache-2.0-licensed.** (`LICENSE.md`; MIT until 2026-10-03.)
 - **Open-weight models first.** Every model the README lists is an open-weight model run locally;
   remote providers are not mentioned as a goal.
 - **Shared code over per-platform code.** Platform source sets contain only entry points and the
