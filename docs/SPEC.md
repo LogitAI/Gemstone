@@ -91,7 +91,8 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
 
 The server then sends one text frame per generated chunk, then `<EOS>`, then closes. An unknown
 session closes the socket with code `1008`. Reasoning arrives between `<think>` and `</think>`
-frames; tool activity arrives as `<tool_call> … </tool_call>` frames (S1.6). Generation runs off
+frames; tool activity arrives as `<tool_call> … </tool_call>` frames (S1.6). Each tag is a frame of its own,
+even when the model's streamer emits it glued to whitespace or text (#112). Generation runs off
 the event loop; if the client disconnects mid-stream, generation stops and the model is free for
 the next request (#35).
 
