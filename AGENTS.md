@@ -47,10 +47,19 @@ build caches, model weights, `node_modules`) into every worktree is how 86 workt
 
 | Branch | Who writes to it |
 |---|---|
-| `work/<topic>` | You. All work happens here. |
-| `develop` | Merged into from work branches after verification. Never commit to it directly. |
+| `feat/<topic>` | You. All work happens here. Never name a branch `work/...`. |
+| `develop` | Merged into from `feat/` branches after verification. Never commit to it directly. |
 | `release` | **CI only.** Not a standing branch: CI regenerates it from every push to `develop`, in the main-only file layout, and opens the PR into `main`. It may not exist. Never write to it. |
 | `main` | **Pull request from `release` only.** Never push or merge to it directly. |
+
+Only `main`, `develop` and `release` are standing branches. A `feat/` branch lives until its pull
+request merges: merge with `gh pr merge --rebase --delete-branch`, then delete the local branch and
+its worktree. Periodically delete every remote and local branch already merged into `develop`.
+Pull requests here are rebase-merged, so `git branch --merged` does not see them: check the branch's
+pull request instead (`gh pr list --head <branch> --state merged`). An unmerged branch older than a
+few days is either landed or reported, not left. Branches named `release-*` (e.g. `release-cnu`) are
+preserved snapshots: keep them. Never force-push a pushed branch; to rebase after a push, push the
+result to a new `feat/` branch.
 
 `main` carries a reduced layout: of the Markdown files, only `README.md` stays at the repository
 root, and `docs/` keeps only its subdirectories (no Markdown files directly under `docs/`).
@@ -63,7 +72,7 @@ Every new feature goes through an issue and a pull request:
 1. Before starting, search the repository's issues (`gh issue list --state all --search "<keywords>"`).
 2. If no issue covers the work, open one (`gh issue create`) stating what and why, and the
    completion criterion — which tests must pass.
-3. Work on a `work/<topic>` branch, push every commit, and open a pull request into `develop`
+3. Work on a `feat/<topic>` branch, push every commit, and open a pull request into `develop`
    whose body contains `Closes #<number>`.
 4. Merge into `develop` through that pull request (`gh pr merge`), not by a local merge, so the
    issue is linked.
@@ -274,6 +283,6 @@ files should simply be written with LF. `docs/build/` is tracked (an exception i
 | `docs/<topic>/` | any | Every other document lives in a topic subdirectory, never directly in `docs/`. |
 
 `README.md` and `docs/locale/README_ko.md` must not link to develop-only files (`AGENTS.md`,
-`CLAUDE.md`, `PROJECT.md`, `docs/INTENT.md`, `docs/SPEC.md`); those links are dead on `main`.
+`PROJECT.md`, `docs/INTENT.md`, `docs/SPEC.md`); those links are dead on `main`.
 
-`CLAUDE.md` contains exactly `@AGENTS.md` and nothing else.
+There is no `CLAUDE.md`: Claude Code reads `AGENTS.md` directly. Do not add one.

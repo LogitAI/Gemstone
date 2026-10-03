@@ -16,9 +16,9 @@ on:
     - cron: "0 5 * * 1"  # weekly, Monday 05:00 UTC
   # workflow_dispatch and schedule only fire once this file is on the default branch (main), which
   # develop reaches through the release PR. Until then, push to ci/torchnative to run it on demand
-  # (e.g. git push origin develop:ci/torchnative). This work branch triggers it once for a first run.
+  # (e.g. git push origin develop:ci/torchnative).
   push:
-    branches: [ci/torchnative, work/torchnative-ci]
+    branches: [ci/torchnative]
 
 permissions:
   contents: read
