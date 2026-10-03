@@ -69,12 +69,14 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
 - Creating a session for an unknown model is `404` with a JSON `detail`: the name must resolve
   and be a catalogue name (fetched on first use, so not yet downloaded is fine) or a model in the
   local store (`Registry.check_known`, which loads and fetches nothing). `{model_id}` may hold a
-  "/" (a Hugging Face id). Deleting an unknown session is `404`. Errors are raised, never returned,
+  "/" (a Hugging Face id). Such an id is also part of the session id, so `{session_id}` of
+  `DELETE`/`POST /api/sessions/{session_id}` is a path parameter and may hold "/" too (#117); ids
+  are unchanged, so the WebSocket and clients need no change. Deleting an unknown session is `404`. Errors are raised, never returned,
   so every error response has a non-2xx status and a JSON `detail`.
 - Code: `api/src/main/server.py`, `api/src/main/settings.py` (`Session`). Tests: session-id
   uniqueness (`api/tests/test_tool_cache.py`); sessions share the registry's engine and closing
   one keeps the model (`api/tests/test_residency.py`); the 404s, the `detail` bodies and the
-  create, chat, delete flow (`api/tests/test_sessions.py`).
+  create, chat, delete flow and deleting a Hugging Face id's session (`api/tests/test_sessions.py`).
 
 ### S1.4 Streaming chat over WebSocket — `implemented` · G4
 
@@ -568,12 +570,26 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
 ### S2.2 Server address — `implemented` · G5
 
 - Android, iOS and desktop default to `127.0.0.1:23100`, overridable through
-  `GEMSTONE_SERVER_HOST` and `GEMSTONE_SERVER_PORT` (JVM system property or environment variable;
-  the port value includes the colon, e.g. `:23100`).
-- Desktop command line: `--server/-s host[:port]`, `--host/-h`, `--port/-p`, `--help`.
-- Web uses the host the page was served from, so the web client must be served by the API (S1.9).
-- Code: `app/src/cioMain/.../HttpClientFactory.cio.kt`, `app/src/wasmJsMain/.../HttpClientFactory.js.kt`,
-  `app/src/desktopMain/kotlin/gemstone/Main.desktop.kt`. Test: none.
+  `GEMSTONE_SERVER_HOST` and `GEMSTONE_SERVER_PORT` (JVM system property or environment variable).
+- `ServerAddress` parses the host: `host`, `host:port`, `[ipv6]:port` or a full `http(s)://host[:port]`
+  URL (path, query and fragment ignored). The port may be written with or without a leading colon
+  (`23100`, `:23100`) and an explicit port wins over one in the host. A bare host without a port
+  uses 23100; a URL without a port uses the scheme's (80 or 443). `http`/`ws` and `https`/`wss`
+  follow the scheme, so an `https` address chats over `wss`. A malformed address is an
+  `IllegalArgumentException`.
+- `GEMSTONE_API_KEY` (same sources), when set, is sent as `Authorization: Bearer <key>` on every
+  HTTP and WebSocket request. A browser cannot set headers on a WebSocket, so the web client sends
+  no key. The server side is S1.1.
+- Desktop command line: `--server/-s <address>` (anything above), `--host/-h`, `--port/-p`, `--help`.
+- Web uses the protocol, host and port of the page (`window.location.origin`; default ports 80/443
+  when it omits them), so the web client must be served by the API (S1.9).
+- Android has no address setting yet: a server on the same machine is reached with
+  `adb reverse tcp:23100 tcp:23100`; serving a LAN means `GEMSTONE_HOST=0.0.0.0` plus
+  `GEMSTONE_API_KEY` on the server, which desktop clients reach with `--server`. Pointing an Android
+  device at a LAN address needs a settings screen (S2.7).
+- Code: `app/src/commonMain/.../network/ServerAddress.kt`, `app/src/cioMain/.../HttpClientFactory.cio.kt`,
+  `app/src/wasmJsMain/.../HttpClientFactory.js.kt`, `app/src/desktopMain/kotlin/gemstone/Main.desktop.kt`.
+  Test: `app/src/commonTest/.../network/ServerAddressTest.kt`.
 
 ### S2.3 Chat screen — `implemented` · G4, G6
 

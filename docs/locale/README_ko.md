@@ -76,6 +76,12 @@ python -m api run server
 ./gradlew :app:installDebug  # Android
 ```
 
+서버는 `127.0.0.1` 에서만 받습니다. Android 기기나 에뮬레이터에서는 서버를 같은 컴퓨터에서 실행하고
+`adb reverse tcp:23100 tcp:23100` 을 쓰세요. 같은 LAN 의 다른 기기에 서비스하려면 서버를
+`GEMSTONE_HOST=0.0.0.0` 으로 시작하고 양쪽에 `GEMSTONE_API_KEY=<비밀값>` 을 설정합니다. 데스크톱
+클라이언트는 `--server http://<호스트>:23100` (또는 `GEMSTONE_SERVER_HOST`)을 받습니다.
+자세한 내용은 `docs/guide/` 의 클라이언트 가이드를 보세요.
+
 **내 코드에서 서버와 대화하기** — 프레임 세 개를 보내면 토큰이 흘러나옵니다:
 
 ```python

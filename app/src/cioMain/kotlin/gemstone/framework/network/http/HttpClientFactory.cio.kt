@@ -1,5 +1,6 @@
 package gemstone.framework.network.http
 
+import gemstone.framework.network.ServerAddress
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -7,11 +8,14 @@ import io.ktor.client.plugins.websocket.*
 import io.ktor.serialization.kotlinx.json.*
 
 
-actual val defaultServerHost: String = (
-    System.getProperty("GEMSTONE_SERVER_HOST") ?: System.getenv("GEMSTONE_SERVER_HOST") ?: "127.0.0.1"
-) + (
-    System.getProperty("GEMSTONE_SERVER_PORT") ?: System.getenv("GEMSTONE_SERVER_PORT") ?: ":23100"
-)
+private fun setting(name: String): String? = System.getProperty(name) ?: System.getenv(name)
+
+
+actual val defaultServerAddress: ServerAddress =
+    ServerAddress.resolve(setting("GEMSTONE_SERVER_HOST"), setting("GEMSTONE_SERVER_PORT"))
+
+
+actual val defaultApiKey: String? = setting("GEMSTONE_API_KEY")
 
 
 actual object HttpClientFactory {
