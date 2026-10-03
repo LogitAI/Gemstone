@@ -61,7 +61,8 @@ docs/               INTENT, SPEC, locale/, guide/ (GitHub Pages), serving/ (서�
 ## 4. 빌드와 실행
 
 ```bash
-uv sync --extra torch            # Python 의존성 (Python >=3.13). torchnative 는 --extra torchnative
+uv sync --extra torch            # Python 의존성 (Python 3.13). torchnative 는 --extra torchnative
+                                 # torchnative 는 PyPI 프리릴리스(2026-10-03 기준 0.1.0b4). 버전 하한은 결정 대기
 uv run --extra torch pytest      # Python 테스트 (api/tests)
 python -m api run server         # 0.0.0.0:23100
 ./gradlew :app:run               # 데스크톱
@@ -84,7 +85,7 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 - **서빙 구조 (2026-10-02)**: 근거와 위험은 [`docs/serving/engine.md`](docs/serving/engine.md) 에 있다.
   - 의미 없는 다중 백엔드를 걷어내고 **단일 서빙 시스템**으로 간다. GGUF·BIN·GPTQ 런타임과
     `llama-cpp-python`·`bitsandbytes` 의존성을 제거한다.
-  - 서빙 시스템은 **torchnative 에 의존**한다. 그래서 Python 요구 버전이 `>=3.13` 으로 오른다.
+  - 서빙 시스템은 **torchnative 에 의존**한다. 그래서 Python 요구 버전이 3.13 으로 오른다(torchnative 가 3.14 에서 측정될 때까지 `<3.14`).
   - Gemstone 은 **Ollama 대체제**가 된다.
   - **연속 배칭(continuous batching)과 페이지드 어텐션(paged attention)을 도입**한다.
   - vLLM 은 의존성으로 쓰지 않는다. 별도의 사용자 결정이 아니라 위 결정(torchnative 기반 단일 서빙)에서

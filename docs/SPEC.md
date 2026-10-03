@@ -223,7 +223,9 @@ Decided (2026-10-02):
 - One engine. `CoreRuntime`, `BackendType` and the GGUF / BIN / GPTQ runtimes are removed, along
   with `llama-cpp-python` and `bitsandbytes`.
 - Models load through `transformers` (`from_pretrained`) on torchnative.
-- The Python requirement is `>=3.13` (torchnative's floor).
+- The Python requirement is 3.13 (`>=3.13,<3.14`): torchnative's floor, capped until torchnative is
+  measured on 3.14. `--extra torchnative` installs torchnative's pre-release from PyPI
+  (0.1.0b4 on 2026-10-03); a version floor is not pinned yet (pending the maintainer's decision).
 - vLLM is not a dependency: a consequence of the torchnative decision, because vLLM assumes the
   CUDA PyTorch runtime and cannot run on torchnative.
 
