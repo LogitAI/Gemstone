@@ -14,7 +14,7 @@ Requests the batch cannot serve take the exclusive path, which is the M1 engine 
 `model.generate` at a time, with no batched request running. See `Engine.__call__`.
 """
 from contextlib import contextmanager
-from typing import Dict, Generator, List, Optional, Union
+from typing import Any, Dict, Generator, List, Optional, Union
 import itertools
 import logging
 import os
@@ -199,10 +199,14 @@ class Engine:
         repeat_penalty: float = 1.0,
         seed: Optional[int] = None,
         cancel: Optional[threading.Event] = None,
+        chat_template_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs
     ) -> Generator[str, None, None]:
         """
         Stream the reply to `messages` as text chunks.
+
+        `chat_template_kwargs` are extra variables for the chat template (`enable_thinking=False`
+        switches Qwen3's reasoning off). Unlike `kwargs` they do not make the request exclusive.
 
         `stream` is accepted for compatibility with the model layer and ignored: the reply is
         always produced as a stream. `max_new_tokens <= 0` means "as many as fit": up to the context
@@ -223,6 +227,7 @@ class Engine:
             chat_template=self.chat_template,
             add_generation_prompt=True,
             tokenize=False,
+            **(chat_template_kwargs or {}),
         )
         input_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
         prompt_length = len(input_ids)

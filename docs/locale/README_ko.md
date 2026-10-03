@@ -69,6 +69,19 @@ python -m api run server
 클라이언트는 `Authorization: Bearer <key>` 를 보냅니다. `GEMSTONE_ORIGINS` 는 브라우저 origin 을 더 허용하고,
 `--reload` (또는 `GEMSTONE_DEV=1`) 는 개발용 자동 재시작을 켭니다.
 
+**기존 클라이언트를 Gemstone 에 연결하기** (포트는 Ollama 의 `11434` 가 아니라 `23100` 입니다):
+
+```bash
+OLLAMA_HOST=http://127.0.0.1:23100 ollama run qwen3          # ollama CLI 와 Ollama 클라이언트
+OPENAI_BASE_URL=http://127.0.0.1:23100/v1 OPENAI_API_KEY=x python my_script.py   # OpenAI SDK
+```
+
+`qwen3`, `qwen3:latest`, `qwen3:0.6b` 는 기본 제공 모델이며 처음 쓸 때 내려받습니다. Hugging Face 모델은 id 로
+받습니다(`ollama pull Org/Model`). 그 밖의 Ollama 라이브러리 이름(`llama3.2`)은 쓸 수 없습니다. 서버에
+`GEMSTONE_API_KEY` 를 설정했다면 그 값을 키로 보내세요. OpenAI SDK 는 `OPENAI_API_KEY=<key>`, 다른 클라이언트는
+`Authorization: Bearer <key>` 헤더입니다(기본 `ollama` CLI 는 키를 보내지 않으므로 키 없는 loopback 서버에서 쓰세요).
+`think: false`(Ollama), `reasoning_effort: "none"`(OpenAI)은 Qwen3 의 추론을 끕니다.
+
 **3. 네이티브 클라이언트 실행**
 
 ```bash

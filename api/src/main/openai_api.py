@@ -24,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import registry as registry_module
 from .leases import LeasedStreamingResponse, acquire, once
-from .registry import ModelBusy, ModelUnavailable, in_catalogue, parse_keep_alive
+from .registry import ModelBusy, ModelUnavailable, in_catalogue, parse_keep_alive, unknown_model_message
 
 
 router = APIRouter(prefix="/v1")
@@ -58,6 +58,21 @@ class ChatCompletionRequest(Schema):
     stream: bool = False
     stream_options: Optional[Dict[str, Any]] = None
     n: Optional[int] = None
+    reasoning_effort: Optional[str] = None  # "none" / "minimal" switch Qwen3-style thinking off
+    chat_template_kwargs: Optional[Dict[str, Any]] = None  # extension, as in vLLM
+
+
+def _template_kwargs(req: "ChatCompletionRequest") -> Dict[str, Any]:
+    """
+    Extra variables for the chat template. `reasoning_effort` (OpenAI's field) maps to
+    `enable_thinking`: `none` / `minimal` is off, any other value on. `chat_template_kwargs`
+    (vLLM's extension) is passed through and wins. Neither set: the template's own default.
+    """
+    out: Dict[str, Any] = {}
+    if req.reasoning_effort is not None:
+        out["enable_thinking"] = req.reasoning_effort.strip().lower() not in ("none", "minimal")
+    out.update(req.chat_template_kwargs or {})
+    return out
 
 
 class APIError(Exception):
@@ -264,11 +279,14 @@ class Generation:
     or None once the reply is complete; `close` stops generation and releases the engine.
     """
 
-    def __init__(self, engine, messages, tools, parameters: Dict[str, Any], stops: List[str]):
+    def __init__(self, engine, messages, tools, parameters: Dict[str, Any], stops: List[str],
+                 template_kwargs: Optional[Dict[str, Any]] = None):
         self.engine, self.messages, self.tools = engine, messages, tools
+        self.template_kwargs = template_kwargs or {}
+        extra = dict(chat_template_kwargs=self.template_kwargs) if self.template_kwargs else {}
         self.max_new_tokens = parameters.get("max_new_tokens", 0)
         self.cancel = threading.Event()
-        self.tokens: Iterator[str] = engine(messages, tools=tools, cancel=self.cancel, **parameters)
+        self.tokens: Iterator[str] = engine(messages, tools=tools, cancel=self.cancel, **extra, **parameters)
         self.parser = OutputParser(parse_tools=bool(tools))
         self.stopper = _StopMatcher(stops)
         self.raw: List[str] = []
@@ -319,7 +337,7 @@ class Generation:
                 completion = len(tokenizer.encode("".join(self.raw), add_special_tokens=False))
                 text = tokenizer.apply_chat_template(
                     self.messages, tools=self.tools, chat_template=getattr(self.engine, "chat_template", None),
-                    add_generation_prompt=True, tokenize=False,
+                    add_generation_prompt=True, tokenize=False, **self.template_kwargs,
                 )
                 prompt = len(tokenizer.encode(text, add_special_tokens=False))
             except Exception:  # usage is informative; never fail a reply over it
@@ -398,7 +416,8 @@ async def _chat_completions(request: Request):
     try:
         hf_id = registry.resolve(req.model)  # derived models (`/api/create`, `/api/copy`) too
     except LookupError:
-        raise APIError(404, f"The model '{req.model}' does not exist.", param="model", code="model_not_found")
+        raise APIError(404, f"The {unknown_model_message(req.model)}",
+                       param="model", code="model_not_found")
 
     derived = registry.derived(req.model) or {}
     messages = _engine_messages(req.messages)
@@ -446,7 +465,7 @@ async def _complete(req: ChatCompletionRequest, lease, release, messages, tools,
         parameters["seed"] = req.seed
     stops = [req.stop] if isinstance(req.stop, str) else list(req.stop or derived.get("stop") or [])
 
-    generation = Generation(engine, messages, tools, parameters, stops)
+    generation = Generation(engine, messages, tools, parameters, stops, _template_kwargs(req))
 
     def finish():
         try:

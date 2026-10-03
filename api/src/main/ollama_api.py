@@ -12,7 +12,6 @@ returned as `message.tool_calls` and never executed. Model names resolve through
 `Registry.resolve` (derived models included); residency and keep_alive are handled by
 `registry.Registry`.
 """
-from importlib import metadata
 from typing import Iterator, List, Optional
 import itertools
 import json
@@ -25,9 +24,10 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from . import registry as registry_module
+from .version import VERSION
 from .leases import LeasedStreamingResponse, acquire, once
-from .registry import (DERIVED_PARAMETERS, ModelBusy, ModelUnavailable, UnsupportedModel, alias_key, format_parameters, is_builtin_name, now_iso,
-                       parse_keep_alive)
+from .registry import (DERIVED_PARAMETERS, ModelBusy, ModelUnavailable, UnsupportedModel, alias_key, format_parameters,
+                       in_catalogue, is_builtin_name, now_iso, parse_keep_alive)
 
 
 router = APIRouter()
@@ -246,14 +246,19 @@ def _count_tokens(engine, text: str) -> Optional[int]:
         return None
 
 
-def _prompt_tokens(engine, messages, tools) -> Optional[int]:
+def _template_kwargs(think: Optional[bool]) -> dict:
+    """ `think` -> the chat template's `enable_thinking` (Qwen3 and others); unset leaves the template's default. """
+    return {} if think is None else {"chat_template_kwargs": {"enable_thinking": think}}
+
+
+def _prompt_tokens(engine, messages, tools, template_kwargs=None) -> Optional[int]:
     tokenizer = getattr(engine, "tokenizer", None)
     if tokenizer is None:
         return None
     try:
         prompt = tokenizer.apply_chat_template(
             messages, tools=tools or None, chat_template=getattr(engine, "chat_template", None),
-            add_generation_prompt=True, tokenize=False)
+            add_generation_prompt=True, tokenize=False, **(template_kwargs or {}))
     except Exception:
         return None
     return _count_tokens(engine, prompt)
@@ -288,8 +293,9 @@ def _generate(lease, messages, tools, kwargs, stops, think, cancel, started, rel
     first_token = None
     chunks = None
     try:
-        prompt_eval_count = _prompt_tokens(engine, messages, tools)
-        chunks = engine(messages, tools=tools or None, cancel=cancel, **kwargs)
+        template = _template_kwargs(think)
+        prompt_eval_count = _prompt_tokens(engine, messages, tools, template.get("chat_template_kwargs"))
+        chunks = engine(messages, tools=tools or None, cancel=cancel, **template, **kwargs)
         for chunk in chunks:
             if first_token is None:
                 first_token = time.perf_counter()
@@ -381,11 +387,11 @@ async def _run(body: dict, messages: list, tools, render, finish):
         if keep_alive == 0:
             await run_in_threadpool(reg.unload, hf_id)
             return JSONResponse(finish(name, "unload"))
-        lease = await acquire(reg, hf_id, keep_alive)
+        lease = await acquire(reg, hf_id, keep_alive, in_catalogue(name))
         reg.release(lease)
         return JSONResponse(finish(name, "load"))
 
-    lease = await acquire(reg, hf_id, keep_alive)
+    lease = await acquire(reg, hf_id, keep_alive, in_catalogue(name))
     cancel = threading.Event()
     release = once(lambda: reg.release(lease))
     events = _generate(lease, messages, tools, kwargs, stops, think, cancel, started, release)
@@ -785,7 +791,7 @@ async def _embed(body: dict, inputs: List[str]) -> tuple:
     keep_alive = parse_keep_alive(body.get("keep_alive"))
     truncate = body.get("truncate", True) is not False
     reg = _registry()
-    lease = await acquire(reg, reg.resolve(name), keep_alive)
+    lease = await acquire(reg, reg.resolve(name), keep_alive, in_catalogue(name))
     try:
         embed = getattr(lease.engine, "embed", None)
         if embed is None:
@@ -828,10 +834,10 @@ async def embeddings(request: Request):
     return {"embedding": vectors[0] if vectors else []}
 
 
-@router.get("/api/version")
+@router.api_route("/api/version", methods=["GET", "HEAD"])
 async def version():
-    """ The Gemstone version (clients use it to check that the server is up). """
-    try:
-        return {"version": metadata.version("gemstone")}
-    except metadata.PackageNotFoundError:
-        return {"version": "0.0.0"}
+    """
+    The Gemstone version (SPEC S1.15). It is a plain `MAJOR.MINOR.PATCH` string, which is what Ollama
+    clients compare as semver; it is above every Ollama 0.x, so a "needs Ollama >= 0.x" check passes.
+    """
+    return {"version": VERSION}

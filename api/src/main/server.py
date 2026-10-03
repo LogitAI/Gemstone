@@ -1,5 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import RedirectResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 import anyio
@@ -38,6 +38,12 @@ def root():
     """ Redirect to the chat page """
     #return RedirectResponse(url="/chat")
     return FileResponse(os.path.join(WEBPACK_DIR, "gemstone.html"))
+
+
+@app.head("/")
+def root_head():
+    """ Health check, as Ollama answers `HEAD /` (SPEC S1.15): 200 with no body and no key. """
+    return Response(status_code=200, media_type="text/plain")
 
 
 @app.get("/composeResources/{path:path}")
