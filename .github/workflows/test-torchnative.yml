@@ -12,6 +12,10 @@ on:
         description: "torchnative version spec, e.g. 0.1.0b4 or >=0.1.0b4 (empty: the latest pre-release)"
         required: false
         default: ""
+      wheel_url:
+        description: "URL of a torchnative wheel (manylinux x86_64, cp313-abi3) to install instead of PyPI"
+        required: false
+        default: ""
   schedule:
     - cron: "0 5 * * 1"  # weekly, Monday 05:00 UTC
   # workflow_dispatch and schedule only fire once this file is on the default branch (main), which
@@ -37,6 +41,9 @@ jobs:
       GEMSTONE_TEST_MODEL: HuggingFaceTB/SmolLM2-135M
       GEMSTONE_TEST_ALLOW_DOWNLOAD: "1"
       TORCHNATIVE_SPEC: ${{ inputs.torchnative }}
+      # For a push run on ci/torchnative (no inputs), put the wheel URL in the quotes below in a commit
+      # on that branch only; develop keeps it empty.
+      TORCHNATIVE_WHEEL_URL: ${{ inputs.wheel_url || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,7 +62,11 @@ jobs:
         # pyproject sets `prerelease = "if-necessary"`, and a pinned spec with a pre-release
         # version allows it too.
         run: |
-          if [ -n "$TORCHNATIVE_SPEC" ]; then
+          if [ -n "$TORCHNATIVE_WHEEL_URL" ]; then
+            uv sync --extra torchnative
+            curl -fsSL -o "$RUNNER_TEMP/$(basename "$TORCHNATIVE_WHEEL_URL")" "$TORCHNATIVE_WHEEL_URL"
+            uv pip install --prerelease=allow --reinstall-package torchnative "$RUNNER_TEMP/$(basename "$TORCHNATIVE_WHEEL_URL")"
+          elif [ -n "$TORCHNATIVE_SPEC" ]; then
             case "$TORCHNATIVE_SPEC" in
               [0-9]*) spec="torchnative==$TORCHNATIVE_SPEC" ;;
               *) spec="torchnative$TORCHNATIVE_SPEC" ;;
