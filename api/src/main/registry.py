@@ -300,6 +300,16 @@ class Registry:
                                     model_description=f"{info.hf_id} (Hugging Face)"))
         return entries
 
+    def check_known(self, name: str) -> str:
+        """
+        The Hugging Face id of a model a session may name, without loading it: a catalogue name
+        (fetched on first use) or a model in the local store. Raises LookupError otherwise.
+        """
+        hf_id = resolve_model_name(name)
+        if not in_catalogue(name) and self.store.get(hf_id) is None:
+            raise LookupError(f"model '{name}' not found, try pulling it first")
+        return hf_id
+
     # -- residency ---------------------------------------------------------------------------------
 
     def acquire(self, hf_id: str, keep_alive: float = DEFAULT_KEEP_ALIVE, fetch: bool = False) -> Lease:
