@@ -64,6 +64,11 @@ python -m api run server
 
 Open <http://127.0.0.1:23100/> for the web client the server bundles.
 
+The server listens on `127.0.0.1` only. To serve other machines, set `GEMSTONE_HOST` (like
+`OLLAMA_HOST`) and an API key: `GEMSTONE_HOST=0.0.0.0:23100 GEMSTONE_API_KEY=<key> python -m api run server`.
+Clients then send `Authorization: Bearer <key>`. `GEMSTONE_ORIGINS` allows more browser origins and
+`--reload` (or `GEMSTONE_DEV=1`) turns on auto-reload for development.
+
 **3. Run a native client**
 
 ```bash

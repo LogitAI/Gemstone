@@ -168,7 +168,7 @@ Gradle and Python are independent toolchains. Neither needs the other to build.
 ```bash
 uv sync --extra torch                     # upstream PyTorch; or --extra torchnative (never both)
 # torchnative comes from PyPI as a pre-release (0.1.0b4 on 2026-10-03); no version floor is pinned yet
-uv run --extra torch python -m api run server   # serve on 0.0.0.0:23100
+uv run --extra torch python -m api run server   # serve on 127.0.0.1:23100 (GEMSTONE_HOST=host[:port] overrides)
 uv run --extra torch pytest                     # api/tests, on SmolLM2-135M from the HF cache
 ```
 
@@ -225,6 +225,11 @@ report it as coverage. New behaviour starts with a real failing test (rule 5).
 - The client finds the server through `GEMSTONE_SERVER_HOST` / `GEMSTONE_SERVER_PORT` (system
   property or environment variable; the port value includes its leading colon, e.g. `:23100`).
   The web client always uses the host it was served from.
+- The server reads `GEMSTONE_HOST` (`host[:port]`, default `127.0.0.1:23100`; the `run server [host] [port]`
+  arguments win), `GEMSTONE_DEV=1` (auto-reload; also `--reload`), `GEMSTONE_ORIGINS` (extra allowed
+  Origins, comma-separated, `*` allowed; localhost and the server's own origin are always allowed) and
+  `GEMSTONE_API_KEY` (when set, `Authorization: Bearer <key>` is required except for the web assets and
+  health checks; a WebSocket may pass `?api_key=`). A key is a secret: never log or commit it.
 
 ## 15. Dependencies
 

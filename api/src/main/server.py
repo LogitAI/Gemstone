@@ -17,9 +17,11 @@ from .registry import DEFAULT_KEEP_ALIVE, ModelBusy, ModelUnavailable, in_catalo
 from .models.config import ChatHistory
 from .openai_api import router as openai_router
 from .ollama_api import router as ollama_router
+from . import security
 
 
 app = FastAPI()
+security.install(app)  # Origin policy and the optional API key (SPEC S1.1)
 app.include_router(ollama_router)  # Ollama-compatible API (SPEC S1.15), including POST /api/chat
 app.mount("/static", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 app.mount("/webpack", StaticFiles(directory=WEBPACK_DIR, html=True), name="webpack")
@@ -149,7 +151,10 @@ async def chat_with_streaming(websocket: WebSocket):
 
 
 if __name__ == '__main__':
+    import sys
+    config = security.resolve_server_config(["run", "server", *sys.argv[1:]])
+    security.warn_if_open(config.host)
     uvicorn.run(
-        "server:app", host="127.0.0.1", port=23100, reload=True,
+        "server:app", host=config.host, port=config.port, reload=config.reload,
         ws_ping_interval=300, ws_ping_timeout=300, ws_per_message_deflate=False
     )
