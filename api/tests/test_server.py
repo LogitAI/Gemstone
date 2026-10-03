@@ -61,8 +61,10 @@ def test_streams_tokens_then_eos(client):
             break
     ws.__exit__(None, None, None)
 
+    reply = "".join(frames[:-1])
     assert frames[-1] == "<EOS>"
-    assert "".join(frames[:-1]).strip()
+    assert reply.strip()
+    assert "ERROR:" not in reply, reply  # an engine failure arrives as an ERROR message, not as a reply
 
 
 def test_disconnect_mid_stream_stops_generation_and_frees_the_model(client, engine, monkeypatch):
