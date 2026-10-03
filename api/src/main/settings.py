@@ -5,8 +5,8 @@ import os
 
 # The model catalogue lives in the registry (registry.CATALOGUE, SPEC S1.2).
 
-STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../test/static")
-WEBPACK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../test/webpack")
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+WEBPACK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webpack")
 
 
 class Session:

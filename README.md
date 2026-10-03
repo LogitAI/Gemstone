@@ -94,7 +94,7 @@ asyncio.run(ask("What is the weather in Daejeon today?"))
 ```
 
 This follows the same protocol as the browser client in
-[`api/src/test/static/index.py`](api/src/test/static/index.py).
+[`api/src/main/static/index.py`](api/src/main/static/index.py).
 
 ## 🧩 Architecture
 

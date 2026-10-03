@@ -203,14 +203,14 @@ CI runs `:app:desktopTest` and `:app:compileKotlinWasmJs` on every pull request 
 (`test_engine.py`, `test_batching.py`), the WebSocket stream (`test_server.py`), the OpenAI and
 Ollama APIs, model residency and lease release, the tool-result cache, and the backend removal.
 Most API tests use a fake engine and need no model; the engine, batching and server tests load
-SmolLM2-135M in float32 (the equality criteria are stated for float32). `api/src/test/` holds
-static web assets, not tests. The only Kotlin
+SmolLM2-135M in float32 (the equality criteria are stated for float32). The served web
+assets live in `api/src/main/static/` and `api/src/main/webpack/`, not in a test directory. The only Kotlin
 test (`app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`) asserts `1 + 2 == 3`; do not
 report it as coverage. New behaviour starts with a real failing test (rule 5).
 
 ## 13. Generated and large files
 
-- `api/src/test/webpack/` is a **committed build output** of the Wasm client, served by the API at
+- `api/src/main/webpack/` is a **committed build output** of the Wasm client, served by the API at
   `/`. Do not hand-edit it. Regenerate it from `app/` with Gradle and say so in the report.
 - Model weights are downloaded from Hugging Face at first use into the Hugging Face cache
   (`HF_HOME`). Never commit weights or caches, and do not trigger a model download from a test or

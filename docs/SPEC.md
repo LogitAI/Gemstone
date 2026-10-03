@@ -149,10 +149,10 @@ Test: `api/tests/test_backends_removed.py`.
 
 ### S1.9 Bundled web clients — `implemented` · G1
 
-- `GET /` serves the prebuilt Wasm client (`api/src/test/webpack/gemstone.html`); `/webpack/*` and
+- `GET /` serves the prebuilt Wasm client (`api/src/main/webpack/gemstone.html`); `/webpack/*` and
   `/composeResources/*` serve its assets.
-- `GET /chat` serves a minimal Brython test page (`api/src/test/static/`).
-- Code: `api/src/main/server.py`. Test: none.
+- `GET /chat` serves a minimal Brython test page (`api/src/main/static/`).
+- Code: `api/src/main/server.py`. Test: `api/tests/test_web_assets.py`.
 
 ### S1.10 OpenAI-compatible API — `partial` · G5
 
@@ -551,9 +551,9 @@ These exist in code (or in the README) but no goal in `INTENT.md` clearly covers
 2. **Remote model providers.** The README's project tree names `OpenAIClient.kt`,
    `AnthropicClient.kt` and `HuggingFaceClient.kt`. No such code exists and no goal mentions remote
    models. Either add the goal or drop them from the plan.
-3. **Production routes served from `api/src/test/`** (S1.9). The deployed web client and the Brython
-   page live under a `test` directory. This is a layout question rather than a behaviour question,
-   but it decides where Python tests can go.
+3. **Production routes served from `api/src/test/`** (S1.9). *Resolved (#83):* the web client and
+   the Brython page now live in `api/src/main/webpack/` and `api/src/main/static/`; Python tests are
+   in `api/tests/`.
 4. **Settings and localisation** (S2.7, S2.9) have no goal of their own; they are filed under G1
    on the assumption that a client meant for every platform is also meant for every user. Confirm,
    and say which languages are in scope (Android declares `en` and `ko`).
