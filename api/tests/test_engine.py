@@ -29,7 +29,7 @@ def test_greedy_output_equals_transformers_generate(engine):
     prompt = tokenizer.apply_chat_template(
         MESSAGES, chat_template=CHAT_TEMPLATE, add_generation_prompt=True, tokenize=False
     )
-    inputs = tokenizer(prompt, return_tensors="pt", add_special_tokens=False)
+    inputs = tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(engine.model.device)
     output = engine.model.generate(**inputs, max_new_tokens=16, do_sample=False)
     expected = tokenizer.decode(output[0, inputs["input_ids"].shape[1]:], skip_special_tokens=True)
 

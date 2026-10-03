@@ -23,6 +23,8 @@ import pytest
 
 TEST_MODEL = os.environ.get("GEMSTONE_TEST_MODEL", "HuggingFaceTB/SmolLM2-135M")
 ALLOW_DOWNLOAD = os.environ.get("GEMSTONE_TEST_ALLOW_DOWNLOAD") == "1"
+# Device of the real-model engines (`cpu` by default; e.g. `mps` to check Apple GPUs locally).
+TEST_DEVICE = os.environ.get("GEMSTONE_TEST_DEVICE", "cpu")
 
 # SmolLM2-135M is a base model and ships without a chat template.
 CHAT_TEMPLATE = (
@@ -109,6 +111,7 @@ def engine():
             # stated in float32. In the checkpoint's bfloat16, top logits tie exactly often enough
             # that a one-ulp difference between batch shapes flips the argmax.
             dtype=torch.float32,
+            device=TEST_DEVICE,
             chat_template=CHAT_TEMPLATE,
             local_files_only=not ALLOW_DOWNLOAD,
         )
