@@ -169,7 +169,8 @@ Gradle and Python are independent toolchains. Neither needs the other to build.
 uv sync --extra torch                     # upstream PyTorch; or --extra torchnative (never both)
 # torchnative comes from PyPI as a pre-release (0.1.0b4 on 2026-10-03); no version floor is pinned yet
 uv run --extra torch python -m api run server   # serve on 127.0.0.1:23100 (GEMSTONE_HOST=host[:port] overrides)
-uv run --extra torch pytest                     # api/tests, on SmolLM2-135M from the HF cache
+uv run --extra torch pytest                     # api/tests without the real-model tests (marker real_model)
+uv run --extra torch pytest -m "real_model or not real_model"   # all, as CI runs them (SmolLM2-135M)
 ```
 
 The tests load a real model. `GEMSTONE_TEST_MODEL` picks it (default `HuggingFaceTB/SmolLM2-135M`);
