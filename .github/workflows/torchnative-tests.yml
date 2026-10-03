@@ -1,0 +1,71 @@
+name: torchnative tests
+
+# The same api/tests as api-tests.yml, on torchnative instead of upstream PyTorch (SPEC S1.11,
+# AGENTS 12). Non-blocking: it is neither a required check nor run on pull requests until
+# torchnative is ready. Tests that need a capability the installed torchnative lacks (continuous
+# batching, q8_0) skip with a reason naming it; `-rs` prints every skip reason. Nothing skips on
+# upstream PyTorch.
+on:
+  workflow_dispatch:
+    inputs:
+      torchnative:
+        description: "torchnative version spec, e.g. 0.1.0b4 or >=0.1.0b4 (empty: the latest pre-release)"
+        required: false
+        default: ""
+  schedule:
+    - cron: "0 5 * * 1"  # weekly, Monday 05:00 UTC
+  # workflow_dispatch and schedule only fire once this file is on the default branch (main), which
+  # develop reaches through the release PR. Until then, push to ci/torchnative to run it on demand
+  # (e.g. git push origin develop:ci/torchnative). This work branch triggers it once for a first run.
+  push:
+    branches: [ci/torchnative, work/torchnative-ci]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: torchnative-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    env:
+      HF_HOME: ${{ github.workspace }}/.hf-cache
+      GEMSTONE_TEST_MODEL: HuggingFaceTB/SmolLM2-135M
+      GEMSTONE_TEST_ALLOW_DOWNLOAD: "1"
+      TORCHNATIVE_SPEC: ${{ inputs.torchnative }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Cache the Hugging Face model
+        uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: hf-${{ env.GEMSTONE_TEST_MODEL }}-v1
+
+      - name: Install (torchnative)
+        # torchnative's Linux wheel is manylinux_2_17_x86_64, cp313-abi3. It is a pre-release:
+        # pyproject sets `prerelease = "if-necessary"`, and a pinned spec with a pre-release
+        # version allows it too.
+        run: |
+          if [ -n "$TORCHNATIVE_SPEC" ]; then
+            case "$TORCHNATIVE_SPEC" in
+              [0-9]*) spec="torchnative==$TORCHNATIVE_SPEC" ;;
+              *) spec="torchnative$TORCHNATIVE_SPEC" ;;
+            esac
+            uv sync --extra torchnative --upgrade-package torchnative
+            uv pip install --prerelease=allow "$spec"
+          else
+            uv sync --extra torchnative --upgrade-package torchnative
+          fi
+          uv run --no-sync python -c "import importlib.metadata as m, torch; print('torchnative', m.version('torchnative'), 'torch', torch.__version__)"
+
+      - name: Test
+        run: uv run --no-sync pytest -v -m "real_model or not real_model" -rs

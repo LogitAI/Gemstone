@@ -9,6 +9,11 @@ that request.
 import threading
 import time
 
+import pytest
+
+# On torchnative these skip, naming the reason, when the build cannot batch (conftest.py).
+pytestmark = pytest.mark.needs_batching
+
 PROMPTS = [
     [{"role": "user", "content": "The capital of France is"}],
     [{"role": "user", "content": "Once upon a time, there was"}],
