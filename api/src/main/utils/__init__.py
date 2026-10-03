@@ -7,6 +7,7 @@ from copy import deepcopy
 
 from concurrent.futures import ThreadPoolExecutor
 import threading
+import os
 
 from . import weather
 from . import calendar
@@ -71,6 +72,7 @@ class FunctionCallResult(list):
         self.implementations: dict = FunctionCalling.DEFAULT.implementations
 
         self.__queue_mutex = threading.Lock()
+        self.__job_done = threading.Condition(self.__queue_mutex)  # notified when a job completes
         self.__thread_pool = ThreadPoolExecutor()
         self.__completed_jobs = 0
         self.__message_queue: list[str] = []
@@ -97,6 +99,11 @@ class FunctionCallResult(list):
                 queue = self.__message_queue
                 self.__message_queue = []
                 return "\n" + "\n".join(queue)
+
+    def wait(self, timeout: float | None = None) -> bool:
+        """ Block until no tool call is pending (or `timeout` seconds pass); True when none is. """
+        with self.__job_done:
+            return self.__job_done.wait_for(lambda: len(self.job_list) == self.__completed_jobs, timeout)
 
     def finalize(
         self,
@@ -143,11 +150,7 @@ class FunctionCallResult(list):
             # Unique within a session: the cache is keyed by this id (the timestamp alone has
             # one-second resolution, so calls staged in the same second used to collide).
             job_id = datetime.now().strftime("call_%Y%m%d%H%M%S_") + uuid4().hex[:8]
-            try:
-                params = loads(calling)
-            except JSONDecodeError:
-                pass  # TODO: Handle invalid JSON format if needed (in the future)
-            name, arguments = params.get("name"), params.get("arguments")
+            name, arguments, error = self.__parse(calling)
 
             self.job_list.append(dict(id=job_id, function=dict(
                 name=name,
@@ -157,7 +160,33 @@ class FunctionCallResult(list):
                 name=name, arguments=deepcopy(arguments)
             ))), ensure_ascii=False) + "\n" + tag[1])
 
-            self.__thread_pool.submit(self.do, job_id, name, arguments, tag, tool_call_caches)
+            self.__thread_pool.submit(self.do, job_id, name, arguments, tag, tool_call_caches, error)
+
+    @staticmethod
+    def __parse(calling: str):
+        """ Split a tool call into (name, arguments, error); a malformed call carries an error text. """
+        try:
+            params = loads(calling)
+        except (JSONDecodeError, TypeError, RecursionError) as e:
+            return None, {}, f"Error: the tool call is not valid JSON ({e}). Send {{\"name\": ..., \"arguments\": {{...}}}}."
+        if not isinstance(params, dict):
+            return None, {}, "Error: the tool call must be a JSON object with \"name\" and \"arguments\"."
+        name, arguments = params.get("name"), params.get("arguments")
+        if not isinstance(name, str) or not name:
+            return None, {}, "Error: the tool call has no \"name\"."
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            return name, {}, f"Error: the arguments of '{name}' must be a JSON object."
+        return name, arguments, None
+
+    @staticmethod
+    def tool_timeout() -> float:
+        """ Per-tool deadline in seconds: GEMSTONE_TOOL_TIMEOUT, default 30. """
+        try:
+            return float(os.environ.get("GEMSTONE_TOOL_TIMEOUT", "30"))
+        except ValueError:
+            return 30.0
 
     def do(
         self,
@@ -165,18 +194,31 @@ class FunctionCallResult(list):
         name: str,
         arguments: dict,
         tag: tuple[str, str] = ("<tool_call>", "</tool_call>"),
-        tool_call_caches: dict | None = None
+        tool_call_caches: dict | None = None,
+        error: str | None = None
     ):
-        # Execute the function
-        try:
-            if name not in self.implementations:
-                raise ValueError(f"Function '{name}' is not registered.")
-            if name == "get_cache_data":
-                result = self.implementations[name](**arguments, tool_call_caches=tool_call_caches)
-            else:
-                result = self.implementations[name](**arguments)
-        except Exception as e:
-            result = str(e)
+        # Execute the function on its own daemon thread so a stuck tool can be abandoned at the deadline
+        if error is not None:
+            result = error
+        else:
+            outcome: list = []
+
+            def run():
+                try:
+                    if name not in self.implementations:
+                        raise ValueError(f"Function '{name}' is not registered.")
+                    if name == "get_cache_data":
+                        outcome.append(self.implementations[name](**arguments, tool_call_caches=tool_call_caches))
+                    else:
+                        outcome.append(self.implementations[name](**arguments))
+                except Exception as e:
+                    outcome.append(str(e))
+
+            worker = threading.Thread(target=run, name=f"tool-{name}", daemon=True)
+            worker.start()
+            timeout = self.tool_timeout()
+            worker.join(timeout)
+            result = outcome[0] if outcome else f"Error: tool '{name}' timed out after {timeout:g} seconds."
 
         # Keep the full result server side; the client history only gets a placeholder
         if tool_call_caches is not None:
@@ -194,6 +236,7 @@ class FunctionCallResult(list):
 
             # Increment the completed job count
             self.__completed_jobs += 1
+            self.__job_done.notify_all()
 
 
 FunctionCalling.DISABLED = FunctionCalling(schemas=[], implementations={})
