@@ -81,7 +81,8 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 - **개발 방식**: 의도 기반 스펙 주도 개발 + 테스트 주도 개발. INTENT → SPEC → 테스트(적색 확인) → 코드.
 - **문서 배치**: `main` 에는 루트의 `README.md` 와 `docs/` 하위 디렉터리만 남는다.
   README 는 develop 전용 파일(AGENTS, PROJECT, INTENT, SPEC)에 링크하지 않는다.
-- **`CLAUDE.md`** 는 `@AGENTS.md` 한 줄만 둔다.
+- **`CLAUDE.md` 는 두지 않는다**(2026-10-03). Claude Code 가 `AGENTS.md` 를 직접 읽는다.
+- **브랜치**: 작업 브랜치는 `feat/<topic>`. `main`·`develop`·`release`(와 보존용 `release-*`)만 상시 브랜치로 두고, 머지된 브랜치는 머지 때 `--delete-branch` 로, 그 밖에는 주기적으로 지운다.
 - **토치 버전**: `pyproject.toml` 에서 torch 계열에 버전을 고정하지 않는다 (Windows 는 cu128 인덱스).
 - **서빙 구조 (2026-10-02)**: 근거와 위험은 [`docs/serving/engine.md`](docs/serving/engine.md) 에 있다.
   - 의미 없는 다중 백엔드를 걷어내고 **단일 서빙 시스템**으로 간다. GGUF·BIN·GPTQ 런타임과
