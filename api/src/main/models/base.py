@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Generator, Optional, List, Dict, Union
 
 from .config import ChatHistory
-from ..engine import Engine
+from ..engine import Engine, ModelBusy
 from ..utils import FunctionCalling, FunctionCallResult
 
 
@@ -233,6 +233,8 @@ class BaseModel:
                         message = f"\n\nERROR: {type(e)} - Something went wrong while processing the chat. Please try again later.\n{e}"
                     if print_output: print(message, end="", flush=True)
                     yield message
+                except ModelBusy:
+                    raise  # the server maps it to 503 / WebSocket close 1013, so it must not become text
                 except Exception as e:  # never let a failure kill the stream without a message
                     traceback.print_exc()
                     message = f"\n\nERROR: {type(e).__name__} - Something went wrong while processing the chat.\n{e}"
