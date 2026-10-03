@@ -109,15 +109,14 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
    돌려 정확도와 처리량을 잰다 ([`docs/serving/engine.md`](docs/serving/engine.md) § 7).
 5. **Python 테스트의 위치** — 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산도
    `api/src/test/` 에서 `api/src/main/{static,webpack}/` 로 옮겼다(#83).
-6. **릴리스 흐름** — 스크립트(`tools/release/sync-release.sh`)와 워크플로(`release-sync.yml`)는 들어왔다.
-   - 해결됨: 원격의 `release/cnu` 를 같은 커밋(`307bb22`)의 `release-cnu` 로 바꿔 보존했다. 이제 CI 가
-     `release` 브랜치를 만들 수 있다.
-   - 남은 것: 저장소 Actions 설정상 GITHUB_TOKEN 으로는 PR 을 만들 수 없다. 설정을 바꾸거나
-     `RELEASE_PR_TOKEN` 시크릿(PAT)을 둬야 한다.
+6. **릴리스 흐름** — 해결됨. develop push 마다 CI 가 `release` 를 만들고 release → main PR 을 연다.
+   main 은 저장소 설정으로만 보호한다(2026-10-03, B안: PR 필수, 승인 0, 직접 push·force-push·삭제
+   금지, 관리자만 머지). release PR 의 출발 브랜치는 사용자가 확인하고 머지한다. 출발 브랜치를 검사하던
+   `main-source-guard` 워크플로는 없앴다. `release-cnu` 는 보존 브랜치다.
 7. **줄바꿈** — 해결됨: LF 로 고정(`.gitattributes`, `.bat`/`.cmd`/`.ps1` 만 CRLF). `docs/build/` 는 추적한다.
-8. **GitHub Pages 배포** — "브랜치에서 배포" 는 `/` 또는 `/docs` 만 고를 수 있어 `docs/guide/` 를
-   바로 쓸 수 없다. `pages.yml` 워크플로가 들어왔으니, 저장소 설정에서 Pages 소스를 "GitHub Actions" 로
-   바꾸면 된다(`main` 푸시 때 배포).
+8. **GitHub Pages 배포** — 해결됨(2026-10-03). Pages 소스는 GitHub Actions, main 에서만 배포한다
+   (`pages.yml`). 주소는 https://logitai.github.io/Gemstone/ 이고, 첫 배포는 release → main PR 이
+   머지되면 일어난다.
 9. **Ollama 대체의 범위** — 모델 pull/list/rm/ps, keep-alive, 여러 모델 동시 상주, Ollama 호환 API 중
    어디까지 할지. 4비트 품질과 GGUF 읽기는 torchnative 쪽 작업에 달려 있다.
 
