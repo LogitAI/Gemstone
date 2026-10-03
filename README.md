@@ -69,6 +69,20 @@ The server listens on `127.0.0.1` only. To serve other machines, set `GEMSTONE_H
 Clients then send `Authorization: Bearer <key>`. `GEMSTONE_ORIGINS` allows more browser origins and
 `--reload` (or `GEMSTONE_DEV=1`) turns on auto-reload for development.
 
+**Point existing clients at Gemstone** (it listens on `23100`, not Ollama's `11434` or OpenAI's HTTPS host):
+
+```bash
+OLLAMA_HOST=http://127.0.0.1:23100 ollama run qwen3          # the ollama CLI and Ollama clients
+OPENAI_BASE_URL=http://127.0.0.1:23100/v1 OPENAI_API_KEY=x python my_script.py   # OpenAI SDKs
+```
+
+`qwen3`, `qwen3:latest` and `qwen3:0.6b` are the built-in model (fetched on first use); any Hugging Face
+model is pulled by its id, e.g. `ollama pull Org/Model`. Other Ollama library names (`llama3.2`) are not
+available. When `GEMSTONE_API_KEY` is set on the server, send it as the key: `OPENAI_API_KEY=<key>` for
+OpenAI SDKs, or an `Authorization: Bearer <key>` header for other clients (the stock `ollama` CLI sends none,
+so use it on a loopback server without a key). `think: false` (Ollama) and `reasoning_effort: "none"`
+(OpenAI) switch Qwen3's reasoning off.
+
 **3. Run a native client**
 
 ```bash

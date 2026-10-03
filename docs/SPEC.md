@@ -228,6 +228,13 @@ Implemented (#65), `api/src/main/openai_api.py`:
   recognised. `finish_reason` is `tool_calls` when any call was returned, else `length` when the
   token limit was reached, else `stop`. With `tool_choice: "none"` the tools are not sent and no
   output is parsed as a call. A block that is not valid JSON is returned as content.
+- `reasoning_effort` switches thinking: `none` or `minimal` passes `enable_thinking=False` to the
+  chat template (Qwen3 then skips its reasoning), any other value passes `True`. The vLLM extension
+  `chat_template_kwargs` (an object) is passed to the template as well and wins over
+  `reasoning_effort`. Neither set: nothing is passed and the template's default applies (Qwen3
+  thinks). The engine takes these as `chat_template_kwargs=`; unlike other extra keywords they do
+  not make a request exclusive (S1.12). An unknown model's 404 message lists the names that exist
+  and says Hugging Face ids can be pulled (S1.15).
 - Reasoning between `<think>` and `</think>` is removed from `content` and returned as
   `reasoning_content` (message field, or delta field when streaming), the extension used by
   DeepSeek, vLLM and others. Leading and trailing whitespace around content and reasoning is
@@ -512,7 +519,7 @@ OpenAI-compatible API (S1.10). Code: `api/src/main/ollama_api.py` (an `APIRouter
 Implemented (M3 scope, #66; the rest of the commands, #75):
 
 - `POST /api/chat`, `POST /api/generate`, `GET /api/tags`, `POST /api/show`, `POST /api/pull`,
-  `DELETE /api/delete`, `GET /api/ps`, `GET /api/version` (the Gemstone package version).
+  `DELETE /api/delete`, `GET /api/ps`, `GET /api/version` (below).
   `GET /api/ps` shows every resident model whichever API loaded it (S1.14).
 - `POST /api/copy`, `POST /api/create`, `POST /api/embed`, `POST /api/embeddings` and
   `POST /api/push` (below).
@@ -521,12 +528,32 @@ Implemented (M3 scope, #66; the rest of the commands, #75):
   not offer, 503 when a load timed out waiting for room (S1.14) or a model cannot be downloaded because the
   machine is offline or the download failed (the message names the model, #114; `/api/pull` too), 500 for a pull of an unknown repository. An error after streaming has started arrives as a final `{"error": ...}` line.
   A stream whose client is gone before it starts still releases the model (S1.14).
+- **Health and version (#118).** `HEAD /` answers 200 with no body and needs no API key, as Ollama's
+  does; `GET /` keeps serving the bundled web client. `HEAD` and `GET /api/version` return
+  `{"version": "<Gemstone version>"}`, the single constant `VERSION` in `api/src/main/version.py`
+  (equal to `pyproject.toml`, checked by a test; the project is not installed, so
+  `importlib.metadata` cannot be used). It is a plain `MAJOR.MINOR.PATCH` string, which is what Ollama
+  clients compare as semver; Gemstone's `1.x` is above every Ollama `0.x`, so a "requires Ollama >=
+  0.x" gate passes.
+- **Names (#118).** The names that resolve to the catalogue model (`Qwen/Qwen3-0.6B`) are `qwen3`,
+  `qwen3:latest`, `qwen3:0.6b`, `qwen3:0.6b-fp16` and `default` (case-insensitive); `smollm2:135m` maps
+  to `HuggingFaceTB/SmolLM2-135M-Instruct`; `Org/Model[:latest]` is a Hugging Face id. Nothing else
+  is mapped: Ollama library names such as `llama3.2` are not available. Such a name is a 404
+  whose message lists the names above and says a Hugging Face id (`Org/Model`) can be pulled. The
+  same text is used for `/api/pull`, `/api/show` and the OpenAI API.
+- **First use (#118).** `/api/chat`, `/api/generate` (also load-only) and `/api/embed`/`/api/embeddings`
+  download a catalogue model that is not in the cache (`qwen3` and the Ollama names that map to it),
+  as the app and the OpenAI API do, so `ollama run qwen3` works on a fresh install. Any other model
+  that is not pulled stays a 404; an offline or failed download is a 503 (#114).
 - **Chat.** `messages` (`role`, `content`, `tool_calls`, `tool_name`); `images` are dropped (no
   vision support). `tools` go to the chat template; a `<tool_call>{json}</tool_call>` block the
   model emits becomes `message.tool_calls: [{function: {name, arguments}}]` and is never executed
   (pass-through, S1.10). A block that is not valid JSON stays in the content as text.
-- **Thinking.** `think: true` returns the `<think>` block as `message.thinking`; `think: false`
-  drops it from the reply (the model still generates it); unset leaves it in the content as written.
+- **Thinking (#118).** `think: false` passes `enable_thinking=False` to the chat template, so a
+  Qwen3-style model skips its reasoning, and drops any `<think>` block from the reply; `think: true`
+  (or a level string such as `"high"`) passes `enable_thinking=True` and returns the block as
+  `message.thinking`; unset passes nothing: the template's default applies (Qwen3 thinks) and the
+  `<think>` block stays in `content` as the model wrote it. `/api/chat` and `/api/generate` behave alike.
 - **Options.** `temperature`, `top_p`, `top_k`, `min_p`, `typical_p`, `repeat_penalty` and `seed`
   go to the engine unchanged; `num_predict` becomes `max_new_tokens` (unset or ≤ 0 means up to the
   context length); `stop` cuts the output at the first stop string and stops generation (best

@@ -55,6 +55,7 @@ MODEL_ALIASES = {
     **{name: entry.hf_id for name, entry in CATALOGUE.items()},  # qwen3, default
     "qwen3:0.6b": "Qwen/Qwen3-0.6B",     # Ollama library name
     "qwen3:latest": "Qwen/Qwen3-0.6B",
+    "qwen3:0.6b-fp16": "Qwen/Qwen3-0.6B",  # Ollama's unquantised tag; the weights are served as published
     "smollm2:135m": "HuggingFaceTB/SmolLM2-135M-Instruct",  # Ollama's smollm2:135m is the instruct model
 }
 
@@ -79,12 +80,27 @@ def resolve_model_name(name: str) -> str:
     repo, _, tag = name.partition(":")
     if "/" in repo and tag in ("", "latest") and re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
         return repo
-    raise LookupError(f"model '{name}' not found")
+    raise LookupError(unknown_model_message(name))
+
+
+def unknown_model_message(name: str) -> str:
+    """ The 404 text for a name that is neither known nor a Hugging Face id: what exists and how to add more. """
+    names = ", ".join(sorted(n for n in MODEL_ALIASES if n != "default"))
+    return (f"model '{name}' not found. Gemstone serves these names: {names}. "
+            "Any Hugging Face model can be pulled by its id (`Org/Model`), "
+            "for example `ollama pull HuggingFaceTB/SmolLM2-360M-Instruct`; Ollama library names such as "
+            "`llama3.2` are not available.")
 
 
 def in_catalogue(name: str) -> bool:
-    """ True for a Gemstone model name (`qwen3`, `default`). """
-    return isinstance(name, str) and name.strip().lower() in CATALOGUE
+    """
+    True for a Gemstone catalogue model, by its own name (`qwen3`, `default`) or an Ollama name that
+    maps to it (`qwen3:latest`, `qwen3:0.6b`): such a model is fetched on first use (S1.14).
+    """
+    if not isinstance(name, str):
+        return False
+    key = name.strip().lower()
+    return key in CATALOGUE or MODEL_ALIASES.get(key) in {e.hf_id for e in CATALOGUE.values()}
 
 
 _plain_classes: dict = {}
