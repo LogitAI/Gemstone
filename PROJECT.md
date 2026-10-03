@@ -110,8 +110,8 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 5. **Python 테스트의 위치** — 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산도
    `api/src/test/` 에서 `api/src/main/{static,webpack}/` 로 옮겼다(#83).
 6. **릴리스 흐름** — 해결됨. develop push 마다 CI 가 `release` 를 만들고 release → main PR 을 연다.
-   main 은 저장소 설정으로만 보호한다(2026-10-03, B안: PR 필수, 승인 0, 직접 push·force-push·삭제
-   금지, 관리자만 머지). release PR 의 출발 브랜치는 사용자가 확인하고 머지한다. 출발 브랜치를 검사하던
+   main 의 보호는 사용자가 저장소 설정에서 관리하고 잠가 둔다. release PR 은 사용자가 확인하고 머지한다.
+   에이전트는 보호 설정을 스크립트로 만들거나 바꾸지 않는다. 출발 브랜치를 검사하던
    `main-source-guard` 워크플로는 없앴다. `release-cnu` 는 보존 브랜치다.
 7. **줄바꿈** — 해결됨: LF 로 고정(`.gitattributes`, `.bat`/`.cmd`/`.ps1` 만 CRLF). `docs/build/` 는 추적한다.
 8. **GitHub Pages 배포** — 해결됨(2026-10-03). Pages 소스는 GitHub Actions, main 에서만 배포한다
