@@ -254,6 +254,26 @@ def safetensors_stats(path: Optional[str]) -> Tuple[Optional[int], Optional[int]
     return params, size, max(by_dtype, key=by_dtype.get) if by_dtype else ""
 
 
+def is_complete(path: str) -> bool:
+    """
+    Whether a snapshot directory holds a loadable model: `config.json` and every weight file. A
+    sharded model (`model.safetensors.index.json`) needs each shard its index names, otherwise
+    at least one `*.safetensors` file must exist. Snapshot files are symlinks into `blobs/`, so a
+    link whose blob is gone counts as missing.
+    """
+    if not os.path.exists(os.path.join(path, "config.json")):
+        return False
+    index = os.path.join(path, "model.safetensors.index.json")
+    if os.path.exists(index):
+        shards = set(_read_json(index).get("weight_map", {}).values())
+        return bool(shards) and all(os.path.exists(os.path.join(path, s)) for s in shards)
+    try:
+        return any(n.endswith(".safetensors") and os.path.exists(os.path.join(path, n))
+                   for n in os.listdir(path))
+    except OSError:
+        return False
+
+
 @dataclass
 class LocalModel:
     """ A model in the local store. """
@@ -302,6 +322,7 @@ class HFStore:
         return [m for m in (self._describe(r) for r in self._repos()) if m is not None]
 
     def get(self, hf_id: str) -> Optional[LocalModel]:
+        """ The model in the cache, or None when it is absent or only partly fetched (`is_complete`). """
         for repo in self._repos():
             if repo.repo_id == hf_id:
                 return self._describe(repo)
@@ -326,9 +347,15 @@ class HFStore:
 
     def download_iter(self, hf_id: str) -> Iterator[dict]:
         """
-        Download the repository's `PULL_PATTERNS` files one by one at one revision, yielding Ollama
-        pull progress (`status`, `digest`, `total`, `completed`) before and after each file. The
-        Hub reports file sizes, so the progress is per file, not per byte.
+        Download the repository's `PULL_PATTERNS` files one by one, yielding Ollama pull progress
+        (`status`, `digest`, `total`, `completed`) before and after each file. The Hub reports file
+        sizes, so the progress is per file, not per byte.
+
+        Each file is fetched at the revision `main`, not at the commit hash: huggingface_hub writes
+        `refs/main` only for a named revision, and loading offline with the default revision
+        resolves through that ref. (`snapshot_download` would do the same but report no per-file
+        progress.) A push to `main` in the middle of a pull can leave the files in two snapshots;
+        `is_complete` then rejects the newest one and the next acquire fetches it whole.
         """
         import huggingface_hub
         from huggingface_hub.errors import RepositoryNotFoundError
@@ -341,7 +368,7 @@ class HFStore:
         for name, size in files:
             event = dict(status=f"pulling {name}", digest=name, total=size, completed=0)
             yield dict(event)
-            huggingface_hub.hf_hub_download(hf_id, name, revision=info.sha)
+            huggingface_hub.hf_hub_download(hf_id, name, revision="main")
             yield {**event, "completed": size}
 
     @staticmethod
@@ -359,6 +386,8 @@ class HFStore:
             return None
         rev = revisions[0]
         path = str(rev.snapshot_path)
+        if not is_complete(path):
+            return None
         config = _read_json(os.path.join(path, "config.json"))
         tokenizer_config = _read_json(os.path.join(path, "tokenizer_config.json"))
         template = tokenizer_config.get("chat_template") or ""
