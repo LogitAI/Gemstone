@@ -30,7 +30,7 @@ Most AI chat apps are a thin window onto someone else's server. Gemstone starts 
 
 Today that means a Kotlin [Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/)
 client for Android, iOS, desktop and the web, talking to a Python server you run yourself on your
-own GPU. Next, the same Python model code moves *into* the app through
+own machine (the engine runs on the CPU for now; GPU support is planned). Next, the same Python model code moves *into* the app through
 [Python Multiplatform](https://github.com/thisisthepy/python-multiplatform), so chatting needs no
 separate server and no network at all.
 
@@ -40,7 +40,7 @@ separate server and no network at all.
 - 🚀 **Streaming chat** — tokens arrive over a WebSocket as they are generated and render as Markdown on the fly.
 - 🧠 **Visible reasoning** — the model's `<think>` block appears as a collapsible panel with elapsed time.
 - 🔌 **Tool calling** — weather, public holidays, exchange rates, a calculator and web search, run server-side in parallel and fed back to the model.
-- 📦 **Open-weight models on one engine** — Qwen 3 0.6B served by a single transformers-based engine that runs on PyTorch or on [torchnative](https://github.com/thisisthepy/torchnative). Gemstone is becoming a local Ollama replacement: concurrent requests (continuous batching), OpenAI- and Ollama-compatible APIs and 8-bit weights are planned for November 2026.
+- 📦 **Open-weight models on one engine** — Qwen 3 0.6B served by a single transformers-based engine that runs on PyTorch or on [torchnative](https://github.com/thisisthepy/torchnative). Gemstone is becoming a local Ollama replacement: concurrent requests (continuous batching with a paged KV cache) and OpenAI- and Ollama-compatible APIs work today; 4-bit weights and GGUF are planned.
 - 🖥️ **Native desktop feel** — a JetBrains Jewel decorated window, with Dmg / Msi / Deb installers.
 
 ## 🚀 Quick start
@@ -152,16 +152,22 @@ Gemstone is an early, working prototype. The honest state of each piece:
 | Area | State |
 |---|---|
 | Streaming chat, reasoning display, tool calling | ✅ Working |
+| One transformers engine, continuous batching, paged KV cache (on CPU by default) | ✅ Working on PyTorch; 🟡 not yet verified on torchnative |
+| Several resident models, eviction, `keep_alive` | ✅ Working |
+| OpenAI-compatible API (`/v1`, tool calls passed through) | 🟡 Partial — no `n` > 1, logprobs or embeddings |
+| Ollama-compatible API (chat, generate, tags, show, pull, delete, ps, copy, create, embed) | 🟡 Partial — `push` returns 501; no Modelfile, template or blobs |
+| Security defaults (loopback bind, origin checks, API key) | ✅ Working |
 | Android, desktop and web clients | ✅ Working |
+| Model choice and server address in the client | ✅ Models are read from the server; Android has no address setting yet |
 | iOS client | 🟡 Framework targets configured; the Xcode build script needs fixing |
-| Model choice in the client | 🟡 Hard-coded list, not yet read from the server |
 | Chat history | 🟡 In memory only |
+| Automated tests | 🟡 Python tests (including a real model) and Kotlin tests for the network layer run in CI; the UI is untested |
+| Native desktop executable (GraalVM, no JVM) | ⏳ Planned — a Windows x64 build path exists but has not been run |
+| GPU (CUDA) inference | ⏳ Planned |
+| 4-bit weights, GGUF | ⏳ Planned |
 | Settings screen | ⏳ Planned |
 | On-device inference via Python Multiplatform | ⏳ Planned |
 | Offline mode, cross-device sync | ⏳ Planned |
-| OpenAI-compatible API | ⏳ Planned |
-| Native desktop executable (GraalVM, no JVM) | ⏳ In progress |
-| Automated tests | ⏳ Not yet — the first priority |
 
 ## 📖 Documentation
 
