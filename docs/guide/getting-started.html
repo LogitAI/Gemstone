@@ -52,7 +52,7 @@ uv sync --extra torch</code></pre>
   <p data-lang="en">That installs upstream PyTorch. To use <a href="https://github.com/thisisthepy/torchnative">torchnative</a> instead, run <code>uv sync --extra torchnative</code>. The two extras cannot be installed together.</p><p data-lang="ko">이렇게 하면 upstream PyTorch 가 설치됩니다. 대신 <a href="https://github.com/thisisthepy/torchnative">torchnative</a> 를 쓰려면 <code>uv sync --extra torchnative</code> 를 실행하세요. 두 extra 는 함께 설치할 수 없습니다.</p>
 
   <h2 data-lang="en">2. Start it</h2><h2 data-lang="ko">2. 실행</h2>
-<pre><code>python -m api run server                  <span class="c"># 0.0.0.0:23100</span>
+<pre><code>python -m api run server                  <span class="c"># 127.0.0.1:23100 (loopback only)</span>
 python -m api run server 127.0.0.1 23100  <span class="c"># explicit host and port</span></code></pre>
   <p class="note" data-lang="en">The model downloads from Hugging Face the first time a session uses it — several gigabytes, once.</p><p class="note" data-lang="ko">모델은 세션이 처음 사용할 때 Hugging Face 에서 내려받습니다 — 수 GB, 한 번만.</p>
 
@@ -60,7 +60,7 @@ python -m api run server 127.0.0.1 23100  <span class="c"># explicit host and po
   <p data-lang="en">The quickest is the web client the server already bundles: open <a href="http://127.0.0.1:23100/">http://127.0.0.1:23100/</a>. For a native window:</p><p data-lang="ko">가장 빠른 것은 서버에 이미 들어 있는 웹 클라이언트입니다: <a href="http://127.0.0.1:23100/">http://127.0.0.1:23100/</a> 를 여세요. 네이티브 창은:</p>
 <pre><code>./gradlew :app:run           <span class="c"># desktop</span>
 ./gradlew :app:installDebug  <span class="c"># Android</span></code></pre>
-  <p data-lang="en">Clients look for the server at <code>127.0.0.1:23100</code>. To use one on another machine, see <a href="guide-clients.html">Connect clients</a>.</p><p data-lang="ko">클라이언트는 <code>127.0.0.1:23100</code> 에서 서버를 찾습니다. 다른 머신의 서버를 쓰려면 <a href="guide-clients.html">클라이언트 연결</a>을 보세요.</p>
+  <p data-lang="en">Clients look for the server at <code>127.0.0.1:23100</code>. To use one on another machine, start the server with <code>GEMSTONE_HOST=0.0.0.0</code> and a <code>GEMSTONE_API_KEY</code> (<a href="guide-server.html">Run the server</a>), then see <a href="guide-clients.html">Connect clients</a>.</p><p data-lang="ko">클라이언트는 <code>127.0.0.1:23100</code> 에서 서버를 찾습니다. 다른 머신의 서버를 쓰려면 <code>GEMSTONE_HOST=0.0.0.0</code> 과 <code>GEMSTONE_API_KEY</code> 로 서버를 띄운 뒤(<a href="guide-server.html">서버 운영</a>) <a href="guide-clients.html">클라이언트 연결</a>을 보세요.</p>
 
   <h2 data-lang="en">If something goes wrong</h2><h2 data-lang="ko">문제가 생기면</h2>
   <ul>

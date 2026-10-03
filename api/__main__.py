@@ -1,16 +1,28 @@
 import sys
 
 
-if sys.argv[1] == "run" and sys.argv[2] == "server":
+def run_uvicorn(target, **kwargs):
+    import uvicorn
+    uvicorn.run(target, **kwargs)
+
+
+def main(argv):
+    if argv[:2] != ["run", "server"]:
+        sys.exit("usage: python -m api run server [host] [port] [--reload]\n"
+                 "env: GEMSTONE_HOST=host[:port], GEMSTONE_API_KEY, GEMSTONE_ORIGINS, GEMSTONE_DEV=1")
     try:
-        from api.src.main.server import uvicorn
+        from api.src.main import security
         server_object = "api.src.main.server:app"
     except ImportError:
-        from src.main.server import uvicorn
+        from src.main import security
         server_object = "src.main.server:app"
-    host = sys.argv[3] if len(sys.argv) > 3 else "0.0.0.0"
-    port = int(sys.argv[4]) if len(sys.argv) > 4 else 23100
-    uvicorn.run(
-        server_object, host=host, port=port, reload=True,
+    config = security.resolve_server_config(argv)
+    security.warn_if_open(config.host)
+    run_uvicorn(
+        server_object, host=config.host, port=config.port, reload=config.reload,
         ws_ping_interval=300, ws_ping_timeout=300, ws_per_message_deflate=False
     )
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

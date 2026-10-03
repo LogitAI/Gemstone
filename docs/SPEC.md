@@ -30,9 +30,19 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
 
 ### S1.1 Server process — `implemented` · G5
 
-- `python -m api run server [host] [port]` starts a uvicorn server on `0.0.0.0:23100` by default,
-  with auto-reload and a 300 s WebSocket ping interval and timeout.
-- Code: `api/__main__.py`, `api/src/main/server.py`. Test: none.
+- `python -m api run server [host] [port] [--reload]` starts a uvicorn server on `127.0.0.1:23100` by
+  default, with a 300 s WebSocket ping interval and timeout. `GEMSTONE_HOST=host[:port]` overrides the
+  default (arguments win over it). Auto-reload only with `--reload` or `GEMSTONE_DEV=1` (#116).
+- CORS and the WebSocket accept localhost, `127.0.0.1`, `[::1]` origins (any port) and the server's own
+  origin; `GEMSTONE_ORIGINS` (comma-separated, `*` allowed) adds more. A request without an `Origin`
+  header always passes. A foreign Origin gets no CORS headers, a state-changing request from it is 403,
+  and its WebSocket is refused before accept.
+- `GEMSTONE_API_KEY`, when set, requires `Authorization: Bearer <key>` on every HTTP route and on the
+  WebSocket (header or `?api_key=`), except the web assets (`/`, `/chat`, `/static`, `/webpack`,
+  `/composeResources`), `HEAD /` and `GET /api/version`. When unset on a non-loopback bind, one
+  start-up warning is logged; the server is never blocked (Ollama compatibility).
+- Code: `api/__main__.py`, `api/src/main/security.py`, `api/src/main/server.py`.
+  Test: `api/tests/test_main_args.py`, `api/tests/test_security.py`.
 - Note: `python -m api` with fewer than two arguments raises `IndexError`.
 
 ### S1.2 Model catalogue — `implemented` · G5

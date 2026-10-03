@@ -64,6 +64,11 @@ python -m api run server
 
 <http://127.0.0.1:23100/> 를 열면 서버에 함께 들어 있는 웹 클라이언트가 뜹니다.
 
+서버는 `127.0.0.1` 에서만 듣습니다. 다른 기기에 열려면 `OLLAMA_HOST` 처럼 `GEMSTONE_HOST` 와 API 키를 설정하세요:
+`GEMSTONE_HOST=0.0.0.0:23100 GEMSTONE_API_KEY=<key> python -m api run server`.
+클라이언트는 `Authorization: Bearer <key>` 를 보냅니다. `GEMSTONE_ORIGINS` 는 브라우저 origin 을 더 허용하고,
+`--reload` (또는 `GEMSTONE_DEV=1`) 는 개발용 자동 재시작을 켭니다.
+
 **3. 네이티브 클라이언트 실행**
 
 ```bash
