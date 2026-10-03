@@ -26,7 +26,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import registry as registry_module
 from .leases import LeasedStreamingResponse, acquire, once
-from .registry import (DERIVED_PARAMETERS, ModelBusy, ModelUnavailable, alias_key, format_parameters, is_builtin_name, now_iso,
+from .registry import (DERIVED_PARAMETERS, ModelBusy, ModelUnavailable, UnsupportedModel, alias_key, format_parameters, is_builtin_name, now_iso,
                        parse_keep_alive)
 
 
@@ -626,6 +626,8 @@ async def pull(request: Request):
     if body.get("stream", True) is False:
         try:
             await run_in_threadpool(store.download, hf_id)
+        except UnsupportedModel as e:
+            return _error(400, str(e))
         except LookupError as e:
             return _error(500, str(e))
         except Exception as e:
@@ -636,7 +638,7 @@ async def pull(request: Request):
         yield {"status": "pulling manifest"}
         try:
             yield from _download_steps(store, hf_id)
-        except LookupError as e:
+        except (LookupError, UnsupportedModel) as e:
             yield {"error": str(e)}
             return
         except Exception as e:

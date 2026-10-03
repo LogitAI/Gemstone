@@ -256,6 +256,26 @@ def safetensors_stats(path: Optional[str]) -> Tuple[Optional[int], Optional[int]
     return params, size, max(by_dtype, key=by_dtype.get) if by_dtype else ""
 
 
+def is_causal_lm(config: dict) -> bool:
+    """
+    Whether a `config.json` describes a causal language model, the only kind Gemstone chats with.
+    Decided from the file alone, with no network and no model load: `architectures` names the
+    class (`...ForCausalLM`, `...LMHeadModel`); without it, `model_type` must be one that
+    transformers' `AutoModelForCausalLM` maps.
+    """
+    architectures = config.get("architectures")
+    if isinstance(architectures, list) and architectures:
+        return any(isinstance(a, str) and a.endswith(("ForCausalLM", "LMHeadModel")) for a in architectures)
+    model_type = config.get("model_type")
+    if not isinstance(model_type, str) or not model_type:
+        return False
+    try:
+        from transformers.models.auto.modeling_auto import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+    except ImportError:
+        return False
+    return model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+
+
 def is_complete(path: str) -> bool:
     """
     Whether a snapshot directory holds a loadable model: `config.json` and every weight file. A
@@ -276,6 +296,10 @@ def is_complete(path: str) -> bool:
         return False
 
 
+class UnsupportedModel(ValueError):
+    """ A Hugging Face repository Gemstone cannot load (no safetensors weights); a pull refuses it (#119). """
+
+
 @dataclass
 class LocalModel:
     """ A model in the local store. """
@@ -291,6 +315,7 @@ class LocalModel:
     parameter_count: Optional[int] = None  # from the safetensors headers
     weight_bytes: Optional[int] = None  # the weights' size at their stored dtype
     dtype: str = ""  # the main safetensors dtype (BF16, F32, ...)
+    causal_lm: bool = True  # config.json describes a causal LM (`is_causal_lm`); `HFStore.list` lists only those
 
     @property
     def capabilities(self) -> List[str]:
@@ -320,8 +345,12 @@ class LocalModel:
 class HFStore:
     """ The local Hugging Face cache (`HF_HOME`) as the model store. """
 
+    # Safetensors headers by (repo id, snapshot path): a snapshot directory is named by its commit hash.
+    _stats: Dict[Tuple[str, str], tuple] = {}
+
     def list(self) -> List[LocalModel]:
-        return [m for m in (self._describe(r) for r in self._repos()) if m is not None]
+        """ The complete causal-LM models in the cache; other repos (bert, vision, ...) are not chat models (#119). """
+        return [m for m in (self._describe(r) for r in self._repos()) if m is not None and m.causal_lm]
 
     def get(self, hf_id: str) -> Optional[LocalModel]:
         """ The model in the cache, or None when it is absent or only partly fetched (`is_complete`). """
@@ -367,6 +396,10 @@ class HFStore:
             raise LookupError(f"model '{hf_id}' not found on the Hugging Face Hub") from e
         files = [(f.rfilename, f.size or 0) for f in (info.siblings or [])
                  if any(fnmatch(f.rfilename, p) for p in PULL_PATTERNS)]
+        if not any(name.endswith(".safetensors") for name, _ in files):
+            raise UnsupportedModel(
+                f"model '{hf_id}' has no *.safetensors weights, the only format Gemstone loads "
+                f"(it may ship .bin, GGUF or other weights): nothing was downloaded")
         for name, size in files:
             event = dict(status=f"pulling {name}", digest=name, total=size, completed=0)
             yield dict(event)
@@ -399,7 +432,10 @@ class HFStore:
                 template = f.read()
         if isinstance(template, list):  # named templates
             template = next((t.get("template", "") for t in template if t.get("name") == "default"), "")
-        params, weight_bytes, dtype = safetensors_stats(path)
+        key = (repo.repo_id, path)  # the snapshot path holds the cache location and the revision hash
+        if key not in HFStore._stats:
+            HFStore._stats[key] = safetensors_stats(path)
+        params, weight_bytes, dtype = HFStore._stats[key]
         return LocalModel(
             hf_id=repo.repo_id,
             size=repo.size_on_disk,
@@ -413,6 +449,7 @@ class HFStore:
             parameter_count=params,
             weight_bytes=weight_bytes,
             dtype=dtype,
+            causal_lm=is_causal_lm(config),
         )
 
 
