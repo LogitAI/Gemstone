@@ -13,15 +13,6 @@ except ImportError:
     pass
 
 
-# Load environment variables from .env file
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    # dotenv not installed, skip
-    pass
-
-
 class WebSearchAPI:
     """Web search API wrapper using SerpApi with robust fallbacks."""
     

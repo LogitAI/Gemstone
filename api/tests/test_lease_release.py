@@ -208,7 +208,7 @@ def test_a_finished_reply_releases_the_lease_once(setup, route, stream):
         response = client.post(path, json={**body, "stream": stream})
         assert response.status_code == 200
         assert "Hello" in response.text
-    assert_released_once_and_switch_completes(setup)
+        assert_released_once_and_switch_completes(setup)  # before shutdown unloads the model
 
 
 @pytest.mark.parametrize("route", list(STREAM_ROUTES))
