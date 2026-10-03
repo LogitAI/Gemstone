@@ -99,8 +99,9 @@ def test_download_writes_refs_main_so_the_default_revision_loads_offline(hub):
 
 def test_a_snapshot_without_weights_is_not_present(hub):
     single(hub)
-    del hub.files["model.safetensors"]
     HFStore().download(REPO)
+    assert HFStore().get(REPO) is not None
+    (hub.cache / "models--someone--fresh-model" / "snapshots" / SHA / "model.safetensors").unlink()
     assert HFStore().get(REPO) is None
     assert REPO not in [m.hf_id for m in HFStore().list()]
 

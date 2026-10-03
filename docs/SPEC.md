@@ -49,8 +49,10 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
 
 - `GET /api/models` returns the models the registry (S1.14) knows, keyed by id, each with
   `model_name` and `model_description`: Gemstone's catalogue, `qwen3` and `default` (an alias of
-  `qwen3`), then every other model in the local store under its Hugging Face id. `GET /v1/models`
-  lists the same ids (S1.10). (`llama3` was removed with the GGUF backend, #84.)
+  `qwen3`), then every other causal-LM model in the local store under its Hugging Face id (S1.14:
+  bert, vision and other non-causal repos in the cache are not listed, #119), and the derived models
+  of listed ones. `GET /v1/models` lists the same ids (S1.10). (`llama3` was removed with the GGUF
+  backend, #84.)
 - Code: `api/src/main/registry.py` (`CATALOGUE`, `Registry.models`), `api/src/main/server.py`
   (`models`). Test: `api/tests/test_residency.py` (`test_api_models_lists_the_registry_models_in_the_app_shape`,
   `test_v1_models_lists_the_same_models`).
@@ -399,11 +401,22 @@ Implemented (M3 scope, #66; several resident models and derived models, #75),
   revision `main`: huggingface_hub then writes `refs/main`, which an offline load of the default
   revision (`local_files_only=True`) resolves through. A model fetched on first use (a catalogue
   name over the WebSocket or the OpenAI API, or `acquire(fetch=True)`) takes the same path.
+  A repository whose Hub file list has no `*.safetensors` (only `.bin`, GGUF, ...) is refused
+  **before anything is downloaded** (#119): `registry.UnsupportedModel`, answered as an Ollama
+  stream line `{"error": ...}` or, with `stream: false`, HTTP 400 `{"error": ...}`.
 - **Present means complete (#110).** The store treats a cached model as present, and lists it,
   only when its snapshot holds `config.json` and every weight file: each shard that
   `model.safetensors.index.json` names, or else at least one `*.safetensors`. A copy left partial
   by an interrupted pull is absent: the next pull or fetching `acquire` downloads it again (files
   already complete are reused by the cache), and `DELETE /api/delete` still removes it.
+- **Only causal LMs are listed (#119).** `HFStore.list` (so `GET /api/tags`, `/api/models`,
+  `/v1/models` and the app sidebar) keeps a complete cached repo only if its snapshot's
+  `config.json` describes a causal LM (`is_causal_lm`): `architectures` has an entry ending in
+  `ForCausalLM` or `LMHeadModel`; with no `architectures`, `model_type` must be in transformers'
+  `AutoModelForCausalLM` mapping. This reads the file only (no network, no model load). Limits:
+  it does not check for a chat template (a base model such as `gpt2` is listed), and an
+  `architectures` list is trusted over `model_type`. `show` and loading by explicit name are not
+  filtered. Safetensors headers are read once per snapshot and cached, not on every call.
 - **List** (`GET /api/tags`) and **show** (`POST /api/show`) read the cache: size on disk, revision
   hash as `digest`, `model_type` as family, `max_position_embeddings` as context length, and the
   chat template (capabilities `tools` / `thinking` are inferred from it).
