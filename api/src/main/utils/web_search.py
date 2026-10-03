@@ -58,7 +58,7 @@ class WebSearchAPI:
             return [{'error': "SerpApi API key not found. Set SERPAPI_KEY environment variable or get a free key from https://serpapi.com/"}]
         
         if not self.serpapi_available:
-            return [{'error': "SerpApi library not installed. Install with: pip install serpapi"}]
+            return [{'error': "SerpApi library not installed. It is a project dependency: run uv sync --extra torch"}]
         
         try:
             # Try new serpapi library first
@@ -238,7 +238,7 @@ class WebSearchAPI:
             return results if results else [{'error': f"No Bing results found for query: {query}"}]
             
         except ImportError:
-            return [{'error': "BeautifulSoup4 library required for fallback search. Install with: pip install beautifulsoup4"}]
+            return [{'error': "BeautifulSoup4 library required for fallback search. It is a project dependency: run uv sync --extra torch"}]
         except Exception as e:
             return [{'error': f"Bing fallback failed: {str(e)}"}]
     

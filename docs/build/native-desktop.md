@@ -1,6 +1,6 @@
 # Native desktop build (GraalVM native-image)
 
-Compiles the desktop target to a standalone native executable — no JVM, no JDK on the target
+Compiles the desktop target to a standalone native executable: no JVM, no JDK on the target
 machine, no installer.
 
 ```powershell
@@ -28,7 +28,7 @@ Output is `app/build/dist`, about 109MB: an 84MB executable plus the native libr
 `java.home`, and **`java.home` is null in a native image**:
 
 - AWT loads its native libraries from `<java.home>/bin`. Unset, the binary dies opening
-  `(null)\bin\jawt.dll` — a hard `0xC0000409` crash with no Java stack trace and no build-time
+  `(null)\bin\jawt.dll`: a hard `0xC0000409` crash with no Java stack trace and no build-time
   warning.
 - AWT reads its font configuration from `<java.home>/lib`. Without it `Font.createFont` fails
   with `IOException: Problem reading font data`, which is what Jewel hits loading its Inter font.
@@ -66,7 +66,7 @@ Start-Job { ./gradlew :app:run -Pagent }
 The agent only writes its configuration on a clean JVM shutdown, which is why the script closes
 the window rather than killing the process.
 
-Most of that metadata is not actually specific to this app — 160 of its 164 JNI entries are
+Most of that metadata is not actually specific to this app: 160 of its 164 JNI entries are
 identical to what a two-button Compose hello world needs, because they describe the
 AWT/Skiko/Compose stack rather than Gemstone. The intent is for that part to become a
 version-pinned bundle applications consume instead of regenerating; see
@@ -81,6 +81,6 @@ for the measurements behind that.
   [oracle/graal#9284](https://github.com/oracle/graal/issues/9284).
 - The agent run did not exercise networking, so Ktor and serialization paths may still be
   missing metadata. Sending an actual chat message in the native build is unverified.
-- Jewel needs JNA at runtime but does not declare it — inside the IDE the platform supplies it.
+- Jewel needs JNA at runtime but does not declare it: inside the IDE the platform supplies it.
   It is added as an explicit `runtimeOnly` dependency; without it the desktop app fails on first
   composition with `NoClassDefFoundError: com/sun/jna/Library`, on the JVM as well as natively.

@@ -14,8 +14,8 @@ overrides any default your tooling has.
 
 ## 2. Nothing is created outside this repository
 
-Everything your work produces — worktrees, agent prompts, logs, measurements, experiments, scratch
-files — lives **inside this repository's root directory.**
+Everything your work produces (worktrees, agent prompts, logs, measurements, experiments, scratch
+files) lives **inside this repository's root directory.**
 
 | What | Where |
 |---|---|
@@ -26,7 +26,7 @@ files — lives **inside this repository's root directory.**
 
 Before writing a file, check that its absolute path starts with this repository's root. If it does
 not, stop. The only exceptions are a path the user names explicitly, and caches that build tools
-manage themselves. **Re-pointing a shared cache or a home-directory symlink reaches other projects —
+manage themselves. **Re-pointing a shared cache or a home-directory symlink reaches other projects:
 ask first.**
 
 Writing to *another* repository is not an exception either. Do it only when told to work there.
@@ -34,7 +34,7 @@ Writing to *another* repository is not an exception either. Do it only when told
 ### Do not add top-level files or folders
 
 **Never add a new directory or file at the repository root on your own.** The root layout is the
-maintainer's. Work belongs inside an existing module or directory — Python under `api/`, the client
+maintainer's. Work belongs inside an existing module or directory: Python under `api/`, the client
 under `app/`, documents under `docs/<topic>/`, CI under `.github/`, developer scripts under `tools/`,
 temporary files under the git-ignored `.tmp/`. If a new top-level entry seems necessary, propose it
 (what, why, and which existing directories you ruled out) and wait for approval; then add it to the
@@ -67,7 +67,7 @@ build caches, model weights, `node_modules`) into every worktree is how 86 workt
 
 - Create worktrees under `.worktrees/<name>`.
 - **Symlink** large untracked directories from the main checkout instead of copying or rebuilding
-  them. If `tools/worktree-add.sh` exists, use it — it does the linking.
+  them. If `tools/worktree-add.sh` exists, use it: it does the linking.
 - Delete a worktree once its branch is merged: `git worktree remove .worktrees/<name>`.
 - Periodically delete `build/` directories inside worktrees; they only grow.
 
@@ -99,7 +99,7 @@ Every new feature goes through an issue and a pull request:
 
 1. Before starting, search the repository's issues (`gh issue list --state all --search "<keywords>"`).
 2. If no issue covers the work, open one (`gh issue create`) stating what and why, and the
-   completion criterion — which tests must pass.
+   completion criterion: which tests must pass.
 3. Work on a `feat/<topic>` branch, push every commit, and open a pull request into `develop`
    whose body contains `Closes #<number>`.
 4. Merge into `develop` through that pull request (`gh pr merge`), not by a local merge, so the
@@ -123,18 +123,18 @@ If a request conflicts with `docs/INTENT.md`, say so instead of implementing it.
 
 ## 6. User-authored files are specification
 
-Files the user wrote by hand — notebooks, example build files, sample apps — are the specification.
+Files the user wrote by hand, notebooks, example build files, sample apps, are the specification.
 Read them **first**. Never delete, rewrite, or `git add` them without being told to. Generated
 documentation (roadmaps, design notes) is a record of work, not a requirement; when the two
 disagree, the user's file wins.
 
 ## 7. Show a conclusion before acting on it
 
-Anything beyond the immediate request — another repository, a public API signature, deleting
-files, killing processes, force-pushing, changing branch protection — state what you would do and
+Anything beyond the immediate request (another repository, a public API signature, deleting
+files, killing processes, force-pushing, changing branch protection): state what you would do and
 why, and wait. Investigating, measuring, and reporting are always fine.
 
-**Push every commit right away.** After you commit — on a work branch or on `develop` — push it to
+**Push every commit right away.** After you commit, on a work branch or on `develop`, push it to
 the remote immediately; no confirmation is needed. Never push to `main` or `release` by hand, and
 never force-push without the user's explicit approval.
 
@@ -174,7 +174,7 @@ to implement", say what you counted against.
 - Give every agent prompt the absolute paths it may write to, and repeat rule 2 in it.
 - **Subagents do not run heavy local builds.** Subagents write code, design, investigate, review
   and document. Gradle builds, cargo builds, the test gate and model runs are done by the session
-  itself — one at a time on this machine — or by CI (GitHub Actions) on a pushed branch. Several
+  itself, one at a time on this machine, or by CI (GitHub Actions) on a pushed branch. Several
   sessions share one machine; parallel local builds slow every one of them.
 
 ---
@@ -200,7 +200,7 @@ status, decisions and open questions.
 
 Gradle and Python are independent toolchains. Neither needs the other to build.
 
-**Python API** (requires Python 3.13 — `>=3.13,<3.14` until torchnative is measured on 3.14 — managed with `uv`):
+**Python API** (requires Python 3.13, `>=3.13,<3.14` until torchnative is measured on 3.14, managed with `uv`):
 
 ```bash
 uv sync --extra torch                     # upstream PyTorch; or --extra torchnative (never both)
@@ -288,6 +288,9 @@ report it as coverage. New behaviour starts with a real failing test (rule 5).
 - The engine uses only the public `torch` / `transformers` API. Custom kernels cannot be registered
   from Gemstone (`torch.library` is a no-op on torchnative); they belong in torchnative.
 - Kotlin and library versions live in `gradle/libs.versions.toml`. Bump them there, not inline.
+- Example commands use `uv`, `ppp` or `tcl` only. Never write a `pip install` example (in docs,
+  messages or comments); a missing Python dependency is fixed with `uv sync` (or `uv add` when it
+  is new).
 
 ## 16. Line endings and encoding
 
@@ -295,7 +298,9 @@ This repository's git config has `core.fileMode=false`, so `chmod +x` is not rec
 executable bit of a tracked script with `git update-index --chmod=+x <file>` (`gradlew` and
 `tools/*.sh` were affected).
 
-Write every file as UTF-8 with LF line endings. Some checkouts of this repository have had files
+Write every file as UTF-8 with LF line endings. Do not use the em-dash character (U+2014) anywhere: documents (the
+guide included) and code (comments, docstrings, strings). Use a colon, a comma or parentheses.
+`api/tests/test_repo_layout.py` fails on one. Some checkouts of this repository have had files
 converted to CRLF by an editor; do not mass-convert files you were not asked to touch, because the
 whole-file diff hides real changes. The repository's `.gitattributes` fixes LF (only `.bat`, `.cmd` and `.ps1` are CRLF), so new
 files should simply be written with LF. `docs/build/` is tracked (an exception in `.gitignore`).
