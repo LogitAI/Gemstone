@@ -263,12 +263,26 @@ Implemented (#84), `api/src/main/engine.py`:
   continuous-batching support, cannot switch to paged attention, or `psutil` is missing on CPU),
   or when the request uses `typical_p != 1`, `repeat_penalty != 1`, extra `generate` keyword
   arguments, or more tokens (prompt + `max_new_tokens`) than the paged KV cache holds.
+- A request that sets no limit (`max_new_tokens <= 0`, the default of the app, Ollama and OpenAI
+  entry points) means "as many as fit". When it can batch, its budget is
+  `min(context length, kv_cache_tokens) - prompt length`, so default requests batch (#111) instead
+  of asking for the whole context (40 960 tokens for Qwen3), which the cache (8192) never holds.
+  A prompt that already fills the cache, a request the batch cannot serve, and an engine without
+  batching still get the whole context, on the exclusive path. An explicit `max_new_tokens` larger
+  than the cache stays exclusive: nothing is capped silently.
+- A request waits at most `queue_timeout` for the model (`Engine(queue_timeout=)`, else
+  `GEMSTONE_QUEUE_TIMEOUT` in seconds or as a duration such as `5m`, default 300 s, 0 or negative
+  for no limit): an exclusive request behind running batched ones or another exclusive one, and a
+  batched request behind an exclusive one. Then it raises `ModelBusy` (the error of the registry's
+  load timeout, S1.14), which the Ollama and OpenAI endpoints answer as HTTP 503 and the chat
+  WebSocket as close code 1013. The HTTP streaming endpoints decide before the response starts.
 - A generation stops when its `cancel` event is set or its stream is closed; the WebSocket
   endpoint does both when the client disconnects (#35).
 - The substrate is chosen at install time: `uv sync --extra torch` (upstream PyTorch) or
   `--extra torchnative`.
 
-Tests: `api/tests/test_engine.py`, `api/tests/test_server.py`, on upstream PyTorch with
+Tests: `api/tests/test_queue_budget.py` (fake tokenizer and batcher: the budget rule, the queue
+timeout and its 503 / 1013 mapping), `api/tests/test_engine.py`, `api/tests/test_server.py`, on upstream PyTorch with
 SmolLM2-135M. Still open for M1: the same tests on torchnative (cpu, mps) once torchnative TN-M1
 lands (2026-10-24).
 
@@ -305,11 +319,20 @@ Implemented (#63), `api/src/main/engine.py`:
   no `torch.Generator` yet), so the draw sequence of a request depends only on its seed.
   Test: `api/tests/test_sampler_rng.py`.
 - Requests the batch does not serve take the exclusive path (S1.11).
+- A request must fit the cache on its own (prompt + new tokens <= `kv_cache_tokens`). transformers
+  cannot serve a lone request that outgrows the cache: when the cache is full and nothing else can
+  be evicted, `ContinuousBatchingManager` raises "No requests can be scheduled and no requests can
+  be offloaded" (`continuous_api.py`, `_generation_loop_body`), the loop treats it as critical, and
+  every request in flight fails. Several requests that fit alone but not together are handled by
+  transformers: the newest are evicted (copied to a CPU pool if `cpu_offload_space` is set, else
+  soft-reset and requeued with their tokens so far folded into the prompt,
+  `offloading_manager.py`, `offload_requests`) and resume later; the engine's sampler counts for
+  that fold.
 - No CUDA graphs, CUDA streams, async batching or `torch.compile` are used (all turned off in the
   `ContinuousBatchingConfig`), so the same code is meant to run on torchnative.
 
 Tests: `api/tests/test_batching.py` (two and four concurrent greedy requests equal sequential
-ones; requests overlap in time; a seeded sample is the same batched or alone, next to a greedy
+ones; requests overlap in time, also with no `max_new_tokens`; a seeded sample is the same batched or alone, next to a greedy
 neighbour; cancelling or closing one stream leaves the others correct).
 Benchmark: `benchmarks/batching_throughput.py` (1 versus N concurrent requests); not yet measured.
 

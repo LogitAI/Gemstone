@@ -25,6 +25,27 @@ import threading
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_QUEUE_TIMEOUT = 300  # seconds a request may wait for the model before it is refused as busy
+
+
+class ModelBusy(TimeoutError):
+    """
+    A request waited `queue_timeout` for the model (or a load waited `load_timeout` for room, see
+    the registry) and it stayed busy: the APIs answer 503 and the WebSocket closes with 1013.
+    """
+
+
+def queue_timeout_default() -> float:
+    """ `GEMSTONE_QUEUE_TIMEOUT` (seconds or a duration such as "5m"; 0 or negative: wait without a limit), else 5 minutes. """
+    value = os.environ.get("GEMSTONE_QUEUE_TIMEOUT")
+    if value is None or not value.strip():
+        return DEFAULT_QUEUE_TIMEOUT
+    from .registry import parse_keep_alive  # the same duration syntax as the other timeouts
+    try:
+        return parse_keep_alive(value)
+    except ValueError as e:
+        raise ValueError(f"GEMSTONE_QUEUE_TIMEOUT: {e}") from e
+
 # Attention implementations of the batched path. Both are plain torch ops (gather + SDPA, or
 # gather + matmul/softmax), so they are the ones torchnative can run.
 PAGED_ATTENTION = {
@@ -64,6 +85,7 @@ class Engine:
         page_size: int = 64,
         max_batch_tokens: int = 256,
         max_batch_requests: int = 16,
+        queue_timeout: Optional[float] = None,
     ):
         """
         `batching=False` turns continuous batching off: every request takes the exclusive path.
@@ -71,6 +93,9 @@ class Engine:
         the paged KV cache shared by all batched requests, in tokens, allocated in pages of
         `page_size` tokens. `max_batch_tokens` caps the tokens of one forward pass (longer prompts are
         prefilled in chunks) and `max_batch_requests` the requests decoded together.
+        `queue_timeout` (seconds, default `GEMSTONE_QUEUE_TIMEOUT` or 300; 0 or negative: no limit) is
+        how long a request waits for the model, behind an exclusive generation or for one to finish,
+        before it fails with `ModelBusy`.
         """
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -87,6 +112,7 @@ class Engine:
         self.chat_template = chat_template
         self.context_length = context_length or getattr(self.model.config, "max_position_embeddings", None)
         self._gate = _Gate()
+        self.queue_timeout = queue_timeout if queue_timeout is not None else queue_timeout_default()
 
         # Continuous batching, or the reason it is off.
         self._batcher: Optional[_Batcher] = None
@@ -110,6 +136,8 @@ class Engine:
                 logger.warning("Continuous batching is off for %s: %s", model_id, e)
 
         # The footprint the registry budgets for (SPEC S1.14): weights plus the paged KV cache.
+        if self._batcher is not None:
+            self._batcher.queue_timeout = self._wait()
         self.memory_bytes = memory_bytes(self.model, kv_cache_tokens if self._batcher is not None else 0)
 
     @property
@@ -122,6 +150,11 @@ class Engine:
         if self._batcher is not None:
             batcher, self._batcher = self._batcher, None
             batcher.close()
+
+    def _wait(self) -> Optional[float]:
+        """ The longest a request waits for the model (None: without a limit). """
+        timeout = getattr(self, "queue_timeout", None)
+        return timeout if timeout and timeout > 0 else None
 
     def embed(self, texts: List[str], truncate: bool = True) -> List[List[float]]:
         """
@@ -145,7 +178,7 @@ class Engine:
 
         base = getattr(self.model, "base_model", None) or self.model  # the decoder without the LM head
         vectors = []
-        with self._gate.exclusive(), torch.no_grad():
+        with self._gate.exclusive(self._wait()), torch.no_grad():
             for ids in encoded:
                 inputs = torch.tensor([ids], dtype=torch.long, device=self.model.device)
                 hidden = base(input_ids=inputs).last_hidden_state[0].float()
@@ -172,7 +205,11 @@ class Engine:
         Stream the reply to `messages` as text chunks.
 
         `stream` is accepted for compatibility with the model layer and ignored: the reply is
-        always produced as a stream. `max_new_tokens <= 0` means "up to the context length".
+        always produced as a stream. `max_new_tokens <= 0` means "as many as fit": up to the context
+        length, but when the request can join the batch, up to what the paged KV cache holds
+        (`min(context length, kv_cache_tokens)` in total with the prompt), so a request that sets
+        no limit still batches. A request that sets a larger limit explicitly takes the exclusive
+        path. A request that waits for the model longer than `queue_timeout` raises `ModelBusy`.
 
         The request joins the running batch unless it needs something the batch does not do, in
         which case it takes the exclusive path (`model.generate`, alone, as in M1):
@@ -189,21 +226,22 @@ class Engine:
         )
         input_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
         prompt_length = len(input_ids)
+        batcher = self._batcher
+        batchable = batcher is not None and typical_p == 1.0 and repeat_penalty == 1.0 and not kwargs
         if max_new_tokens <= 0:
             if self.context_length is None:
                 raise ValueError("max_new_tokens must be positive when the context length is unknown.")
             max_new_tokens = self.context_length - prompt_length
+            if batchable:
+                # No limit was set: take what the paged KV cache can hold, so the request batches.
+                # A prompt that already fills the cache cannot, and runs exclusive up to the context.
+                fitting = min(self.context_length, batcher.kv_cache_tokens) - prompt_length
+                if fitting > 0:
+                    max_new_tokens = fitting
         if max_new_tokens <= 0:
             raise ValueError(f"The prompt ({prompt_length} tokens) exceeds the token limit ({self.context_length}).")
 
-        batcher = self._batcher
-        if (
-            batcher is not None
-            and typical_p == 1.0
-            and repeat_penalty == 1.0
-            and not kwargs
-            and batcher.fits(prompt_length + max_new_tokens)
-        ):
+        if batchable and batcher.fits(prompt_length + max_new_tokens):
             if temperature > 0:
                 params = dict(
                     temperature=float(temperature),
@@ -236,7 +274,7 @@ class Engine:
             def __call__(self, input_ids, scores, **_):
                 return stop.is_set() or (cancel is not None and cancel.is_set())
 
-        with self._gate.exclusive():
+        with self._gate.exclusive(self._wait()):
             inputs = torch.tensor([input_ids], dtype=torch.long, device=self.model.device)
             streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
             do_sample = temperature > 0
@@ -321,13 +359,17 @@ class _Gate:
         self._exclusive_waiting = 0
 
     @contextmanager
-    def exclusive(self):
+    def exclusive(self, timeout: Optional[float] = None):
+        """ Wait up to `timeout` seconds (None: without a limit) for the gate, else raise `ModelBusy`. """
         with self._cond:
             self._exclusive_waiting += 1
             try:
-                self._cond.wait_for(lambda: not self._exclusive and self._shared == 0)
+                taken = self._cond.wait_for(lambda: not self._exclusive and self._shared == 0, timeout)
             finally:
                 self._exclusive_waiting -= 1
+                self._cond.notify_all()  # sharers queued behind this waiter may go now if it gave up
+            if not taken:
+                raise ModelBusy(f"server busy: the model was not free within {timeout:g}s.")
             self._exclusive = True
         try:
             yield
@@ -337,10 +379,14 @@ class _Gate:
                 self._cond.notify_all()
 
     @contextmanager
-    def shared(self, on_first, on_last):
-        """ `on_first` runs when the first sharer enters, `on_last` when the last one leaves (under the lock). """
+    def shared(self, on_first, on_last, timeout: Optional[float] = None):
+        """
+        `on_first` runs when the first sharer enters, `on_last` when the last one leaves (under the
+        lock). Waits up to `timeout` seconds (None: without a limit), else raises `ModelBusy`.
+        """
         with self._cond:
-            self._cond.wait_for(lambda: not self._exclusive and self._exclusive_waiting == 0)
+            if not self._cond.wait_for(lambda: not self._exclusive and self._exclusive_waiting == 0, timeout):
+                raise ModelBusy(f"server busy: the model was not free within {timeout:g}s.")
             if self._shared == 0:
                 on_first()
             self._shared += 1
@@ -391,6 +437,7 @@ class _Batcher:
         self._paged = PAGED_ATTENTION[attn_implementation]
         self._original = model.config._attn_implementation
         self.kv_cache_tokens = kv_cache_tokens
+        self.queue_timeout: Optional[float] = None  # the engine sets it: how long a request waits for the gate
 
         eos = model.generation_config.eos_token_id
         self._eos = eos if eos is not None else tokenizer.eos_token_id
@@ -479,7 +526,7 @@ class _Batcher:
                 target.put(result)
 
     def stream(self, input_ids, max_new_tokens, params, cancel) -> Generator[str, None, None]:
-        with self._gate.shared(self._start, self._stop):
+        with self._gate.shared(self._start, self._stop, self.queue_timeout):
             request_id = f"gemstone-{next(_REQUEST_IDS)}"  # unique across engines: the sampler state is shared
             with self._queues_lock:
                 outputs = self._queues[request_id] = queue.Queue()

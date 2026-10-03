@@ -31,6 +31,8 @@ import tempfile
 import threading
 import time
 
+from .engine import ModelBusy  # noqa: F401  (a load, or a request, that waited for a busy model; defined with the engine)
+
 
 @dataclass(frozen=True)
 class CatalogueEntry:
@@ -548,10 +550,6 @@ class ModelUnavailable(Exception):
                 return cls.offline(hf_id)
             e = e.__cause__ or e.__context__
         return cls.offline(hf_id) if constants.HF_HUB_OFFLINE else cls.failed(hf_id, error)
-
-
-class ModelBusy(TimeoutError):
-    """ A load waited `load_timeout` for room, and every resident model stayed busy. """
 
 
 @dataclass(eq=False)

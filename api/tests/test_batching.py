@@ -86,6 +86,49 @@ def test_concurrent_requests_overlap_in_time(engine):
     assert first_chunks < first_finish
 
 
+def test_requests_without_a_token_limit_batch_and_overlap(engine, monkeypatch):
+    # `max_new_tokens=0` is what every entry point sends by default: "as many as fit". It must not
+    # push the request to the exclusive path (one at a time) because the context length exceeds
+    # the paged KV cache (#111): its budget is capped to the cache, so it joins the batch.
+    batched = []
+    stream = engine._batcher.stream
+
+    def spy(input_ids, max_new_tokens, *rest, **kwargs):
+        batched.append(max_new_tokens)
+        return stream(input_ids, max_new_tokens, *rest, **kwargs)
+
+    monkeypatch.setattr(engine._batcher, "stream", spy)
+    wanted = 24  # the model would otherwise run to the cache's end, so each request stops itself
+    times = [[] for _ in range(2)]
+    errors = []
+    barrier = threading.Barrier(2)
+
+    def run(i):
+        cancel = threading.Event()
+        try:
+            barrier.wait()
+            for _ in engine(PROMPTS[i], cancel=cancel, temperature=0, max_new_tokens=0):
+                times[i].append(time.monotonic())
+                if len(times[i]) >= wanted:
+                    cancel.set()
+                    break
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=run, args=(i,), daemon=True) for i in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=300)
+
+    assert not errors, errors
+    assert not any(t.is_alive() for t in threads), "a concurrent request did not finish"
+    assert len(batched) == 2, "both requests must take the batched path"
+    assert all(0 < budget <= engine._batcher.kv_cache_tokens for budget in batched), batched
+    assert all(times), "every request must produce output"
+    assert max(t[0] for t in times) < min(t[-1] for t in times)
+
+
 def test_same_seed_sample_is_identical_batched_or_alone(engine):
     alone = generate(engine, PROMPTS[0], seed=7, **SAMPLED)
     other_alone = generate(engine, PROMPTS[1], seed=11, **SAMPLED)

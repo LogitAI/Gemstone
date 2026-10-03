@@ -347,6 +347,8 @@ def _tool_call_object(call: Dict[str, str]) -> Dict[str, Any]:
 
 
 def _engine_error(e: Exception) -> APIError:
+    if isinstance(e, ModelBusy):
+        return APIError(503, str(e), type="server_error", code="server_busy")
     if isinstance(e, ValueError) and "exceeds the token limit" in str(e):
         return APIError(400, str(e), code="context_length_exceeded", param="messages")
     return APIError(500, f"Generation failed: {e}", type="server_error")

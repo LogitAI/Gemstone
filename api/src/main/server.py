@@ -140,6 +140,8 @@ async def chat_with_streaming(websocket: WebSocket):
         await websocket.close()
     except WebSocketDisconnect:
         pass  # the client went away mid-stream
+    except ModelBusy as e:  # waited past the queue timeout for the model (SPEC S1.11): 1013 "try again later"
+        await websocket.close(code=1013, reason=str(e)[:120])
     finally:
         cancel.set()
         try:
