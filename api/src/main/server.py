@@ -77,8 +77,8 @@ def create_session(model_id: str = "default"):
     return dict(model_id=model_id, session_id=session.session_id, message="A session is created successfully.")
 
 
-@app.delete("/api/sessions/{session_id}")
-@app.post("/api/sessions/{session_id}")
+@app.delete("/api/sessions/{session_id:path}")  # `path`: the id of a Hugging Face model holds a "/"
+@app.post("/api/sessions/{session_id:path}")
 def delete_session(session_id: str):
     """ Delete a session by its ID; 404 if there is no such session """
     try:

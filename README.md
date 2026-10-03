@@ -76,6 +76,11 @@ Clients then send `Authorization: Bearer <key>`. `GEMSTONE_ORIGINS` allows more 
 ./gradlew :app:installDebug  # Android
 ```
 
+The server listens on `127.0.0.1` only. For an Android device or emulator, run the server on the same
+machine and `adb reverse tcp:23100 tcp:23100`. To serve other machines on your LAN, start it with
+`GEMSTONE_HOST=0.0.0.0` and set `GEMSTONE_API_KEY=<secret>` on both sides; desktop clients take
+`--server http://<host>:23100` (or `GEMSTONE_SERVER_HOST`). See the clients guide in `docs/guide/`.
+
 **Talk to the server from your own code** — three frames in, tokens out:
 
 ```python

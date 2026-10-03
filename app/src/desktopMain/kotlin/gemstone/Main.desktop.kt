@@ -63,13 +63,8 @@ private fun parseCommandLineArgs(args: Array<String>, exitApplication: () -> Uni
             "--server", "-s" -> {
                 if (i + 1 < args.size) {
                     val serverAddress = args[i + 1]
-                    if (serverAddress.contains(":")) {
-                        val parts = serverAddress.split(":", limit = 2)
-                        System.setProperty("GEMSTONE_SERVER_HOST", parts[0])
-                        System.setProperty("GEMSTONE_SERVER_PORT", ":${parts[1]}")
-                    } else {
-                        System.setProperty("GEMSTONE_SERVER_HOST", serverAddress)
-                    }
+                    // host, host:port, [ipv6]:port or http(s)://host[:port]; parsed by ServerAddress (S2.2)
+                    System.setProperty("GEMSTONE_SERVER_HOST", serverAddress)
                     i += 2
                 } else {
                     println("Error: --server option requires a value")
@@ -87,7 +82,7 @@ private fun parseCommandLineArgs(args: Array<String>, exitApplication: () -> Uni
             }
             "--port", "-p" -> {
                 if (i + 1 < args.size) {
-                    System.setProperty("GEMSTONE_SERVER_PORT", ":${args[i + 1]}")
+                    System.setProperty("GEMSTONE_SERVER_PORT", args[i + 1])
                     i += 2
                 } else {
                     println("Error: --port option requires a value")
@@ -116,7 +111,7 @@ private fun printHelp() {
         Usage: gemstone [options]
         
         Options:
-            --server, -s <address>    Server address (host:port format)
+            --server, -s <address>    Server address (host, host:port, [ipv6]:port or http(s)://host[:port])
             --host, -h <host>         Server host (default: localhost)
             --port, -p <port>         Server port (default: 23100)
             --help                    Show this help message

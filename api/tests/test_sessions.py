@@ -71,3 +71,13 @@ def test_create_chat_delete_flow_still_works(setup):
     assert ws_chat(c, sid) == "Hello there!"
     assert setup["loads"] == [QWEN]
     assert c.delete(f"/api/sessions/{sid}").status_code == 200
+
+
+@pytest.mark.parametrize("method", ["delete", "post"])
+def test_session_of_a_hugging_face_id_can_be_deleted(setup, method):
+    # The session id embeds the model id, so it holds a "/" (issue #117)
+    created = setup["client"].post(f"/api/models/{SMOL}/sessions/").json()
+    assert "/" in created["session_id"]
+    r = getattr(setup["client"], method)(f"/api/sessions/{created['session_id']}")
+    assert r.status_code == 200
+    assert_error(getattr(setup["client"], method)(f"/api/sessions/{created['session_id']}"), 404)
