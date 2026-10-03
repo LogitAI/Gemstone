@@ -235,13 +235,17 @@ report it as coverage. New behaviour starts with a real failing test (rule 5).
 ## 15. Dependencies
 
 - `torch` and `torchnative` are mutually exclusive extras (torchnative replaces `import torch`).
-  Do not add a version pin to `torch`; the Windows wheels come from the CUDA index configured under
-  `[tool.uv.sources]`.
+  Do not add a version pin to `torch`; on Windows and Linux it comes from the PyTorch CPU index
+  configured under `[tool.uv.sources]` (the engine runs on CPU; CUDA returns in M4 as a `cuda` extra).
 - The engine uses only the public `torch` / `transformers` API. Custom kernels cannot be registered
   from Gemstone (`torch.library` is a no-op on torchnative); they belong in torchnative.
 - Kotlin and library versions live in `gradle/libs.versions.toml`. Bump them there, not inline.
 
 ## 16. Line endings and encoding
+
+This repository's git config has `core.fileMode=false`, so `chmod +x` is not recorded: set the
+executable bit of a tracked script with `git update-index --chmod=+x <file>` (`gradlew` and
+`tools/*.sh` were affected).
 
 Write every file as UTF-8 with LF line endings. Some checkouts of this repository have had files
 converted to CRLF by an editor; do not mass-convert files you were not asked to touch, because the
