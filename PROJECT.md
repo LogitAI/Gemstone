@@ -53,7 +53,8 @@ api/                Python 3.13 모델 서빙 서버
   src/main/engine.py      서빙 엔진 (transformers, PyTorch 또는 torchnative 위)
   tests/                  pytest (실제 모델 SmolLM2-135M 사용)
   src/main/utils/         도구 구현과 도구 호출 루프
-  src/test/               정적 웹 자산 (빌드된 Wasm 클라이언트, Brython 테스트 페이지) — 테스트 코드 아님
+  src/main/static/        Brython 테스트 페이지 (`/chat`)
+  src/main/webpack/       빌드된 Wasm 클라이언트 (`/`)
 docs/               INTENT, SPEC, locale/, guide/ (GitHub Pages), serving/ (서빙 엔진 결정 기록), build/
 ```
 
@@ -103,8 +104,8 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 4. **서빙 엔진 세부** — 방향은 torchnative 단일 시스템으로 확정(다중 백엔드·vLLM 사용 안 함). 엔진 구성은 미확정: 현재 제안은 transformers 5.x 연속 배칭 + 페이지드 KV 캐시를 엔진으로, 커널은 torchnative.
    확정 전에 할 일: 작은 모델로 torchnative 위에서 `generate_batch`(`sdpa_paged`/`eager_paged`)를
    돌려 정확도와 처리량을 잰다 ([`docs/serving/engine.md`](docs/serving/engine.md) § 7).
-5. **Python 테스트의 위치** — 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산을
-   `api/src/test/` 밖으로 옮기는 일은 #83(M4).
+5. **Python 테스트의 위치** — 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산도
+   `api/src/test/` 에서 `api/src/main/{static,webpack}/` 로 옮겼다(#83).
 6. **릴리스 흐름** — 스크립트(`tools/release/sync-release.sh`)와 워크플로(`release-sync.yml`)는 들어왔다.
    - 해결됨: 원격의 `release/cnu` 를 같은 커밋(`307bb22`)의 `release-cnu` 로 바꿔 보존했다. 이제 CI 가
      `release` 브랜치를 만들 수 있다.

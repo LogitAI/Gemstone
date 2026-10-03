@@ -93,7 +93,7 @@ async def ask(prompt: str, host: str = "127.0.0.1:23100") -> None:
 asyncio.run(ask("오늘 대전 날씨가 어때?"))
 ```
 
-브라우저 클라이언트 [`api/src/test/static/index.py`](../../api/src/test/static/index.py) 와 같은
+브라우저 클라이언트 [`api/src/main/static/index.py`](../../api/src/main/static/index.py) 와 같은
 프로토콜입니다.
 
 ## 🧩 아키텍처

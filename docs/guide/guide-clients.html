@@ -54,9 +54,9 @@ adb reverse tcp:23100 tcp:23100   <span class="c"># make the device's 127.0.0.1:
   <p data-lang="en">The Android client has no address setting yet, so <code>adb reverse</code> is the simplest way to reach a server on your computer from a phone or an emulator.</p><p data-lang="ko">Android 클라이언트에는 아직 주소 설정이 없으므로, 휴대폰이나 에뮬레이터에서 내 컴퓨터의 서버로 가는 가장 간단한 방법은 <code>adb reverse</code> 입니다.</p>
 
   <h2 data-lang="en">Web</h2><h2 data-lang="ko">웹</h2>
-  <p data-lang="en">The web client talks to whichever host served it, so it must be served <em>by the Gemstone server</em> — that is what <code>http://127.0.0.1:23100/</code> does. The bundle lives in <code>api/src/test/webpack/</code>. To refresh it after changing the client:</p><p data-lang="ko">웹 클라이언트는 자신을 서빙한 호스트와 대화하므로, <em>Gemstone 서버가</em> 서빙해야 합니다 — <code>http://127.0.0.1:23100/</code> 이 바로 그것입니다. 번들은 <code>api/src/test/webpack/</code> 에 있습니다. 클라이언트를 고친 뒤 갱신하려면:</p>
+  <p data-lang="en">The web client talks to whichever host served it, so it must be served <em>by the Gemstone server</em> — that is what <code>http://127.0.0.1:23100/</code> does. The bundle lives in <code>api/src/main/webpack/</code>. To refresh it after changing the client:</p><p data-lang="ko">웹 클라이언트는 자신을 서빙한 호스트와 대화하므로, <em>Gemstone 서버가</em> 서빙해야 합니다 — <code>http://127.0.0.1:23100/</code> 이 바로 그것입니다. 번들은 <code>api/src/main/webpack/</code> 에 있습니다. 클라이언트를 고친 뒤 갱신하려면:</p>
 <pre><code>./gradlew :app:wasmJsBrowserDistribution
-<span class="c"># then copy the production distribution into api/src/test/webpack/</span></code></pre>
+<span class="c"># then copy the production distribution into api/src/main/webpack/</span></code></pre>
   <p class="note" data-lang="en"><code>./gradlew :app:wasmJsBrowserDevelopmentRun</code> is handy for UI work, but its page is served by the Gradle dev server, which has no chat API behind it.</p><p class="note" data-lang="ko"><code>./gradlew :app:wasmJsBrowserDevelopmentRun</code> 은 UI 작업에 편리하지만, 그 페이지는 Gradle 개발 서버가 서빙하므로 뒤에 채팅 API 가 없습니다.</p>
 
   <h2 data-lang="en">iOS</h2><h2 data-lang="ko">iOS</h2>
