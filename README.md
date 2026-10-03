@@ -162,7 +162,7 @@ that tracks it. Python tests (a real model included) and the Kotlin network-laye
 | Android, desktop and web clients | ✅ Implemented |
 | Model list from the server | ✅ Implemented |
 | Server address and API key in the app | 🟡 Partial: desktop and web only; Android needs a settings screen ([#166](https://github.com/LogitAI/Gemstone/issues/166)) |
-| iOS client | 🟡 Partial: framework targets build; the Xcode build script needs fixing ([#165](https://github.com/LogitAI/Gemstone/issues/165)) |
+| iOS client | 🟡 Partial: builds for the simulator; not yet run on a simulator or a device |
 | Chat history | 🟡 Partial: kept in memory only ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
 | UI tests | ⏳ Planned |
 | Native desktop executable (GraalVM, no JVM) | ⏳ Planned: a Windows x64 build path exists but has not been run |

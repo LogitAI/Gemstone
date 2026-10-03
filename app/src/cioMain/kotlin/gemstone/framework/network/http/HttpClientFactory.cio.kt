@@ -8,7 +8,8 @@ import io.ktor.client.plugins.websocket.*
 import io.ktor.serialization.kotlinx.json.*
 
 
-private fun setting(name: String): String? = System.getProperty(name) ?: System.getenv(name)
+/** A setting from the platform: JVM system property or environment variable; the environment on iOS. */
+internal expect fun setting(name: String): String?
 
 
 actual val defaultServerAddress: ServerAddress =

@@ -1,6 +1,9 @@
 TEAM_ID=
 
 PRODUCT_NAME=Gemstone
+// The Kotlin framework is also named Gemstone; a distinct module name keeps `import Gemstone`
+// resolving to the framework instead of the app itself.
+PRODUCT_MODULE_NAME=iosApp
 PRODUCT_BUNDLE_IDENTIFIER=io.github.thisisthepy.Gemstone$(TEAM_ID)
 
 CURRENT_PROJECT_VERSION=1

@@ -642,10 +642,12 @@ No code in Gemstone.
 | Web (Kotlin/Wasm) | `wasmJsMain` | `implemented` |
 | iOS (static framework `Gemstone` for x64, arm64, simulator arm64) | `iosMain` | `partial` |
 
-iOS: the framework targets are configured, but the Xcode build phase runs
-`cd "$SRCROOT/.." && ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode`: there is no
-`gradlew` at that path and no `:composeApp` module (the module is `:app`). The Xcode build is
-expected to fail until that script is corrected.
+iOS: the Xcode project builds for the simulator (`xcodebuild -sdk iphonesimulator`, checked on
+2026-10-04, #165). Its build phase runs `./gradlew :app:embedAndSignAppleFrameworkForXcode` from the
+repository root; `cioMain` (the Ktor CIO code shared by Android, desktop and iOS) is a group of the
+Kotlin hierarchy template, because explicit `dependsOn()` calls had switched the template off and
+left `iosMain` out of every iOS compilation; the app's module name is `iosApp` so that
+`import Gemstone` resolves to the Kotlin framework. Not yet run on a simulator or a device.
 
 Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pbxproj`. Test: none.
 

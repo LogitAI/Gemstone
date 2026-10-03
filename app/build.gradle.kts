@@ -49,20 +49,25 @@ kotlin {
         binaries.executable()
     }
 
+    // cioMain is shared by every target that uses Ktor's CIO engine: Android, desktop (JVM) and iOS.
+    // It is declared through the hierarchy template: explicit dependsOn() calls switch the default
+    // template off, which left iosMain out of every iOS compilation.
+    applyDefaultHierarchyTemplate {
+        common {
+            group("cio") {
+                withAndroidTarget()
+                withJvm()
+                group("ios")
+            }
+        }
+    }
+
     sourceSets {
-        val commonMain by getting
-        val androidMain by getting
         val desktopMain by getting
-        val cioMain by creating {
+        val cioMain by getting {
             dependencies {
                 api(libs.ktor.client.cio)
             }
-            androidMain.dependsOn(this)
-            desktopMain.dependsOn(this)
-            iosMain {
-                dependsOn(this)
-            }
-            dependsOn(commonMain)
         }
         wasmJsMain.dependencies {
             api(libs.ktor.client.js)
