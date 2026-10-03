@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import registry as registry_module
 from .leases import LeasedStreamingResponse, acquire, once
-from .registry import (DERIVED_PARAMETERS, ModelBusy, alias_key, format_parameters, is_builtin_name, now_iso,
+from .registry import (DERIVED_PARAMETERS, ModelBusy, ModelUnavailable, alias_key, format_parameters, is_builtin_name, now_iso,
                        parse_keep_alive)
 
 
@@ -477,7 +477,7 @@ def _handle(fn):
             return _error(501, str(e))
         except LookupError as e:
             return _error(404, str(e.args[0]) if e.args else "model not found")
-        except ModelBusy as e:
+        except (ModelBusy, ModelUnavailable) as e:
             return _error(503, str(e))
         except ValueError as e:
             return _error(400, str(e))
@@ -613,15 +613,18 @@ async def pull(request: Request):
         except LookupError as e:
             return _error(500, str(e))
         except Exception as e:
-            return _error(500, f"pull failed: {e}")
+            return _error(503, str(ModelUnavailable.from_error(hf_id, e)))
         return {"status": "success"}
 
     def lines():
         yield {"status": "pulling manifest"}
         try:
             yield from _download_steps(store, hf_id)
-        except Exception as e:
+        except LookupError as e:
             yield {"error": str(e)}
+            return
+        except Exception as e:
+            yield {"error": str(ModelUnavailable.from_error(hf_id, e))}
             return
         yield {"status": "success"}
 

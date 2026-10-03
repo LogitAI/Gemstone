@@ -36,6 +36,22 @@ sealed class ChatEvent {
 }
 
 
+/** Close codes after which the reply is complete: 1000 (normal) and 1005 (no status code sent). */
+private val NORMAL_CLOSE_CODES = setOf(1000, 1005)
+
+/**
+ * What a server close frame means for the chat (SPEC S1.4). A normal close ends the reply; any
+ * other code (1008 unknown model, 1011 offline or failed download, 1013 busy) is an error that
+ * carries the server's reason, so the app shows it instead of treating the close as a finished
+ * reply. Pure, so it is tested without a socket.
+ */
+fun closeEventFor(code: Int?, reason: String?): ChatEvent {
+    if (code == null || code in NORMAL_CLOSE_CODES) return ChatEvent.MessageComplete
+    val text = reason?.trim().orEmpty()
+    return ChatEvent.ErrorOccurred(text.ifEmpty { "The server closed the connection (code $code)." })
+}
+
+
 @Serializable
 data class SessionResponse(
     val model_id: String,
@@ -162,8 +178,14 @@ class ChatWebSocketClient(
                         handleMessage(message)
                     }
                     is Frame.Close -> {
-                        _state.value = ChatState.Disconnected
-                        _events.emit(ChatEvent.MessageComplete)
+                        val closeReason = frame.readReason()
+                        val event = closeEventFor(closeReason?.code?.toInt(), closeReason?.message)
+                        _state.value = if (event is ChatEvent.ErrorOccurred) {
+                            ChatState.Error(event.error)
+                        } else {
+                            ChatState.Disconnected
+                        }
+                        _events.emit(event)
                         break
                     }
                     else -> { /* Handle other frame types if needed */ }

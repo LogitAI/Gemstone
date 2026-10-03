@@ -24,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import registry as registry_module
 from .leases import LeasedStreamingResponse, acquire, once
-from .registry import ModelBusy, in_catalogue, parse_keep_alive
+from .registry import ModelBusy, ModelUnavailable, in_catalogue, parse_keep_alive
 
 
 router = APIRouter(prefix="/v1")
@@ -413,6 +413,8 @@ async def _chat_completions(request: Request):
                        param="model", code="model_not_found")
     except ModelBusy as e:
         raise APIError(503, str(e), type="server_error", code="server_busy")
+    except ModelUnavailable as e:  # offline or a failed download (#114)
+        raise APIError(503, str(e), type="server_error", code="model_unavailable")
     release = once(lambda: registry.release(lease))
     try:
         return await _complete(req, lease, release, messages, tools, derived.get("parameters") or {})
