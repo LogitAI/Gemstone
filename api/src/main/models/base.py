@@ -102,10 +102,11 @@ class BaseModel:
                 (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END),
                 print_output=print_output
             )
-            if queued > 0 and stat % 2 == 0:
-                print(f"\r{spinner[(stat//2) % len(spinner)]} Waiting for tool calls to finish...", end="", flush=True)
+            if queued > 0 and final_result is False:
+                print(f"\r{spinner[stat % len(spinner)]} Waiting for tool calls to finish...", end="", flush=True)
             if final_result is False:
                 stat += 1
+                result_obj.wait(0.1)  # sleeps until a tool finishes; wakes to animate the spinner
                 continue
             if queued > 0:
                 print("\r[✔] Tool calls are finalized successfully.", flush=True)
@@ -230,6 +231,11 @@ class BaseModel:
                         message = "\n\nERROR: Chat is unexpectedly terminated due to token limit. Please shorten your prompt or chat history."
                     else:
                         message = f"\n\nERROR: {type(e)} - Something went wrong while processing the chat. Please try again later.\n{e}"
+                    if print_output: print(message, end="", flush=True)
+                    yield message
+                except Exception as e:  # never let a failure kill the stream without a message
+                    traceback.print_exc()
+                    message = f"\n\nERROR: {type(e).__name__} - Something went wrong while processing the chat.\n{e}"
                     if print_output: print(message, end="", flush=True)
                     yield message
                 finally:

@@ -143,8 +143,17 @@ Test: `api/tests/test_ollama_api.py` (`test_legacy_chat_and_hello_routes_are_gon
 - Call ids are `call_<YYYYmmddHHMMSS>_<8 hex>`, unique even within one second (the former
   one-second-resolution id made same-second calls share an id and would have overwritten each
   other's cache entry). Session ids are unique too (S1.3), so sessions never share a cache.
+- Robustness (#113): a malformed tool call (invalid JSON, not an object, no `name`, non-object
+  `arguments`) does not raise; it becomes a `tool` result starting `Error: …` that the model sees on
+  its next turn. Each tool has a deadline, `GEMSTONE_TOOL_TIMEOUT` seconds (default 30); past it the
+  result is `Error: tool '<name>' timed out after <n> seconds.` and the chat goes on (the stuck
+  tool's daemon thread is abandoned, its late result ignored). Waiting for tools blocks on a
+  condition variable, not a spin loop. `calculate` parses with `ast` (numbers, `+ - * / // **`,
+  parentheses, `pi`, `e`, `abs round pow sqrt sin cos tan log log10 exp`), caps expressions at 1000
+  characters and integer results at 100 000 bits, so `9**9**9**9` returns `Error: Result too large`
+  at once. `BaseModel.chat` ends a failing stream with an `ERROR:` message instead of dying.
 - Code: `api/src/main/utils/__init__.py`, `api/src/main/utils/*.py`, `api/src/main/models/base.py`.
-  Test: `api/tests/test_tool_cache.py` (cache only).
+  Tests: `api/tests/test_tool_cache.py` (cache), `api/tests/test_tool_robustness.py` (#113).
 
 ### S1.7 Models — `implemented` · G5
 
