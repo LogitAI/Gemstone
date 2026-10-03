@@ -57,8 +57,8 @@ request merges: merge with `gh pr merge --rebase --delete-branch`, then delete t
 its worktree. Periodically delete every remote and local branch already merged into `develop`.
 Pull requests here are rebase-merged, so `git branch --merged` does not see them: check the branch's
 pull request instead (`gh pr list --head <branch> --state merged`). An unmerged branch older than a
-few days is either landed or reported, not left. Branches named `release-*` (e.g. `release-cnu`) are
-preserved snapshots: keep them. Never force-push a pushed branch; to rebase after a push, push the
+few days is either landed or reported, not left. Branches named `release-*` (e.g. `release-cnu`) and
+tags named `archive/*` are preserved snapshots: keep them. Never force-push a pushed branch; to rebase after a push, push the
 result to a new `feat/` branch.
 
 `main` carries a reduced layout: of the Markdown files, only `README.md` stays at the repository
