@@ -64,7 +64,7 @@ docs/               INTENT, SPEC, locale/, guide/ (GitHub Pages), serving/ (서�
 uv sync --extra torch            # Python 의존성 (Python 3.13). torchnative 는 --extra torchnative
                                  # torchnative 는 PyPI 프리릴리스(2026-10-03 기준 0.1.0b4). 버전 하한은 결정 대기
 uv run --extra torch pytest      # Python 테스트 (api/tests)
-python -m api run server         # 0.0.0.0:23100
+uv run --extra torch python -m api run server   # 127.0.0.1:23100 (GEMSTONE_HOST 로 변경)
 ./gradlew :app:run               # 데스크톱
 ./gradlew :app:installDebug      # Android
 ./gradlew :app:wasmJsBrowserDevelopmentRun   # 웹 개발 서버
