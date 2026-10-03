@@ -1,0 +1,142 @@
+name: Tests
+
+# Every test that gates a pull request into develop, as one workflow with a job per kind:
+#   pytest      the Python tests (api/tests) on a real model; the model is downloaded once into a
+#               cached HF_HOME, so every run uses the same checkpoint as a local run
+#   quickstart  the README's start command, run literally, must come up without a model
+#   gradle      the Kotlin client's common tests on the JVM, and the web (Wasm) target compiles
+#   web-bundle  the committed web client in api/src/main/webpack matches a fresh build of app/
+# The torchnative run is test-torchnative.yml (different triggers, non-blocking).
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HF_HOME: ${{ github.workspace }}/.hf-cache
+      GEMSTONE_TEST_MODEL: HuggingFaceTB/SmolLM2-135M
+      GEMSTONE_TEST_ALLOW_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Cache the Hugging Face model
+        uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: hf-${{ env.GEMSTONE_TEST_MODEL }}-v1
+
+      - name: Install (upstream PyTorch, CPU)
+        run: uv sync --extra torch
+
+      - name: Test
+        run: uv run --extra torch pytest -v -m "real_model or not real_model"
+
+  quickstart:
+    # The documented start command, run literally, must come up without a model and answer.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install (as in the README)
+        run: uv sync --extra torch
+
+      - name: Start the server and ask for its version
+        run: |
+          uv run --extra torch python -m api run server > server.log 2>&1 &
+          pid=$!
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:23100/api/version; then ok=1; break; fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          kill -INT "$pid" 2>/dev/null || true
+          wait "$pid" || true
+          cat server.log
+          test "$ok" = 1
+
+  gradle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Common tests on the JVM
+        run: ./gradlew :app:desktopTest --console=plain
+
+      - name: Compile the web target
+        run: ./gradlew :app:compileKotlinWasmJs --console=plain
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-test-results
+          path: app/build/test-results/desktopTest/
+          if-no-files-found: ignore
+
+  web-bundle:
+    # The server serves the committed Wasm build in api/src/main/webpack. Rebuild it from app/ and fail
+    # when the committed copy is out of date; the fresh build is uploaded so it can be committed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the web client
+        run: ./gradlew :app:wasmJsBrowserDistribution --console=plain
+
+      - name: Copy it over the committed bundle
+        run: tools/sync-web-bundle.sh
+
+      - name: Upload the fresh bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-bundle
+          path: api/src/main/webpack/
+
+      - name: Fail if the committed bundle is out of date
+        run: |
+          git add -A api/src/main/webpack
+          if ! git diff --cached --quiet -- api/src/main/webpack; then
+            git diff --cached --stat -- api/src/main/webpack
+            echo "::error::api/src/main/webpack is out of date. Run ./gradlew :app:wasmJsBrowserDistribution && tools/sync-web-bundle.sh, or commit the web-bundle artifact of this run."
+            exit 1
+          fi

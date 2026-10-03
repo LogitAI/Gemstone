@@ -304,7 +304,7 @@ Implemented (#84), `api/src/main/engine.py`:
 - The substrate is chosen at install time: `uv sync --extra torch` (upstream PyTorch) or
   `--extra torchnative`.
 
-Capability-based skips: the CI job `.github/workflows/torchnative-tests.yml` (manual with a
+Capability-based skips: the CI job `.github/workflows/test-torchnative.yml` (manual with a
 torchnative version input, weekly, non-blocking) runs `api/tests` on torchnative. `conftest.py`
 detects the substrate (torchnative and its version, or upstream PyTorch). On torchnative only,
 `needs_batching` skips when `engine.batching` is False (reason: `engine.batching_unavailable` and the

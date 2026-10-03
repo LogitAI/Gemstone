@@ -1,6 +1,6 @@
-name: torchnative tests
+name: Tests on torchnative
 
-# The same api/tests as api-tests.yml, on torchnative instead of upstream PyTorch (SPEC S1.11,
+# The same api/tests as test.yml (job pytest), on torchnative instead of upstream PyTorch (SPEC S1.11,
 # AGENTS 12). Non-blocking: it is neither a required check nor run on pull requests until
 # torchnative is ready. Tests that need a capability the installed torchnative lacks (continuous
 # batching, q8_0) skip with a reason naming it; `-rs` prints every skip reason. Nothing skips on
@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: torchnative-tests-${{ github.ref }}
+  group: test-torchnative-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

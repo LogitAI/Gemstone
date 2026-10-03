@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copy the Wasm client's production build into api/src/main/webpack, which the server serves at `/`.
 # The bundle is committed so a server checkout works without a JDK; CI rebuilds it and fails when the
-# committed copy differs (`.github/workflows/app-tests.yml`, job web-bundle).
+# committed copy differs (`.github/workflows/test.yml`, job web-bundle).
 #
 #   ./gradlew :app:wasmJsBrowserDistribution && tools/sync-web-bundle.sh
 set -euo pipefail
