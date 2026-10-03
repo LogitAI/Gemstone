@@ -45,7 +45,8 @@ def setup(monkeypatch):
         engines[hf_id] = FakeEngine(hf_id, ["Hello", " there", "!"])
         return engines[hf_id]
 
-    reg = Registry(loader=loader, store=FakeStore(QWEN, SMOL))
+    # One model slot: a switch to another model has to wait for the streaming model's lease.
+    reg = Registry(loader=loader, store=FakeStore(QWEN, SMOL), max_loaded=1)
     released = []
     release = reg.release
 
@@ -56,6 +57,13 @@ def setup(monkeypatch):
     monkeypatch.setattr(reg, "release", counting_release)
     monkeypatch.setattr(registry_module, "registry", reg)
     return dict(registry=reg, released=released, engines=engines, release=release)
+
+
+def only(reg):
+    """ The one resident model (`hf_id`, `active`), or None. """
+    models = reg.loaded()
+    assert len(models) <= 1
+    return models[0] if models else None
 
 
 def scope_for(path, body, spec_version):
@@ -112,10 +120,10 @@ def assert_released_once_and_switch_completes(setup):
     reg, released = setup["registry"], setup["released"]
     gc.collect()
     deadline = time.monotonic() + SWITCH_TIMEOUT
-    while (reg._resident is None or reg._resident.active) and time.monotonic() < deadline:
+    while (only(reg) is None or only(reg)["active"]) and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert reg._resident is not None and reg._resident.hf_id == QWEN
-    assert reg._resident.active == 0, "the lease on the streaming model was never released"
+    assert only(reg) is not None and only(reg)["hf_id"] == QWEN
+    assert only(reg)["active"] == 0, "the lease on the streaming model was never released"
 
     switched = {}
 
@@ -127,7 +135,7 @@ def assert_released_once_and_switch_completes(setup):
     thread.join(timeout=SWITCH_TIMEOUT)
     assert not thread.is_alive(), "a model switch did not complete: the lease leaked"
     setup["release"](switched["lease"])
-    assert reg._resident.hf_id == SMOL
+    assert only(reg)["hf_id"] == SMOL
 
     gc.collect()
     assert len(released) == 1, f"the lease was released {len(released)} times, not once"
@@ -152,7 +160,7 @@ def test_a_streaming_response_dropped_unsent_releases_the_lease(setup, route):
         request = Request(scope_for(path, raw, "2.4"), request_messages(raw))
         response = await ENDPOINTS[route](request)
         assert response.status_code == 200 and hasattr(response, "body_iterator")
-        assert setup["registry"]._resident.active == 1  # leased until the response is done with
+        assert only(setup["registry"])["active"] == 1  # leased until the response is done with
 
     asyncio.run(asyncio.wait_for(build(), timeout=SWITCH_TIMEOUT))
     assert_released_once_and_switch_completes(setup)
@@ -174,12 +182,12 @@ def test_the_response_releases_as_it_ends_not_when_it_is_collected(setup, route,
     async def run():
         request = Request(scope_for(path, raw, spec_version), request_messages(raw))
         response = await ENDPOINTS[route](request)
-        assert reg._resident.active == 1
+        assert only(reg)["active"] == 1
         try:
             await response(scope_for(path, raw, spec_version), disconnect, send)
         except Exception:
             pass
-        assert reg._resident.active == 0, "released only once the response was garbage-collected"
+        assert only(reg)["active"] == 0, "released only once the response was garbage-collected"
         if route == "openai":  # its first step ran before the response: that generation is closed too
             assert setup["engines"][QWEN].closed.is_set()
         assert len(setup["released"]) == 1
@@ -208,7 +216,7 @@ def test_an_unknown_model_takes_no_lease(setup, route):
     path, body = STREAM_ROUTES[route]
     with TestClient(server.app) as client:
         assert client.post(path, json={**body, "model": "someone/not-pulled"}).status_code == 404
-    assert setup["released"] == [] and setup["registry"]._resident is None
+    assert setup["released"] == [] and only(setup["registry"]) is None
 
 
 def test_a_lease_granted_after_the_request_was_cancelled_is_released(setup):
@@ -229,9 +237,9 @@ def test_a_lease_granted_after_the_request_was_cancelled_is_released(setup):
     asyncio.run(asyncio.wait_for(run(), timeout=SWITCH_TIMEOUT))
     # asyncio's cancellation abandons the worker thread, which is granted SMOL once QWEN is free.
     deadline = time.monotonic() + SWITCH_TIMEOUT
-    while not (reg._resident and reg._resident.hf_id == SMOL and setup["released"]) \
+    while not (only(reg) and only(reg)["hf_id"] == SMOL and setup["released"]) \
             and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert reg._resident.hf_id == SMOL
-    assert reg._resident.active == 0, "the lease granted to the cancelled request leaked"
+    assert only(reg)["hf_id"] == SMOL
+    assert only(reg)["active"] == 0, "the lease granted to the cancelled request leaked"
     assert len(setup["released"]) == 1

@@ -32,7 +32,9 @@ def client(engine, monkeypatch):
 
     # The session's model ("default") resolves to Qwen3; the registry loads the test engine for it
     # and wraps it in TinyModel (SPEC S1.14).
-    reg = Registry(loader=lambda hf_id: engine, store=FakeStore(QWEN), model_class=lambda hf_id: TinyModel)
+    # `close`: the session engine outlives this registry (later tests batch on it), so unloading must not close it.
+    reg = Registry(loader=lambda hf_id: engine, store=FakeStore(QWEN), model_class=lambda hf_id: TinyModel,
+                   close=lambda engine: None)
     monkeypatch.setattr(registry_module, "registry", reg)
     with TestClient(server.app) as c:
         yield c

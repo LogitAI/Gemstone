@@ -1,13 +1,16 @@
 """
 The Ollama-compatible API (SPEC S1.15), so existing Ollama clients can use Gemstone.
 
-Endpoints: POST /api/chat, POST /api/generate, GET /api/tags, POST /api/show, POST /api/pull,
-DELETE /api/delete, GET /api/ps, GET /api/version. Streaming responses are NDJSON; `"stream": false`
-returns one JSON object. Errors are `{"error": "..."}` with an HTTP status, as Ollama does.
+Endpoints: POST /api/chat, POST /api/generate, POST /api/embed, POST /api/embeddings (legacy),
+GET /api/tags, POST /api/show, POST /api/pull, POST /api/copy, POST /api/create, DELETE /api/delete,
+GET /api/ps, GET /api/version; POST /api/push answers 501. Streaming responses are NDJSON;
+`"stream": false` returns one JSON object. Errors are `{"error": "..."}` with an HTTP status, as
+Ollama does.
 
 Tool calls pass through (SPEC S1.10): a `<tool_call>{json}</tool_call>` block the model emits is
 returned as `message.tool_calls` and never executed. Model names resolve through
-`registry.resolve_model_name`; residency and keep_alive are handled by `registry.Registry`.
+`Registry.resolve` (derived models included); residency and keep_alive are handled by
+`registry.Registry`.
 """
 from importlib import metadata
 from typing import Iterator, List, Optional
@@ -22,7 +25,8 @@ from starlette.concurrency import run_in_threadpool
 
 from . import registry as registry_module
 from .leases import LeasedStreamingResponse, acquire, once
-from .registry import now_iso, parse_keep_alive, resolve_model_name
+from .registry import (DERIVED_PARAMETERS, ModelBusy, alias_key, format_parameters, is_builtin_name, now_iso,
+                       parse_keep_alive)
 
 
 router = APIRouter()
@@ -51,6 +55,10 @@ def _error(status: int, message: str) -> JSONResponse:
 
 class _BadRequest(Exception):
     pass
+
+
+class _NotImplemented(Exception):
+    """ A feature Gemstone does not offer (501). """
 
 
 async def _body(request: Request) -> dict:
@@ -354,12 +362,19 @@ async def _run(body: dict, messages: list, tools, render, finish):
     started = time.perf_counter()
     name = _model_of(body)
     keep_alive = parse_keep_alive(body.get("keep_alive"))
-    kwargs, stops = _engine_kwargs(body.get("options"))
+    reg = _registry()
+    hf_id = reg.resolve(name)
+    derived = reg.derived(name) or {}
+    options = body.get("options")
+    if options is not None and not isinstance(options, dict):
+        raise _BadRequest("options must be an object")
+    # A derived model's parameters are defaults; the request's options win (as in Ollama).
+    kwargs, stops = _engine_kwargs({**(derived.get("parameters") or {}), **(options or {})})
+    if messages and derived.get("system") and not any(m["role"] == "system" for m in messages):
+        messages = [{"role": "system", "content": derived["system"]}, *messages]
     think = body.get("think")
     if think is not None and not isinstance(think, bool):
         think = bool(think)  # "low" / "medium" / "high" levels are treated as on
-    hf_id = resolve_model_name(name)
-    reg = _registry()
 
     if not messages:  # load or unload only
         if keep_alive == 0:
@@ -458,8 +473,12 @@ def _handle(fn):
             return await fn(request)
         except _BadRequest as e:
             return _error(400, str(e))
+        except _NotImplemented as e:
+            return _error(501, str(e))
         except LookupError as e:
             return _error(404, str(e.args[0]) if e.args else "model not found")
+        except ModelBusy as e:
+            return _error(503, str(e))
         except ValueError as e:
             return _error(400, str(e))
     wrapper.__name__ = fn.__name__
@@ -497,53 +516,95 @@ async def generate(request: Request):
     return await _run(body, messages, None, _generate_render, _generate_finish)
 
 
-def _tag(info) -> dict:
-    return dict(name=info.hf_id, model=info.hf_id, modified_at=info.modified_at, size=info.size,
-                digest=info.digest, details=info.details())
+def _tag(name: str, info, modified_at: Optional[str] = None, parent: str = "") -> dict:
+    return dict(name=name, model=name, modified_at=modified_at or info.modified_at, size=info.size,
+                digest=info.digest, details=info.details(parent))
+
+
+def _local(hf_id: str):
+    info = _registry().store.get(hf_id)
+    if info is None:
+        raise LookupError(f"model '{hf_id}' not found")
+    return info
 
 
 @router.get("/api/tags")
 async def tags():
-    """ Models in the local store (the Hugging Face cache). """
-    models = await run_in_threadpool(_registry().store.list)
-    return {"models": [_tag(m) for m in models]}
+    """ Models in the local store (the Hugging Face cache), then the derived models of them. """
+    reg = _registry()
+    models = await run_in_threadpool(reg.store.list)
+    by_id = {m.hf_id: m for m in models}
+    entries = [_tag(m.hf_id, m) for m in models]
+    for name, record in sorted(reg.aliases.all().items()):
+        info = by_id.get(record.get("from"))
+        if info is not None:
+            entries.append(_tag(name, info, record.get("created_at"), info.hf_id))
+    return {"models": entries}
+
+
+def _modelfile(hf_id: str, system: str, parameters: dict) -> str:
+    """ A Modelfile that describes the model (Ollama's `modelfile` field); for reading only. """
+    lines = [f"FROM {hf_id}"]
+    if system:
+        lines.append(f'SYSTEM """{system}"""')
+    lines += [f"PARAMETER {line}" for line in format_parameters(parameters).splitlines()]
+    return "\n".join(lines) + "\n"
 
 
 @router.post("/api/show")
 @_handle
 async def show(request: Request):
-    """ Details of one local model. """
-    hf_id = resolve_model_name(_model_of(await _body(request)))
-    info = await run_in_threadpool(_registry().store.get, hf_id)
-    if info is None:
-        raise LookupError(f"model '{hf_id}' not found")
+    """ Details of one local model or derived model. """
+    name = _model_of(await _body(request))
+    reg = _registry()
+    hf_id = reg.resolve(name)
+    derived = reg.derived(name)
+    info = await run_in_threadpool(_local, hf_id)
+    parameters = {**info.parameters, **((derived or {}).get("parameters") or {})}
+    system = (derived or {}).get("system") or ""
     model_info = {"general.architecture": info.family}
+    if info.parameter_count:
+        model_info["general.parameter_count"] = info.parameter_count
     if info.family and info.context_length:
         model_info[f"{info.family}.context_length"] = info.context_length
-    return dict(modelfile="", parameters="", template=info.chat_template, details=info.details(),
-                model_info=model_info, capabilities=info.capabilities, modified_at=info.modified_at)
+    body = dict(modelfile=_modelfile(hf_id, system, parameters), parameters=format_parameters(parameters),
+                template=info.chat_template, details=info.details(hf_id if derived else ""),
+                model_info=model_info, capabilities=info.capabilities,
+                modified_at=(derived or {}).get("created_at") or info.modified_at)
+    if system:
+        body["system"] = system
+    return body
 
 
 @router.get("/api/ps")
 async def ps():
-    """ Loaded models and when they unload. """
+    """ Loaded models, latest expiry first, with their memory estimate and when they unload. """
     models = []
     for entry in _registry().loaded():
         info = entry["info"]
         models.append(dict(
-            name=entry["hf_id"], model=entry["hf_id"], size=info.size if info else 0,
+            name=entry["hf_id"], model=entry["hf_id"], size=entry["size"],
             digest=info.digest if info else "", details=info.details() if info else {},
             expires_at=entry["expires_at"], size_vram=0,
         ))
     return {"models": models}
 
 
+def _download_steps(store, hf_id: str) -> Iterator[dict]:
+    """ The store's per-file pull progress, or nothing (a store without it downloads in one go). """
+    steps = getattr(store, "download_iter", None)
+    if steps is None:
+        store.download(hf_id)
+        return iter(())
+    return steps(hf_id)
+
+
 @router.post("/api/pull")
 @_handle
 async def pull(request: Request):
-    """ Download a model from the Hugging Face Hub into the local cache. """
+    """ Download a model from the Hugging Face Hub into the local cache, reporting each file. """
     body = await _body(request)
-    hf_id = resolve_model_name(_model_of(body))
+    hf_id = _registry().resolve(_model_of(body))
     store = _registry().store
 
     if body.get("stream", True) is False:
@@ -557,9 +618,8 @@ async def pull(request: Request):
 
     def lines():
         yield {"status": "pulling manifest"}
-        yield {"status": f"downloading {hf_id}"}
         try:
-            store.download(hf_id)
+            yield from _download_steps(store, hf_id)
         except Exception as e:
             yield {"error": str(e)}
             return
@@ -569,14 +629,182 @@ async def pull(request: Request):
     return StreamingResponse(_stream(items, _closer(items)), media_type=NDJSON)
 
 
+@router.post("/api/push")
+async def push():
+    """ Not offered: Gemstone's models come from the Hugging Face Hub, not an Ollama registry. """
+    return _error(501, "push is not supported: Gemstone's models live on the Hugging Face Hub; "
+                       "upload a model there with `hf upload` instead")
+
+
+def _alias_name(name) -> str:
+    key = alias_key(name)
+    if key is None:
+        raise _BadRequest(f"invalid model name {name!r}: use name[:tag] with letters, digits, '.', '_' or '-' "
+                          f"and no '/' (Hugging Face ids name themselves)")
+    if is_builtin_name(name):
+        raise _BadRequest(f"'{name}' is a built-in model name")
+    return key
+
+
+def _source(name) -> tuple:
+    """ (Hugging Face id, derived record or {}) of a model in the local store. """
+    if not isinstance(name, str) or not name:
+        raise _BadRequest("from is required: the model to derive from")
+    reg = _registry()
+    hf_id = reg.resolve(name)
+    _local(hf_id)
+    return hf_id, reg.derived(name) or {}
+
+
+@router.post("/api/copy")
+@_handle
+async def copy(request: Request):
+    """ Name a local model (or derived model) anew; the copy shares the weights. """
+    body = await _body(request)
+    source, destination = body.get("source"), body.get("destination")
+    if not isinstance(source, str) or not source:
+        raise _BadRequest("source is required")
+    hf_id, derived = await run_in_threadpool(_source, source)
+    key = _alias_name(destination)
+    record = {**derived, "from": hf_id, "created_at": now_iso()}
+    await run_in_threadpool(_registry().aliases.set, key, record)
+    return Response(status_code=200)
+
+
+# Ollama create fields Gemstone does not take, and why.
+CREATE_UNSUPPORTED = {
+    "template": "templates are not supported: Ollama's are Go templates, and Gemstone always formats "
+                "prompts with the model's Hugging Face (Jinja) chat template",
+    "files": "model files are not supported: Gemstone loads safetensors from the Hugging Face cache "
+             "(pull the model instead)",
+    "adapters": "adapters are not supported",
+    "quantize": "quantizing is not supported",
+    "modelfile": "Modelfiles are not supported: send 'from' with 'system' and 'parameters' instead",
+    "messages": "preset messages are not supported",
+}
+
+
+def _parameters(raw) -> dict:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise _BadRequest("parameters must be an object")
+    out = {}
+    for name, value in raw.items():
+        kind = DERIVED_PARAMETERS.get(name)
+        if kind is None:
+            raise _BadRequest(f"unknown parameter '{name}'")
+        try:
+            if kind is list:
+                value = [value] if isinstance(value, str) else list(value)
+                if not all(isinstance(v, str) for v in value):
+                    raise ValueError
+            elif isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError
+            else:
+                value = kind(value)
+        except (TypeError, ValueError):
+            raise _BadRequest(f"invalid value for parameter '{name}': {value!r}")
+        out[name] = value
+    return out
+
+
+@router.post("/api/create")
+@_handle
+async def create(request: Request):
+    """
+    A derived model: `from` a local model, with its own `system` prompt and `parameters`, stored
+    as an alias that shares the weights. Templates, files, adapters, quantizing and Modelfiles
+    answer 501.
+    """
+    body = await _body(request)
+    name = _model_of(body)
+    for field in CREATE_UNSUPPORTED:
+        if body.get(field):
+            raise _NotImplemented(CREATE_UNSUPPORTED[field])
+    key = _alias_name(name)
+    hf_id, base = await run_in_threadpool(_source, body.get("from"))
+    parameters = {**(base.get("parameters") or {}), **_parameters(body.get("parameters"))}
+    system = body.get("system")
+    if system is not None and not isinstance(system, str):
+        raise _BadRequest("system must be a string")
+    record = {"from": hf_id, "created_at": now_iso()}
+    if system or base.get("system"):
+        record["system"] = system or base["system"]
+    if parameters:
+        record["parameters"] = parameters
+    await run_in_threadpool(_registry().aliases.set, key, record)
+
+    if body.get("stream", True) is False:
+        return {"status": "success"}
+    lines = [{"status": f"using {hf_id}"}, {"status": "writing manifest"}, {"status": "success"}]
+    return StreamingResponse(iter([json.dumps(line) + "\n" for line in lines]), media_type=NDJSON)
+
+
 @router.delete("/api/delete")
 @_handle
 async def delete(request: Request):
-    """ Unload a model and remove it from the local cache. """
-    hf_id = resolve_model_name(_model_of(await _body(request)))
-    if not await run_in_threadpool(_registry().delete, hf_id):
+    """ Remove a derived model, or unload a model and remove it from the local cache. """
+    name = _model_of(await _body(request))
+    reg = _registry()
+    key = alias_key(name)
+    if key is not None and await run_in_threadpool(reg.aliases.delete, key):
+        return Response(status_code=200)
+    hf_id = reg.resolve(name)
+    if not await run_in_threadpool(reg.delete, hf_id):
         raise LookupError(f"model '{hf_id}' not found")
     return Response(status_code=200)
+
+
+# -- embeddings ------------------------------------------------------------------------------------
+
+async def _embed(body: dict, inputs: List[str]) -> tuple:
+    """ (vectors, token count, load seconds) for `inputs` on the model `body` names. """
+    name = _model_of(body)
+    keep_alive = parse_keep_alive(body.get("keep_alive"))
+    truncate = body.get("truncate", True) is not False
+    reg = _registry()
+    lease = await acquire(reg, reg.resolve(name), keep_alive)
+    try:
+        embed = getattr(lease.engine, "embed", None)
+        if embed is None:
+            raise _NotImplemented(f"model '{name}' cannot produce embeddings")
+        vectors = await run_in_threadpool(embed, inputs, truncate) if inputs else []
+        count = sum(_count_tokens(lease.engine, text) or 0 for text in inputs)
+    finally:
+        reg.release(lease)
+    return vectors, count, lease.load_duration
+
+
+@router.post("/api/embed")
+@_handle
+async def embed(request: Request):
+    """
+    Embeddings: the mean of the model's last hidden state over each input's tokens, unit length.
+    A chat model's embeddings are usable for similarity but weaker than a dedicated embedding model's.
+    """
+    started = time.perf_counter()
+    body = await _body(request)
+    inputs = body.get("input", [])
+    if isinstance(inputs, str):
+        inputs = [inputs]
+    if not isinstance(inputs, list) or not all(isinstance(i, str) for i in inputs):
+        raise _BadRequest("input must be a string or a list of strings")
+    vectors, count, load = await _embed(body, inputs)
+    return {"model": _model_of(body), "embeddings": vectors, "total_duration": _ns(time.perf_counter() - started),
+            "load_duration": _ns(load), "prompt_eval_count": count}
+
+
+@router.post("/api/embeddings")
+@_handle
+async def embeddings(request: Request):
+    """ The legacy single-prompt endpoint: `prompt` in, one `embedding` out. """
+    body = await _body(request)
+    prompt = body.get("prompt") or ""
+    if not isinstance(prompt, str):
+        raise _BadRequest("prompt must be a string")
+    vectors, _, _ = await _embed(body, [prompt] if prompt else [])
+    return {"embedding": vectors[0] if vectors else []}
 
 
 @router.get("/api/version")

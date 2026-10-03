@@ -45,7 +45,8 @@ class FakeEngine:
 
 def serve(monkeypatch, engine):
     """ Every model name the registry is asked for loads `engine` (SPEC S1.14). """
-    reg = Registry(loader=lambda hf_id: engine, store=FakeStore(QWEN))
+    reg = Registry(loader=lambda hf_id: engine, store=FakeStore(QWEN),
+                   close=lambda engine: None)  # the session engine outlives this registry
     monkeypatch.setattr(registry_module, "registry", reg)
     return reg
 
@@ -351,7 +352,7 @@ def test_disconnect_mid_stream_cancels_generation(monkeypatch):
     assert closed.wait(timeout=10)
     assert seen["cancel"].is_set()
     assert time.monotonic() - started_at < 20
-    assert reg.loaded() and reg._resident.active == 0  # the lease was released
+    assert reg.loaded() and all(m["active"] == 0 for m in reg.loaded())  # the lease was released
 
 
 # --- errors -------------------------------------------------------------------------------------

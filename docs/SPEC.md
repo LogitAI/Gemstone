@@ -14,7 +14,8 @@ a status:
 **Evidence.** Each item names the code it was read from and its test. Python tests live in
 `api/tests/` (pytest) and cover the engine (S1.11), the WebSocket stream (S1.4), the
 OpenAI-compatible API (S1.10), the Ollama-compatible API with its model management (S1.14,
-S1.15), the residency shared by all three (S1.14), the tool-result cache (S1.6) and the backend
+S1.15), the residency shared by all three, with several resident models and derived models
+(S1.14, `test_multi_resident.py`), the tool-result cache (S1.6) and the backend
 removal (S1.8). Everything else has **no
 behavioural test** yet: the only Kotlin test,
 `app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`, asserts `1 + 2 == 3`. So
@@ -324,7 +325,8 @@ model. A torchnative paged-attention kernel for speed is still to come.
 Follows from *Ollama replacement*. Served through the Ollama-compatible API (S1.15); the local
 model store is the Hugging Face cache (`HF_HOME`).
 
-Implemented (M3 scope, #66), `api/src/main/registry.py`:
+Implemented (M3 scope, #66; several resident models and derived models, #75),
+`api/src/main/registry.py`:
 
 - **Names.** A request names a model by Gemstone id, Ollama name or Hugging Face id:
 
@@ -341,13 +343,52 @@ Implemented (M3 scope, #66), `api/src/main/registry.py`:
   hash as `digest`, `model_type` as family, `max_position_embeddings` as context length, and the
   chat template (capabilities `tools` / `thinking` are inferred from it).
 - **Remove** (`DELETE /api/delete`) unloads the model if resident and deletes its cached revisions.
-- **Residency.** One model is resident at a time; loading another waits until the resident model
-  has no generation in flight, then unloads it. A model is loaded only from the cache (no implicit
-  download); a model that is not there is a 404 asking to pull it first. After each request the
-  model stays loaded for `keep_alive` (seconds or a Go duration such as `5m`; default 5 minutes;
-  `0` unloads at once; negative keeps it until another model replaces it). An idle model is never
-  unloaded mid-generation. `GET /api/ps` lists the resident model with `expires_at`
-  (`9999-12-31T23:59:59Z` when it never expires; `size_vram` is always 0).
+- **Residency (#75).** Several models are resident at once, bounded by a count and an optional
+  memory budget:
+
+  | Setting | Default | Meaning |
+  |---|---|---|
+  | `GEMSTONE_MAX_LOADED_MODELS` | `3` | Most resident models (minimum 1), as Ollama's `OLLAMA_MAX_LOADED_MODELS`. |
+  | `GEMSTONE_MAX_MODEL_MEMORY` | unset (no budget) | Total memory of the resident models: bytes, or a number with a unit (`8GB` = 8e9, `8GiB` = 2^33). |
+  | `GEMSTONE_LOAD_TIMEOUT` | `5m` | How long a load waits for room (seconds or a Go duration), as `OLLAMA_LOAD_TIMEOUT`. |
+
+  A bad value fails at start-up naming the variable. The same limits are the `Registry`
+  constructor's `max_loaded`, `max_memory` and `load_timeout`.
+
+  - **Eviction.** Loading a model that does not fit the count or the budget evicts idle models,
+    least recently used first (last acquire or release), until it fits. A model with an active
+    lease (a generation in flight, a WebSocket chat, an open stream) is **never** evicted. A model
+    alone is never refused for being over the budget: it loads once the others are gone.
+  - **Waiting.** When room can only come from busy models, the load waits for one to become idle,
+    for at most `GEMSTONE_LOAD_TIMEOUT`. It then fails with `registry.ModelBusy` (a
+    `TimeoutError`), which the APIs report as: Ollama HTTP 503 `{"error": ...}`, OpenAI HTTP 503
+    (`type: server_error`, `code: server_busy`), the chat WebSocket close code 1013 (try again
+    later). Loads are one at a time.
+  - **Memory.** Before loading, a model's footprint is estimated from its safetensors headers
+    (else its size on disk). After loading, the figure the engine reports replaces it:
+    `Engine.memory_bytes` (function `engine.memory_bytes`), the parameters and buffers at their
+    element size plus the paged KV cache (keys and values, every layer) when batching is on.
+    Activations and allocator overhead are not counted, so the budget is an estimate, not a
+    guarantee.
+  - **Keep-alive.** A model is loaded only from the cache (no implicit download; a model that is
+    not there is a 404 asking to pull it first), except a catalogue model, fetched on first use.
+    Each model has its own `keep_alive` (seconds or a Go duration such as `5m`; default 5
+    minutes; `0` unloads that model at once, the others stay; negative keeps it until it is
+    evicted). An idle model is never unloaded mid-generation. `GET /api/ps` lists every resident
+    model, latest expiry first, with `size` (the memory figure above) and `expires_at`
+    (`9999-12-31T23:59:59Z` when it never expires; `size_vram` is always 0).
+- **Derived models: copy and create (#75).** A derived model is a name for a local model with
+  its own `system` prompt and `parameters`; it shares the weights, so it costs no memory beyond
+  the base model (a derived and a base name are the same resident model). Records live in one
+  JSON file, `$HF_HOME/gemstone/aliases.json` (`GEMSTONE_ALIASES` overrides the path): next to the
+  cache so they move with `HF_HOME`, outside `hub/` which `scan_cache_dir` expects to hold only
+  repositories. Names are `name[:tag]` (lower case, letters, digits, `.`, `_`, `-`, no `/`;
+  `name` means `name:latest`) and never a built-in name (`qwen3`, `smollm2:135m`, ...). A request
+  to any API names a derived model like any other; its `system` is added when the request has no
+  system message and its `parameters` are defaults under the request's own options (Ollama
+  API, OpenAI API for the sampling ones, `num_predict` and `stop`). `/api/tags` lists a derived
+  model after the local models when its weights are in the store; `/api/delete` on a derived
+  name removes only the record, never the weights.
 - **One owner for every entry point (#89).** The registry is the only place engines are loaded.
   The chat app's WebSocket (S1.4), the OpenAI API (S1.10) and the Ollama API (S1.15) all lease
   the model from it, so at most one engine exists, one model is loaded once whichever API asks
@@ -368,9 +409,16 @@ Implemented (M3 scope, #66), `api/src/main/registry.py`:
   display names and model class; it replaces `settings.MODEL_LIST`. `Registry.models()` lists it
   plus the other local models, for `GET /api/models` and `GET /v1/models` (S1.2).
 
-Not yet: several resident models, eviction under memory pressure, pull progress per file, GGUF.
+Not yet: memory accounting beyond weights and KV cache (activations, allocator overhead), GPU
+placement (`size_vram` is 0), pull progress per byte (it is per file; the Hub reports file
+sizes), GGUF.
 
-Tests: `api/tests/test_ollama_api.py` (fake engine and fake store; nothing is loaded or
+Tests: `api/tests/test_multi_resident.py` (fake engine and store: two models resident and
+serving, count and memory eviction in least-recently-used order, the engine-reported footprint,
+a model over the budget loading alone, a busy model never evicted, waiting then proceeding on
+release, the timeout error, per-model keep_alive, `/api/ps`, the environment variables, byte-size
+parsing, aliases and their JSON file, the alias file's default under `HF_HOME`, the memory
+estimate of an engine); `api/tests/test_ollama_api.py` (fake engine and fake store; nothing is loaded or
 downloaded); `api/tests/test_residency.py` (one engine for WebSocket, OpenAI and Ollama; switches
 wait for another API's generation; `/api/ps` after WebSocket and OpenAI loads; the catalogue
 listings; model-class mapping); `api/tests/test_lease_release.py` (the ASGI app driven by hand: a
@@ -383,14 +431,16 @@ Follows from *Ollama replacement*, so existing Ollama clients can use Gemstone. 
 OpenAI-compatible API (S1.10). Code: `api/src/main/ollama_api.py` (an `APIRouter` included by
 `server.py`).
 
-Implemented (M3 scope, #66):
+Implemented (M3 scope, #66; the rest of the commands, #75):
 
 - `POST /api/chat`, `POST /api/generate`, `GET /api/tags`, `POST /api/show`, `POST /api/pull`,
   `DELETE /api/delete`, `GET /api/ps`, `GET /api/version` (the Gemstone package version).
-  `GET /api/ps` shows the model whichever API loaded it (S1.14).
+  `GET /api/ps` shows every resident model whichever API loaded it (S1.14).
+- `POST /api/copy`, `POST /api/create`, `POST /api/embed`, `POST /api/embeddings` and
+  `POST /api/push` (below).
 - Streaming is NDJSON by default; `"stream": false` returns one JSON object. Errors are
-  `{"error": "..."}`: 400 for a malformed request, 404 for an unknown or not-pulled model, 500 for a
-  failed pull. An error after streaming has started arrives as a final `{"error": ...}` line.
+  `{"error": "..."}`: 400 for a malformed request, 404 for an unknown or not-pulled model, 501 for what Gemstone does
+  not offer, 503 when a load timed out waiting for room (S1.14), 500 for a failed pull. An error after streaming has started arrives as a final `{"error": ...}` line.
   A stream whose client is gone before it starts still releases the model (S1.14).
 - **Chat.** `messages` (`role`, `content`, `tool_calls`, `tool_name`); `images` are dropped (no
   vision support). `tools` go to the chat template; a `<tool_call>{json}</tool_call>` block the
@@ -416,14 +466,47 @@ Implemented (M3 scope, #66):
   `eval_duration` from the first chunk to the end. Counts are omitted when the engine has no
   tokenizer.
 
-Not yet: `format` (JSON / schema output), `/api/embed`, `/api/create`, `/api/copy`, `/api/push`,
-blobs, `logprobs`, image input, and concurrent generation (requests on one model take turns until
-S1.12).
+- **Copy** (`POST /api/copy`, `source`, `destination`) names a local model, or a derived model
+  (it inherits its system and parameters), anew; 200 with an empty body. 404 when `source` is not
+  in the local store; 400 when `destination` is not a valid name or is a built-in name. An
+  existing derived `destination` is replaced.
+- **Create** (`POST /api/create`) makes a derived model (S1.14) `from` a local model (or a derived
+  one, whose settings it inherits) with an optional `system` string and a `parameters` object
+  (`temperature`, `top_p`, `top_k`, `min_p`, `typical_p`, `repeat_penalty`, `seed`, `num_predict`,
+  `stop`, `num_ctx`, `repeat_last_n`, `presence_penalty`, `frequency_penalty`; another name or a
+  mistyped value is 400). It streams `using <id>`, `writing manifest`, `success`, or with
+  `"stream": false` `{"status": "success"}`. **Out of scope, 501:** `template` (Ollama's are Go
+  templates; Gemstone always formats prompts with the model's Hugging Face Jinja chat template),
+  `files`, `adapters`, `quantize`, `modelfile` (send `from`, `system` and `parameters` instead)
+  and `messages`; each answers with a message saying why. No weights are created or converted.
+- **Embeddings** (`POST /api/embed`: `input` a string or list, `truncate` default true, `keep_alive`;
+  response `embeddings`, `total_duration`, `load_duration`, `prompt_eval_count`). The legacy
+  `POST /api/embeddings` takes one `prompt` and returns `embedding`. A vector is the mean of the
+  model's last hidden state over the text's tokens, scaled to unit length (`Engine.embed`). It is
+  usable for similarity but weaker than a dedicated embedding model's. A text over the context
+  length is cut to it, or with `truncate: false` is a 400; an empty input is a 400; an engine
+  without `embed` is 501. It runs on the engine's exclusive path, so it waits for a batched
+  generation to end (S1.12) and loads the model like any request.
+- **Push** (`POST /api/push`) is **501**, always: Gemstone's models come from the Hugging Face
+  Hub, not an Ollama registry, so there is nowhere to push to; the error says to upload with
+  `hf upload`.
+- **Pull** streams one `pulling <file>` event per file with `digest`, `total` and `completed`
+  (before and after the file, from the Hub's file sizes; not per byte), then `success`.
+- **Show** also returns `modelfile` (read-only, a description: `FROM`, `SYSTEM`, `PARAMETER`),
+  `parameters`, `system` (derived models) and `general.parameter_count` (from the safetensors
+  headers); a derived model's `details.parent_model` is its base. **Delete** of a derived name
+  removes the record only.
+
+Status `partial` stays. Not yet: `format` (JSON / schema output), blobs (`/api/blobs`), Modelfile
+text and templates, adapters, quantizing, `logprobs`, image input, and concurrent generation (requests on
+one model take turns until S1.12).
 
 Tests: `api/tests/test_ollama_api.py` — on a fake engine (streaming and non-streaming chat and
 generate, tool-call pass-through, option forwarding, stop, think, tags / show / ps, keep_alive,
 model switching and the no-unload-mid-generation rule, delete, pull with a mocked downloader, error
-format), and one test on the real engine (SmolLM2-135M, `test_chat_on_the_real_engine`).
+format), and one test on the real engine (SmolLM2-135M, `test_chat_on_the_real_engine`);
+`api/tests/test_multi_resident.py` — copy, create (and what it refuses), derived models in the
+Ollama and OpenAI APIs, show, embed and the legacy embeddings, push 501, per-file pull progress.
 
 ### S1.16 4-bit quantised weights — `planned` · G5
 
