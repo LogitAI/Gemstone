@@ -109,6 +109,9 @@ class Engine:
                 self.batching_unavailable = str(e)
                 logger.warning("Continuous batching is off for %s: %s", model_id, e)
 
+        # The footprint the registry budgets for (SPEC S1.14): weights plus the paged KV cache.
+        self.memory_bytes = memory_bytes(self.model, kv_cache_tokens if self._batcher is not None else 0)
+
     @property
     def batching(self) -> bool:
         """ Whether concurrent requests are batched (False: every request runs alone). """
@@ -119,6 +122,35 @@ class Engine:
         if self._batcher is not None:
             batcher, self._batcher = self._batcher, None
             batcher.close()
+
+    def embed(self, texts: List[str], truncate: bool = True) -> List[List[float]]:
+        """
+        One embedding per text (Ollama's `/api/embed`, SPEC S1.15): the mean of the model's last
+        hidden state over the text's tokens, scaled to unit length. A text longer than the context
+        is cut to it, or with `truncate=False` refused (ValueError). Runs on the exclusive path, so
+        it never overlaps a batched generation (which switches the model's attention).
+        """
+        import torch
+
+        encoded = []
+        for text in texts:
+            ids = list(self.tokenizer(text, add_special_tokens=True)["input_ids"])
+            if not ids:
+                raise ValueError("cannot embed an empty input")
+            if self.context_length and len(ids) > self.context_length:
+                if not truncate:
+                    raise ValueError(f"the input ({len(ids)} tokens) exceeds the context length ({self.context_length})")
+                ids = ids[:self.context_length]
+            encoded.append(ids)
+
+        base = getattr(self.model, "base_model", None) or self.model  # the decoder without the LM head
+        vectors = []
+        with self._gate.exclusive(), torch.no_grad():
+            for ids in encoded:
+                inputs = torch.tensor([ids], dtype=torch.long, device=self.model.device)
+                hidden = base(input_ids=inputs).last_hidden_state[0].float()
+                vectors.append(torch.nn.functional.normalize(hidden.mean(dim=0), dim=0).tolist())
+        return vectors
 
     def __call__(
         self,
@@ -252,6 +284,28 @@ class Engine:
                 worker.join()
             if failure:
                 raise failure[0]
+
+
+def memory_bytes(model, kv_cache_tokens: int = 0) -> int:
+    """
+    An estimate of a loaded model's memory: its parameters and buffers at their element size, plus
+    a paged KV cache of `kv_cache_tokens` tokens (keys and values, every layer, in the weights'
+    dtype). Activations and allocator overhead are not counted.
+    """
+    tensors = list(model.parameters()) + list(model.buffers())
+    weights = sum(t.numel() * t.element_size() for t in tensors)
+    config = getattr(model, "config", None)
+    if not kv_cache_tokens or config is None:
+        return weights
+    layers = getattr(config, "num_hidden_layers", None)
+    heads = getattr(config, "num_attention_heads", None)
+    kv_heads = getattr(config, "num_key_value_heads", None) or heads
+    head_dim = getattr(config, "head_dim", None) or (
+        config.hidden_size // heads if heads and getattr(config, "hidden_size", None) else None)
+    if not (layers and kv_heads and head_dim):
+        return weights
+    element = next((t.element_size() for t in tensors if t.is_floating_point()), 2)
+    return weights + kv_cache_tokens * layers * 2 * kv_heads * head_dim * element
 
 
 class _Gate:

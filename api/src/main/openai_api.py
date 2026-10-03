@@ -24,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import registry as registry_module
 from .leases import LeasedStreamingResponse, acquire, once
-from .registry import in_catalogue, parse_keep_alive, resolve_model_name
+from .registry import ModelBusy, in_catalogue, parse_keep_alive
 
 
 router = APIRouter(prefix="/v1")
@@ -392,45 +392,55 @@ async def _chat_completions(request: Request):
         keep_alive = parse_keep_alive(body.get("keep_alive"))  # extension, as in Ollama
     except ValueError as e:
         raise APIError(400, str(e), param="keep_alive")
+    registry = registry_module.registry
     try:
-        hf_id = resolve_model_name(req.model)
+        hf_id = registry.resolve(req.model)  # derived models (`/api/create`, `/api/copy`) too
     except LookupError:
         raise APIError(404, f"The model '{req.model}' does not exist.", param="model", code="model_not_found")
 
+    derived = registry.derived(req.model) or {}
     messages = _engine_messages(req.messages)
+    if derived.get("system") and not any(m["role"] == "system" for m in messages):
+        messages.insert(0, {"role": "system", "content": derived["system"]})
     tools = _select_tools(req)
 
     # Hold the model in the registry until the reply ends; a catalogue model missing from the cache
     # is fetched on first use.
-    registry = registry_module.registry
     try:
         lease = await acquire(registry, hf_id, keep_alive, in_catalogue(req.model))
     except LookupError:
         raise APIError(404, f"The model '{req.model}' does not exist locally; pull it first.",
                        param="model", code="model_not_found")
+    except ModelBusy as e:
+        raise APIError(503, str(e), type="server_error", code="server_busy")
     release = once(lambda: registry.release(lease))
     try:
-        return await _complete(req, lease, release, messages, tools)
+        return await _complete(req, lease, release, messages, tools, derived.get("parameters") or {})
     except BaseException:
         release()
         raise
 
 
-async def _complete(req: ChatCompletionRequest, lease, release, messages, tools):
+async def _complete(req: ChatCompletionRequest, lease, release, messages, tools, derived: Dict[str, Any]):
     """
     Run the completion on the leased model. `release` runs exactly once: before a non-streaming or
     failed reply returns, or, for a stream, once the response is done with however it ends (#93).
+    `derived` holds a derived model's Ollama parameters, which sit between the model's defaults
+    and the request's own values.
     """
     model, engine = lease.model, lease.engine
 
     parameters = _model_defaults(model)
+    parameters.update({k: v for k, v in derived.items() if k in SAMPLING_PARAMETERS or k == "seed"})
     for name in ("temperature", "top_p", "top_k", "min_p"):
         if getattr(req, name) is not None:
             parameters[name] = getattr(req, name)
-    parameters["max_new_tokens"] = req.max_completion_tokens or req.max_tokens or 0  # 0: up to the context length
+    num_predict = derived.get("num_predict") if isinstance(derived.get("num_predict"), int) else 0
+    parameters["max_new_tokens"] = (req.max_completion_tokens or req.max_tokens  # 0: up to the context length
+                                    or max(num_predict, 0))
     if req.seed is not None:
         parameters["seed"] = req.seed
-    stops = [req.stop] if isinstance(req.stop, str) else list(req.stop or [])
+    stops = [req.stop] if isinstance(req.stop, str) else list(req.stop or derived.get("stop") or [])
 
     generation = Generation(engine, messages, tools, parameters, stops)
 

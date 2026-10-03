@@ -22,9 +22,9 @@ INTENT → SPEC 순으로 그쪽이 이깁니다.
 |---|---|---|
 | 단일 서빙 엔진 (transformers) | 구현, 테스트 있음 | `engine.py` (#85). torchnative 위 검증은 TN-M1(10-24) 이후 (#84) |
 | 연속 배칭 · 페이지드 KV 캐시 | 구현, 테스트 있음 | `engine.py` (#91). 동일성 기준은 float32. 처리량 측정과 torchnative 검증은 남음 |
-| 모델 상주 (앱 · OpenAI · Ollama 공유, keep_alive) | 구현, 테스트 있음 | `registry.py`, `leases.py` (#92, #94) |
+| 모델 상주 (앱 · OpenAI · Ollama 공유, keep_alive, 여러 모델과 LRU 축출) | 구현, 테스트 있음 | `registry.py`, `leases.py` (#92, #94, #75) |
 | OpenAI 호환 API (`/v1`, tool call pass-through) | 부분, 테스트 있음 | `openai_api.py` (#88). n>1, logprobs, embeddings 없음 |
-| Ollama 호환 API (핵심 8개, pull/delete/ps) | 부분, 테스트 있음 | `ollama_api.py` (#90). 상주 모델 1개, create/copy/push·embed 는 M4 |
+| Ollama 호환 API (핵심 8개 + copy/create/embed, 여러 상주 모델) | 부분, 테스트 있음 | `ollama_api.py` (#90, #75). push 는 501, Modelfile·template·blobs·format 없음 |
 | WebSocket 스트리밍 채팅 (`/api/chat/streaming`) | 구현, 테스트 있음 | `server.py`. 연결이 끊기면 생성 중단 |
 | 도구 호출과 세션별 결과 캐시 | 구현, 캐시는 테스트 있음 | `utils/` (#87, PR #53 기능 이식) |
 | 4비트 가중치 · GGUF | 예정 (M4) | torchnative TN-M3 에 달림 (#67) |
@@ -129,7 +129,7 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 |---|---|---|---|---|
 | **M1 단일 torchnative 엔진** | 2026-11-16 | transformers `generate` 기반 엔진 하나(공개 torch API 만 사용). GGUF·BIN·GPTQ 제거. Python 3.13. q8_0. WebSocket 스트리밍 채팅과 서버 측 도구 유지. 요청 직렬화. 연결이 끊기면 생성 중단. 모델은 Qwen3-0.6B(기본)와 SmolLM2. 자동 테스트는 torchnative #23(Qwen3 상류 일치)이 착지할 때까지 SmolLM2 | torchnative(cpu, mps)에서 스트리밍 채팅 테스트 통과. `llama-cpp`·`bitsandbytes` import 0건 | #36 #35 |
 | **M2 동시 요청** | 2026-11-23 | transformers `generate_batch` 기반 연속 배칭과 페이지드 KV 캐시. attention 은 `sdpa_paged`/`eager_paged`(순수 torch op) | 동시 두 요청의 출력이 순차 생성과 같다. 같은 시드의 샘플링은 배칭 여부와 상관없이 같은 출력을 낸다. 처리량 측정 기록 | #63 #64 |
-| **M3 실사용 Ollama 대체** | 2026-11-30 | OpenAI 호환 `/v1/chat/completions`(스트리밍, tool call pass-through)·`/v1/models`. Ollama 핵심 엔드포인트(`/api/chat` `/api/generate` `/api/tags` `/api/show` `/api/pull` `/api/delete` `/api/ps`)와 `keep_alive`. 상주 모델 1개. Hugging Face 의 q8_0 | OpenAI·Ollama 클라이언트로 tool call 왕복 테스트 통과. Ollama 클라이언트로 작은 모델 pull·list·채팅·삭제 | #65 #66 #57 |
+| **M3 실사용 Ollama 대체** | 2026-11-30 | OpenAI 호환 `/v1/chat/completions`(스트리밍, tool call pass-through)·`/v1/models`. Ollama 핵심 엔드포인트(`/api/chat` `/api/generate` `/api/tags` `/api/show` `/api/pull` `/api/delete` `/api/ps`)와 `keep_alive`. 상주 모델 1개(이후 #75 에서 여러 개로 확장). Hugging Face 의 q8_0 | OpenAI·Ollama 클라이언트로 tool call 왕복 테스트 통과. Ollama 클라이언트로 작은 모델 pull·list·채팅·삭제 | #65 #66 #57 |
 | **M4 성능과 범위 확장** | 2027-02-26 | 아래 "11월에서 뺀 것" | 항목별 이슈에 적음 | #74 #75 #67 #37 |
 
 **11월에서 뺀 것과 이유**
@@ -138,7 +138,7 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 |---|---|---|
 | 빠른 paged attention 커널 | 완전히 새로 만들어야 하는 torchnative 커널이다(TN-M2). 11월에는 순수 torch op 경로로 정확성만 맞춘다 | #74 |
 | 4비트(Q4) 가중치, GGUF 가져오기 | torchnative Q4_0 의 생성 품질이 떨어진다(logit RMS 29.5%). GGUF 리더도 없다(TN-M3). 11월에는 q8_0 만 낸다 | #67 |
-| 여러 모델 동시 상주와 축출, 나머지 Ollama 명령(create/copy/push, Modelfile, embeddings) | 실사용에 필요한 최소 범위 밖이다. 상주 모델 1개와 핵심 엔드포인트로 시작한다 | #75 |
+| ~~여러 모델 동시 상주와 축출, 나머지 Ollama 명령(create/copy/push, Modelfile, embeddings)~~ | **구현함**(develop 반영 대기). 상주 모델 수 3개(`GEMSTONE_MAX_LOADED_MODELS`)와 메모리 한도, 사용 중이 아닌 모델의 LRU 축출, copy·create(system·parameters)·embed. push 는 501, Modelfile·template 은 지원하지 않는다 | #75 |
 | 세션 프리픽스 캐시 | 체감 속도는 좋아지지만 정확성 기능은 아니다 | #37 |
 | Qwen3 4B 이상과 8B 이상 모델 | Qwen3 은 0.6B 부터 검증한다(torchnative #23). 4비트가 없으면 큰 모델은 메모리 부담이 크다 | — |
 | CUDA 서버 경로 | torchnative CUDA 는 연결만 돼 있고 실행해 본 적이 없다 | — |

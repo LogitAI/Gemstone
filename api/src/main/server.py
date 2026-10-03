@@ -13,7 +13,7 @@ import os
 from .settings import STATIC_DIR, WEBPACK_DIR, Session
 from . import registry as registry_module
 from .leases import acquire
-from .registry import DEFAULT_KEEP_ALIVE, in_catalogue, resolve_model_name
+from .registry import DEFAULT_KEEP_ALIVE, ModelBusy, in_catalogue
 from .models.config import ChatHistory
 from .openai_api import router as openai_router
 from .ollama_api import router as ollama_router
@@ -90,7 +90,7 @@ async def chat_with_streaming(websocket: WebSocket):
     try:
         session_id = json.loads(await websocket.receive_text()).get("session_id")
         session = Session(session_id=session_id)
-        hf_id = resolve_model_name(session.model_id)
+        hf_id = registry_module.registry.resolve(session.model_id)  # derived models too
     except Exception:
         traceback.print_exc()
         await websocket.close(code=1008, reason="Invalid session ID or model not found.")
@@ -106,6 +106,9 @@ async def chat_with_streaming(websocket: WebSocket):
     registry = registry_module.registry
     try:
         lease = await acquire(registry, hf_id, DEFAULT_KEEP_ALIVE, in_catalogue(session.model_id))
+    except ModelBusy as e:  # every resident model stayed busy (SPEC S1.14): 1013 "try again later"
+        await websocket.close(code=1013, reason=str(e)[:120])
+        return
     except Exception:
         traceback.print_exc()
         await websocket.close(code=1008, reason="Model not found or failed to load.")

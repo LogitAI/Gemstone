@@ -42,6 +42,11 @@ class FakeEngine:
         self.chat_template = None
         self.closed = threading.Event()
         self.gate = None  # a threading.Event the generation waits on after its first chunk
+        self.memory_bytes = None  # the footprint the engine reports (None: the registry estimates it)
+        self.closed_engine = False  # `close` ran: the registry unloaded this engine
+
+    def close(self):
+        self.closed_engine = True
 
     def __call__(self, messages, tools=None, cancel=None, **kwargs):
         self.calls.append(dict(messages=messages, tools=tools, **kwargs))
@@ -62,6 +67,7 @@ class FakeStore:
     def __init__(self, *ids):
         self.models = {i: self._entry(i) for i in ids}
         self.downloads = []
+        self.files = {}  # hf_id -> [(file name, size)] that a pull reports progress for
 
     @staticmethod
     def _entry(hf_id):
@@ -80,11 +86,18 @@ class FakeStore:
     def delete(self, hf_id):
         return self.models.pop(hf_id, None) is not None
 
-    def download(self, hf_id):
+    def download_iter(self, hf_id):
         self.downloads.append(hf_id)
         if hf_id == "nobody/does-not-exist":
             raise LookupError(f"Repository {hf_id} not found on the Hugging Face Hub.")
+        for name, size in self.files.get(hf_id, []):
+            yield dict(status=f"pulling {name}", digest=name, total=size, completed=0)
+            yield dict(status=f"pulling {name}", digest=name, total=size, completed=size)
         self.models[hf_id] = self._entry(hf_id)
+
+    def download(self, hf_id):
+        for _ in self.download_iter(hf_id):
+            pass
 
 
 DEFAULT_CHUNKS = ["Hello", " there", "!"]
@@ -294,7 +307,8 @@ def test_keep_alive_expiry_unloads_the_model(setup):
     assert setup["client"].get("/api/ps").json()["models"] == []
 
 
-def test_loading_a_second_model_unloads_the_first(setup):
+def test_with_a_limit_of_one_loading_a_second_model_unloads_the_first(setup):
+    setup["registry"].max_loaded = 1  # several models stay resident by default (test_multi_resident.py)
     c = setup["client"]
     c.post("/api/chat", json={"model": "qwen3", "messages": []})
     c.post("/api/chat", json={"model": "smollm2:135m", "messages": []})
@@ -303,6 +317,7 @@ def test_loading_a_second_model_unloads_the_first(setup):
 
 
 def test_a_model_is_not_unloaded_mid_generation(setup):
+    setup["registry"].max_loaded = 1  # the second model can only load by evicting the first
     c = setup["client"]
     c.post("/api/chat", json={"model": "qwen3", "messages": []})
     setup["engines"][QWEN].gate = gate = threading.Event()
@@ -447,7 +462,8 @@ def test_no_client_or_document_uses_the_legacy_routes():
 
 def test_chat_on_the_real_engine(engine, monkeypatch):
     store = FakeStore(engine.model_id)
-    reg = Registry(loader=lambda hf_id: engine, store=store)
+    reg = Registry(loader=lambda hf_id: engine, store=store,
+                   close=lambda engine: None)  # the session engine outlives this registry
     monkeypatch.setattr(registry_module, "registry", reg)
     with TestClient(server.app) as client:
         body = client.post("/api/chat", json={

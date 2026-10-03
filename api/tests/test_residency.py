@@ -141,9 +141,10 @@ def test_openai_api_takes_keep_alive(setup):
     assert ps(c) == []
 
 
-# -- switching models waits for generations in other APIs -------------------------------------------
+# -- with one model slot, a switch waits for generations in other APIs -------------------------------------------
 
 def test_ollama_switch_waits_for_a_websocket_generation(setup):
+    setup["registry"].max_loaded = 1  # a switch must evict the busy model
     c = setup["client"]
     session_id = new_session(c)
     c.post("/api/chat", json={"model": "qwen3", "messages": []})  # load qwen3
@@ -170,6 +171,7 @@ def test_ollama_switch_waits_for_a_websocket_generation(setup):
 
 
 def test_websocket_switch_waits_for_an_openai_generation(setup):
+    setup["registry"].max_loaded = 1  # a switch must evict the busy model
     c = setup["client"]
     session_id = new_session(c, "default")
     c.post("/api/chat", json={"model": SMOL, "messages": []})  # load smollm2 through Ollama
