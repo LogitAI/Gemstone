@@ -8,7 +8,7 @@
 
 **모든 플랫폼에 하나의 AI 채팅 클라이언트 — 모델을 내 기기에서 돌리기 위해 만들었습니다.**
 
-[![License: MIT](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](../../LICENSE.md)
+[![License: Apache-2.0](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](../../LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](../../gradle/libs.versions.toml)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.9-4285F4?logo=jetpackcompose&logoColor=white)](../../gradle/libs.versions.toml)
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](../../pyproject.toml)
@@ -202,4 +202,4 @@ Kotlin, Compose Multiplatform, Jewel 을 만든 [JetBrains](https://www.jetbrain
 
 ## 📄 라이선스
 
-[MIT](../../LICENSE.md) © 2025 thisisthepy
+[Apache-2.0](../../LICENSE.md) © 2025 thisisthepy

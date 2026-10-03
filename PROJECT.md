@@ -1,6 +1,6 @@
 # Gemstone — 프로젝트 주요 사항
 
-저장소: `github.com/LogitAI/Gemstone` · 라이선스: MIT · 기준 커밋: `2be0e37` (2026-10-02)
+저장소: `github.com/LogitAI/Gemstone` · 라이선스: Apache-2.0 · 기준 커밋: `2be0e37` (2026-10-02)
 
 의도는 [`docs/INTENT.md`](docs/INTENT.md), 동작 계약은 [`docs/SPEC.md`](docs/SPEC.md), 에이전트 규정은
 [`AGENTS.md`](AGENTS.md) 에 있습니다. 이 문서는 그 셋을 한국어로 빠르게 훑기 위한 요약이며, 어긋나면
