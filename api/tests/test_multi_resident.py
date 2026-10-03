@@ -489,7 +489,7 @@ def test_pull_streams_progress_per_file(make, client):
     assert lines[-1] == {"status": "success"}
 
 
-def test_hf_store_pulls_the_pattern_files_one_by_one(monkeypatch):
+def test_hf_store_pulls_the_pattern_files_one_by_one_at_main(monkeypatch):
     import huggingface_hub
     from types import SimpleNamespace
     from api.src.main.registry import HFStore
@@ -507,7 +507,7 @@ def test_hf_store_pulls_the_pattern_files_one_by_one(monkeypatch):
     monkeypatch.setattr(huggingface_hub, "hf_hub_download",
                         lambda repo_id, filename, revision=None, **_: fetched.append((filename, revision)))
     events = list(HFStore().download_iter("someone/model"))
-    assert fetched == [("config.json", "rev1"), ("model.safetensors", "rev1")]
+    assert fetched == [("config.json", "main"), ("model.safetensors", "main")]
     assert events[-1] == {"status": "pulling model.safetensors", "digest": "model.safetensors",
                           "total": 300, "completed": 300}
 

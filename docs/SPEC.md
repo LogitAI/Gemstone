@@ -340,7 +340,15 @@ Implemented (M3 scope, #66; several resident models and derived models, #75),
 
   Any other name, or another tag on a Hugging Face id (`…:q4_K_M`), is unknown (404).
 - **Pull** (`POST /api/pull`) downloads the repository's safetensors weights, config, tokenizer and
-  chat template files with `huggingface_hub.snapshot_download` into the cache.
+  chat template files into the cache, one file at a time (so progress is per file), each at the
+  revision `main`: huggingface_hub then writes `refs/main`, which an offline load of the default
+  revision (`local_files_only=True`) resolves through. A model fetched on first use (a catalogue
+  name over the WebSocket or the OpenAI API, or `acquire(fetch=True)`) takes the same path.
+- **Present means complete (#110).** The store treats a cached model as present, and lists it,
+  only when its snapshot holds `config.json` and every weight file: each shard that
+  `model.safetensors.index.json` names, or else at least one `*.safetensors`. A copy left partial
+  by an interrupted pull is absent: the next pull or fetching `acquire` downloads it again (files
+  already complete are reused by the cache), and `DELETE /api/delete` still removes it.
 - **List** (`GET /api/tags`) and **show** (`POST /api/show`) read the cache: size on disk, revision
   hash as `digest`, `model_type` as family, `max_position_embeddings` as context length, and the
   chat template (capabilities `tools` / `thinking` are inferred from it).
