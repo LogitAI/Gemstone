@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -18,6 +19,7 @@ import gemstone.app.generated.resources.Res
 import gemstone.app.generated.resources.bell
 import gemstone.app.generated.resources.search
 import gemstone.app.generated.resources.sliders
+import gemstone.framework.network.ModelInfo
 import gemstone.framework.ui.viewmodel.AIModelViewModel
 import gemstone.framework.ui.viewmodel.SettingsViewModel
 import org.jetbrains.compose.resources.stringResource
@@ -32,6 +34,8 @@ fun SideScreen(
         false -> Modifier.fillMaxSize()
         true -> Modifier.fillMaxHeight().width(Dimen.SIDEBAR_WIDTH)
     }
+
+    LaunchedEffect(Unit) { AIModelViewModel.refreshAIModels() }
 
     Column(modifier = modifier) {
         Spacer(modifier = Modifier.fillMaxWidth().padding(top = Dimen.LAYOUT_PADDING))
@@ -98,22 +102,23 @@ fun SideScreen(
             horizontalArrangement = Arrangement.spacedBy(Dimen.LIST_ELEMENT_SPACING),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val select = { modelInfo: Pair<String, String> ->
-                if (modelInfo.first == "All") {
+            val allEntry = ModelInfo("", "All", "Using Default Model")
+            val select = { modelInfo: ModelInfo ->
+                if (modelInfo.id.isEmpty()) {
                     AIModelViewModel.deselectAIModel()
                 } else {
-                    AIModelViewModel.selectAIModel(modelInfo.first, modelInfo.second)
+                    AIModelViewModel.selectAIModel(modelInfo)
                 }
             }
-            for (modelInfo in listOf(Pair("All", "Using Default Model")) + AIModelViewModel.availableAIModels) {
+            for (modelInfo in listOf(allEntry) + AIModelViewModel.availableAIModels) {
                 item(modelInfo) {
-                    if (modelInfo.first == AIModelViewModel.selectedAIModel || (AIModelViewModel.selectedAIModel.isEmpty() && modelInfo.first == "All")) {
+                    if (modelInfo.id == AIModelViewModel.selectedAIModel) {
                         PrimaryFluxButton(
                             onClick = { select(modelInfo) },
                             shape = MaterialTheme.shapes.large.copy(Dimen.BIG_BUTTON_CORNER_RADIUS),
                             contentPadding = PaddingValues(Dimen.BIG_BUTTON_PADDING)
                         ) {
-                            BodyText(modelInfo.first)
+                            BodyText(modelInfo.name)
                         }
                     } else {
                         BlurredFluxButton(
@@ -121,8 +126,19 @@ fun SideScreen(
                             shape = MaterialTheme.shapes.large.copy(Dimen.BIG_BUTTON_CORNER_RADIUS),
                             contentPadding = PaddingValues(Dimen.BIG_BUTTON_PADDING)
                         ) {
-                            BodyText(modelInfo.first)
+                            BodyText(modelInfo.name)
                         }
+                    }
+                }
+            }
+            if (AIModelViewModel.modelsUnavailable) {
+                item("models-retry") {
+                    BlurredFluxButton(
+                        onClick = { AIModelViewModel.refreshAIModels() },
+                        shape = MaterialTheme.shapes.large.copy(Dimen.BIG_BUTTON_CORNER_RADIUS),
+                        contentPadding = PaddingValues(Dimen.BIG_BUTTON_PADDING)
+                    ) {
+                        BodyText("Server unreachable - retry")
                     }
                 }
             }

@@ -476,11 +476,18 @@ In landscape the sidebar sits next to the chat; in portrait the sidebar is a sta
 navigates to the chat, with a swipe-back gesture to return. Code: `.../screen/chat/MainScreen.kt`,
 `.../navigation/AppNavigation.kt`. Test: none.
 
-### S2.5 Model selection — `partial` · G5
+### S2.5 Model selection — `implemented` · G5
 
-The sidebar lists models and selecting one opens a new server session for it. The list is
-hard-coded in the client (`Qwen3`) instead of read from `GET /api/models`.
-Code: `.../ui/viewmodel/AIModelViewModel.kt`, `.../screen/chat/SideScreen.kt`. Test: none.
+The sidebar lists the models the server offers and selecting one opens a new server session for
+it, using the server id (`/api/models/{id}/sessions/`, lowercase, e.g. `qwen3`). The list is read
+from `GET /api/models` (`{id: {model_name, model_description}}`) when the sidebar appears; the
+sidebar shows `model_name`. The server's `default` alias is hidden from the list; it only picks the
+default model (the entry with the same `model_name`, else the first), which the "All" entry uses.
+If the server is unreachable the list is empty, "All" still works (it sends the `default` alias)
+and a "Server unreachable - retry" button re-fetches the list (`AIModelViewModel.refreshAIModels`).
+Code: `.../network/ModelCatalog.kt` (pure parsing), `.../network/http/ModelsApi.kt`,
+`.../ui/viewmodel/AIModelViewModel.kt`, `.../screen/chat/SideScreen.kt`.
+Test: `ModelCatalogTest` (commonTest).
 
 ### S2.6 Chat list and history — `partial` · G4
 
