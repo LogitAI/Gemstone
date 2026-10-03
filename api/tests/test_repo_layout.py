@@ -32,9 +32,18 @@ def test_every_tracked_root_entry_is_approved():
 
     assert unapproved == set(), (
         f"top-level entries not approved in AGENTS.md §2: {sorted(unapproved)} "
-        "— propose them and add them to the list, or move the work into an existing directory"
+        ",  propose them and add them to the list, or move the work into an existing directory"
     )
 
 
 def test_the_approved_list_is_read():
     assert {"api", "app", "docs", "AGENTS.md", "pyproject.toml"} <= approved_entries()
+
+
+def test_no_em_dash_in_tracked_text():
+    """ AGENTS.md section 16: no U+2014 in documents or code. """
+    names = subprocess.run(["git", "grep", "-l", "\u2014", "--", ".", ":!api/src/main/webpack"],
+                           cwd=ROOT, capture_output=True, text=True).stdout.split()
+    text_files = [n for n in names if not n.endswith((".png", ".ico", ".icns", ".webp", ".wasm", ".jar"))]
+
+    assert text_files == [], f"em-dash found in: {text_files}"

@@ -1,4 +1,4 @@
-# Serving engine — decisions and design record
+# Serving engine: decisions and design record
 
 What the maintainer decided about Gemstone's model serving on 2026-10-02, what is still a
 proposal, and the findings both rest on. `docs/INTENT.md` G5 and

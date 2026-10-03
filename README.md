@@ -6,7 +6,7 @@ English | [한국어](docs/locale/README_ko.md)
 
 # Gemstone
 
-**One AI chat client for every platform — built to run the model on your own device.**
+**One AI chat client for every platform: built to run the model on your own device.**
 
 [![License: Apache-2.0](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](gradle/libs.versions.toml)
@@ -36,12 +36,12 @@ separate server and no network at all.
 
 ## ✨ Features
 
-- 🧩 **One codebase, four targets** — Android, iOS, desktop (Windows, macOS, Linux) and web (Kotlin/Wasm) share the UI, view models and protocol.
-- 🚀 **Streaming chat** — tokens arrive over a WebSocket as they are generated and render as Markdown on the fly.
-- 🧠 **Visible reasoning** — the model's `<think>` block appears as a collapsible panel with elapsed time.
-- 🔌 **Tool calling** — weather, public holidays, exchange rates, a calculator and web search, run server-side in parallel and fed back to the model.
-- 📦 **Open-weight models on one engine** — Qwen 3 0.6B served by a single transformers-based engine that runs on PyTorch or on [torchnative](https://github.com/thisisthepy/torchnative). Gemstone is becoming a local Ollama replacement: concurrent requests (continuous batching with a paged KV cache) and OpenAI- and Ollama-compatible APIs work today; 4-bit weights and GGUF are planned.
-- 🖥️ **Native desktop feel** — a JetBrains Jewel decorated window, with Dmg / Msi / Deb installers.
+- 🧩 **One codebase, four targets**: Android, iOS, desktop (Windows, macOS, Linux) and web (Kotlin/Wasm) share the UI, view models and protocol.
+- 🚀 **Streaming chat**: tokens arrive over a WebSocket as they are generated and render as Markdown on the fly.
+- 🧠 **Visible reasoning**: the model's `<think>` block appears as a collapsible panel with elapsed time.
+- 🔌 **Tool calling**: weather, public holidays, exchange rates, a calculator and web search, run server-side in parallel and fed back to the model.
+- 📦 **Open-weight models on one engine**: Qwen 3 0.6B served by a single transformers-based engine that runs on PyTorch or on [torchnative](https://github.com/thisisthepy/torchnative). Gemstone is becoming a local Ollama replacement: concurrent requests (continuous batching with a paged KV cache) and OpenAI- and Ollama-compatible APIs work today; 4-bit weights and GGUF are planned.
+- 🖥️ **Native desktop feel**: a JetBrains Jewel decorated window, with Dmg / Msi / Deb installers.
 
 ## 🚀 Quick start
 
@@ -95,7 +95,7 @@ machine and `adb reverse tcp:23100 tcp:23100`. To serve other machines on your L
 `GEMSTONE_HOST=0.0.0.0` and set `GEMSTONE_API_KEY=<secret>` on both sides; desktop clients take
 `--server http://<host>:23100` (or `GEMSTONE_SERVER_HOST`). See the clients guide in `docs/guide/`.
 
-**Talk to the server from your own code** — three frames in, tokens out:
+**Talk to the server from your own code**: three frames in, tokens out:
 
 ```python
 import asyncio, json, urllib.request
@@ -124,10 +124,10 @@ This follows the same protocol as the browser client in
 
 ```mermaid
 flowchart LR
-    subgraph Client["app/ — Compose Multiplatform"]
+    subgraph Client["app/: Compose Multiplatform"]
         UI["Chat UI<br/>commonMain"] --> VM["ChatViewModel"] --> WS["ChatWebSocketClient<br/>(Ktor)"]
     end
-    subgraph Server["api/ — Python 3.13"]
+    subgraph Server["api/: Python 3.13"]
         EP["FastAPI<br/>/api/chat/streaming"] --> M["Model<br/>Qwen 3"]
         M --> B["Engine<br/>transformers on PyTorch / torchnative"]
         M <--> T["Tools<br/>weather · search · …"]
@@ -138,7 +138,7 @@ flowchart LR
 
 | Directory | What lives there |
 |---|---|
-| `app/src/commonMain` | UI, view models, network protocol — shared by every target |
+| `app/src/commonMain` | UI, view models, network protocol: shared by every target |
 | `app/src/{android,ios,desktop,wasmJs}Main` | One entry point per platform |
 | `app/src/cioMain` | Ktor CIO engine shared by Android, iOS and desktop |
 | `api/src/main/models` | Model definitions: prompts, sampling defaults |
@@ -154,15 +154,15 @@ Gemstone is an early, working prototype. The honest state of each piece:
 | Streaming chat, reasoning display, tool calling | ✅ Working |
 | One transformers engine, continuous batching, paged KV cache (on CPU by default) | ✅ Working on PyTorch; 🟡 not yet verified on torchnative |
 | Several resident models, eviction, `keep_alive` | ✅ Working |
-| OpenAI-compatible API (`/v1`, tool calls passed through) | 🟡 Partial — no `n` > 1, logprobs or embeddings |
-| Ollama-compatible API (chat, generate, tags, show, pull, delete, ps, copy, create, embed) | 🟡 Partial — `push` returns 501; no Modelfile, template or blobs |
+| OpenAI-compatible API (`/v1`, tool calls passed through) | 🟡 Partial: no `n` > 1, logprobs or embeddings |
+| Ollama-compatible API (chat, generate, tags, show, pull, delete, ps, copy, create, embed) | 🟡 Partial: `push` returns 501; no Modelfile, template or blobs |
 | Security defaults (loopback bind, origin checks, API key) | ✅ Working |
 | Android, desktop and web clients | ✅ Working |
 | Model choice and server address in the client | ✅ Models are read from the server; Android has no address setting yet |
 | iOS client | 🟡 Framework targets configured; the Xcode build script needs fixing |
 | Chat history | 🟡 In memory only |
 | Automated tests | 🟡 Python tests (including a real model) and Kotlin tests for the network layer run in CI; the UI is untested |
-| Native desktop executable (GraalVM, no JVM) | ⏳ Planned — a Windows x64 build path exists but has not been run |
+| Native desktop executable (GraalVM, no JVM) | ⏳ Planned: a Windows x64 build path exists but has not been run |
 | GPU (CUDA) inference | ⏳ Planned |
 | 4-bit weights, GGUF | ⏳ Planned |
 | Settings screen | ⏳ Planned |
@@ -171,7 +171,7 @@ Gemstone is an early, working prototype. The honest state of each piece:
 
 ## 📖 Documentation
 
-- **[Gemstone Guide](https://logitai.github.io/Gemstone/)** — getting started, concepts, task guides and FAQ, in English and 한국어. Source in [`docs/guide/`](docs/guide/).
+- **[Gemstone Guide](https://logitai.github.io/Gemstone/)**: getting started, concepts, task guides and FAQ, in English and 한국어. Source in [`docs/guide/`](docs/guide/).
 - **[한국어 README](docs/locale/README_ko.md)**
 
 ## 🌐 Ecosystem
@@ -181,7 +181,7 @@ Python-on-every-platform stack is meant to carry:
 
 | Project | Role |
 |---|---|
-| [python-multiplatform](https://github.com/thisisthepy/python-multiplatform) | CPython embedded in Kotlin Multiplatform — the path to on-device inference |
+| [python-multiplatform](https://github.com/thisisthepy/python-multiplatform) | CPython embedded in Kotlin Multiplatform: the path to on-device inference |
 | [pythonx-compose](https://github.com/thisisthepy/pythonx-compose) | Python wrapper for Compose Multiplatform |
 | [toolchain](https://github.com/thisisthepy/toolchain) | Gradle build plugin and tooling for Python Multiplatform |
 | [torchnative](https://github.com/thisisthepy/torchnative) | The real PyTorch ecosystem, running on device |
@@ -189,7 +189,7 @@ Python-on-every-platform stack is meant to carry:
 ## 🤝 Contributing
 
 Issues and pull requests are welcome at [LogitAI/Gemstone](https://github.com/LogitAI/Gemstone/issues).
-Gemstone is developed intent-first and test-first — read
+Gemstone is developed intent-first and test-first: read
 [Contributing in the guide](https://logitai.github.io/Gemstone/faq.html#contributing) before you
 open a pull request.
 

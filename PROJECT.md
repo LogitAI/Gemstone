@@ -1,4 +1,4 @@
-# Gemstone — 프로젝트 주요 사항
+# Gemstone: 프로젝트 주요 사항
 
 저장소: `github.com/LogitAI/Gemstone` · 라이선스: Apache-2.0 · 기준 커밋: `2be0e37` (2026-10-02)
 
@@ -102,22 +102,22 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 
 1. **외부 웹 서비스를 쓰는 도구**(SerpApi, Bing, Open-Meteo 등)가 "프라이버시 우선 · 오프라인"
    의도와 맞는가? 범위 안인지, 선택 기능인지, 서버 전용인지 결정이 필요하다.
-2. **원격 모델 제공자**(OpenAI, Anthropic, HF Inference) — 옛 README 트리에만 있고 코드·의도에 없다.
+2. **원격 모델 제공자**(OpenAI, Anthropic, HF Inference): 옛 README 트리에만 있고 코드·의도에 없다.
 3. **동기화(sync)** 가 무엇을 무엇으로 동기화하는지.
-4. **서빙 엔진 세부** — 방향은 torchnative 단일 시스템으로 확정(다중 백엔드·vLLM 사용 안 함). 엔진 구성은 미확정: 현재 제안은 transformers 5.x 연속 배칭 + 페이지드 KV 캐시를 엔진으로, 커널은 torchnative.
+4. **서빙 엔진 세부**: 방향은 torchnative 단일 시스템으로 확정(다중 백엔드·vLLM 사용 안 함). 엔진 구성은 미확정: 현재 제안은 transformers 5.x 연속 배칭 + 페이지드 KV 캐시를 엔진으로, 커널은 torchnative.
    확정 전에 할 일: 작은 모델로 torchnative 위에서 `generate_batch`(`sdpa_paged`/`eager_paged`)를
    돌려 정확도와 처리량을 잰다 ([`docs/serving/engine.md`](docs/serving/engine.md) § 7).
-5. **Python 테스트의 위치** — 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산도
+5. **Python 테스트의 위치**: 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산도
    `api/src/test/` 에서 `api/src/main/{static,webpack}/` 로 옮겼다(#83).
-6. **릴리스 흐름** — 해결됨. develop push 마다 CI 가 `release` 를 만들고 release → main PR 을 연다.
+6. **릴리스 흐름**: 해결됨. develop push 마다 CI 가 `release` 를 만들고 release → main PR 을 연다.
    main 의 보호는 사용자가 저장소 설정에서 관리하고 잠가 둔다. release PR 은 사용자가 확인하고 머지한다.
    에이전트는 보호 설정을 스크립트로 만들거나 바꾸지 않는다. 출발 브랜치를 검사하던
    `main-source-guard` 워크플로는 없앴다. `release-cnu` 는 보존 브랜치다.
-7. **줄바꿈** — 해결됨: LF 로 고정(`.gitattributes`, `.bat`/`.cmd`/`.ps1` 만 CRLF). `docs/build/` 는 추적한다.
-8. **GitHub Pages 배포** — 해결됨(2026-10-03). Pages 소스는 GitHub Actions, main 에서만 배포한다
+7. **줄바꿈**: 해결됨: LF 로 고정(`.gitattributes`, `.bat`/`.cmd`/`.ps1` 만 CRLF). `docs/build/` 는 추적한다.
+8. **GitHub Pages 배포**: 해결됨(2026-10-03). Pages 소스는 GitHub Actions, main 에서만 배포한다
    (`pages.yml`). 주소는 https://logitai.github.io/Gemstone/ 이고, 첫 배포는 release → main PR 이
    머지되면 일어난다.
-9. **Ollama 대체의 범위** — 모델 pull/list/rm/ps, keep-alive, 여러 모델 동시 상주, Ollama 호환 API 중
+9. **Ollama 대체의 범위**: 모델 pull/list/rm/ps, keep-alive, 여러 모델 동시 상주, Ollama 호환 API 중
    어디까지 할지. 4비트 품질과 GGUF 읽기는 torchnative 쪽 작업에 달려 있다.
 
 ## 7. 마일스톤 (2026-10-03 재조정: 11월 말 실사용)
@@ -142,8 +142,8 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 | 4비트(Q4) 가중치, GGUF 가져오기 | torchnative Q4_0 의 생성 품질이 떨어진다(logit RMS 29.5%). GGUF 리더도 없다(TN-M3). 11월에는 q8_0 만 낸다 | #67 |
 | ~~여러 모델 동시 상주와 축출, 나머지 Ollama 명령(create/copy/push, Modelfile, embeddings)~~ | **구현함**(develop 반영 대기). 상주 모델 수 3개(`GEMSTONE_MAX_LOADED_MODELS`)와 메모리 한도, 사용 중이 아닌 모델의 LRU 축출, copy·create(system·parameters)·embed. push 는 501, Modelfile·template 은 지원하지 않는다 | #75 |
 | 세션 프리픽스 캐시 | 체감 속도는 좋아지지만 정확성 기능은 아니다 | #37 |
-| Qwen3 4B 이상과 8B 이상 모델 | Qwen3 은 0.6B 부터 검증한다(torchnative #23). 4비트가 없으면 큰 모델은 메모리 부담이 크다 | — |
-| CUDA 서버 경로 | torchnative CUDA 는 연결만 돼 있고 실행해 본 적이 없다 | — |
+| Qwen3 4B 이상과 8B 이상 모델 | Qwen3 은 0.6B 부터 검증한다(torchnative #23). 4비트가 없으면 큰 모델은 메모리 부담이 크다 | - |
+| CUDA 서버 경로 | torchnative CUDA 는 연결만 돼 있고 실행해 본 적이 없다 | - |
 
 **위험**
 

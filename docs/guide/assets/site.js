@@ -1,4 +1,4 @@
-/* Gemstone Guide — language and theme. Loaded in <head> so the first paint is already correct. */
+/* Gemstone Guide: language and theme. Loaded in <head> so the first paint is already correct. */
 (function () {
   var root = document.documentElement;
   var LANG_KEY = "gemstone-guide-lang";

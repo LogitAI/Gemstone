@@ -6,7 +6,7 @@
 
 # Gemstone
 
-**모든 플랫폼에 하나의 AI 채팅 클라이언트 — 모델을 내 기기에서 돌리기 위해 만들었습니다.**
+**모든 플랫폼에 하나의 AI 채팅 클라이언트: 모델을 내 기기에서 돌리기 위해 만들었습니다.**
 
 [![License: Apache-2.0](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](../../LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](../../gradle/libs.versions.toml)
@@ -36,12 +36,12 @@
 
 ## ✨ 기능
 
-- 🧩 **하나의 코드베이스, 네 개의 타깃** — Android, iOS, 데스크톱(Windows, macOS, Linux), 웹(Kotlin/Wasm) 이 UI, 뷰모델, 프로토콜을 공유합니다.
-- 🚀 **스트리밍 채팅** — 토큰이 생성되는 즉시 WebSocket 으로 도착하고, 그 자리에서 Markdown 으로 렌더링됩니다.
-- 🧠 **보이는 추론 과정** — 모델의 `<think>` 블록이 경과 시간과 함께 접을 수 있는 패널로 표시됩니다.
-- 🔌 **도구 호출** — 날씨, 공휴일, 환율, 계산기, 웹 검색을 서버에서 병렬로 실행하고 결과를 모델에 돌려줍니다.
-- 📦 **엔진 하나로 도는 공개 가중치 모델** — Qwen 3 0.6B 를 transformers 기반 단일 엔진이 서빙합니다. 이 엔진은 PyTorch 위에서도, [torchnative](https://github.com/thisisthepy/torchnative) 위에서도 돕니다. Gemstone 은 로컬 Ollama 대체제가 되어 가는 중입니다. 동시 요청 처리(페이지드 KV 캐시를 쓰는 연속 배칭)와 OpenAI·Ollama 호환 API 는 이미 동작하고, 4비트 가중치와 GGUF 는 예정입니다.
-- 🖥️ **네이티브 데스크톱 경험** — JetBrains Jewel 데코레이티드 윈도우와 Dmg / Msi / Deb 설치 파일.
+- 🧩 **하나의 코드베이스, 네 개의 타깃**: Android, iOS, 데스크톱(Windows, macOS, Linux), 웹(Kotlin/Wasm) 이 UI, 뷰모델, 프로토콜을 공유합니다.
+- 🚀 **스트리밍 채팅**: 토큰이 생성되는 즉시 WebSocket 으로 도착하고, 그 자리에서 Markdown 으로 렌더링됩니다.
+- 🧠 **보이는 추론 과정**: 모델의 `<think>` 블록이 경과 시간과 함께 접을 수 있는 패널로 표시됩니다.
+- 🔌 **도구 호출**: 날씨, 공휴일, 환율, 계산기, 웹 검색을 서버에서 병렬로 실행하고 결과를 모델에 돌려줍니다.
+- 📦 **엔진 하나로 도는 공개 가중치 모델**: Qwen 3 0.6B 를 transformers 기반 단일 엔진이 서빙합니다. 이 엔진은 PyTorch 위에서도, [torchnative](https://github.com/thisisthepy/torchnative) 위에서도 돕니다. Gemstone 은 로컬 Ollama 대체제가 되어 가는 중입니다. 동시 요청 처리(페이지드 KV 캐시를 쓰는 연속 배칭)와 OpenAI·Ollama 호환 API 는 이미 동작하고, 4비트 가중치와 GGUF 는 예정입니다.
+- 🖥️ **네이티브 데스크톱 경험**: JetBrains Jewel 데코레이티드 윈도우와 Dmg / Msi / Deb 설치 파일.
 
 ## 🚀 빠른 시작
 
@@ -95,7 +95,7 @@ OPENAI_BASE_URL=http://127.0.0.1:23100/v1 OPENAI_API_KEY=x python my_script.py  
 클라이언트는 `--server http://<호스트>:23100` (또는 `GEMSTONE_SERVER_HOST`)을 받습니다.
 자세한 내용은 `docs/guide/` 의 클라이언트 가이드를 보세요.
 
-**내 코드에서 서버와 대화하기** — 프레임 세 개를 보내면 토큰이 흘러나옵니다:
+**내 코드에서 서버와 대화하기**: 프레임 세 개를 보내면 토큰이 흘러나옵니다:
 
 ```python
 import asyncio, json, urllib.request
@@ -124,10 +124,10 @@ asyncio.run(ask("오늘 대전 날씨가 어때?"))
 
 ```mermaid
 flowchart LR
-    subgraph Client["app/ — Compose Multiplatform"]
+    subgraph Client["app/: Compose Multiplatform"]
         UI["채팅 UI<br/>commonMain"] --> VM["ChatViewModel"] --> WS["ChatWebSocketClient<br/>(Ktor)"]
     end
-    subgraph Server["api/ — Python 3.13"]
+    subgraph Server["api/: Python 3.13"]
         EP["FastAPI<br/>/api/chat/streaming"] --> M["모델<br/>Qwen 3"]
         M --> B["엔진<br/>PyTorch / torchnative 위의 transformers"]
         M <--> T["도구<br/>날씨 · 검색 · …"]
@@ -138,7 +138,7 @@ flowchart LR
 
 | 디렉터리 | 들어 있는 것 |
 |---|---|
-| `app/src/commonMain` | UI, 뷰모델, 네트워크 프로토콜 — 모든 타깃이 공유 |
+| `app/src/commonMain` | UI, 뷰모델, 네트워크 프로토콜: 모든 타깃이 공유 |
 | `app/src/{android,ios,desktop,wasmJs}Main` | 플랫폼별 진입점 하나씩 |
 | `app/src/cioMain` | Android, iOS, 데스크톱이 공유하는 Ktor CIO 엔진 |
 | `api/src/main/models` | 모델 정의: 프롬프트, 샘플링 기본값 |
@@ -154,15 +154,15 @@ Gemstone 은 초기 단계의, 동작하는 프로토타입입니다. 각 부분
 | 스트리밍 채팅, 추론 표시, 도구 호출 | ✅ 동작 |
 | transformers 단일 엔진, 연속 배칭, 페이지드 KV 캐시 (기본은 CPU) | ✅ PyTorch 에서 동작, 🟡 torchnative 위 검증은 아직 |
 | 여러 모델 상주, 축출, `keep_alive` | ✅ 동작 |
-| OpenAI 호환 API (`/v1`, 도구 호출은 클라이언트로 전달) | 🟡 부분 — `n` > 1, logprobs, embeddings 없음 |
-| Ollama 호환 API (chat, generate, tags, show, pull, delete, ps, copy, create, embed) | 🟡 부분 — `push` 는 501, Modelfile · template · blobs 없음 |
+| OpenAI 호환 API (`/v1`, 도구 호출은 클라이언트로 전달) | 🟡 부분: `n` > 1, logprobs, embeddings 없음 |
+| Ollama 호환 API (chat, generate, tags, show, pull, delete, ps, copy, create, embed) | 🟡 부분: `push` 는 501, Modelfile · template · blobs 없음 |
 | 보안 기본값 (루프백 바인드, 오리진 검사, API 키) | ✅ 동작 |
 | Android, 데스크톱, 웹 클라이언트 | ✅ 동작 |
 | 클라이언트의 모델 선택과 서버 주소 | ✅ 모델은 서버에서 읽음. Android 는 아직 주소 설정이 없음 |
 | iOS 클라이언트 | 🟡 프레임워크 타깃은 구성됨, Xcode 빌드 스크립트 수정 필요 |
 | 대화 기록 | 🟡 메모리에만 보관 |
 | 자동화된 테스트 | 🟡 Python 테스트(실제 모델 포함)와 네트워크 계층의 Kotlin 테스트가 CI 에서 돎. UI 는 테스트 없음 |
-| 네이티브 데스크톱 실행 파일 (GraalVM, JVM 없음) | ⏳ 예정 — Windows x64 빌드 경로는 있으나 아직 실행해 보지 않음 |
+| 네이티브 데스크톱 실행 파일 (GraalVM, JVM 없음) | ⏳ 예정: Windows x64 빌드 경로는 있으나 아직 실행해 보지 않음 |
 | GPU(CUDA) 추론 | ⏳ 예정 |
 | 4비트 가중치, GGUF | ⏳ 예정 |
 | 설정 화면 | ⏳ 예정 |
@@ -171,7 +171,7 @@ Gemstone 은 초기 단계의, 동작하는 프로토타입입니다. 각 부분
 
 ## 📖 문서
 
-- **[Gemstone 가이드](https://logitai.github.io/Gemstone/?lang=ko)** — 시작하기, 개념, 작업별 가이드, FAQ (한국어 · English). 소스는 [`docs/guide/`](../guide/).
+- **[Gemstone 가이드](https://logitai.github.io/Gemstone/?lang=ko)**: 시작하기, 개념, 작업별 가이드, FAQ (한국어 · English). 소스는 [`docs/guide/`](../guide/).
 - **[English README](../../README.md)**
 
 ## 🌐 생태계
@@ -181,7 +181,7 @@ Gemstone 은 아직 아래 프로젝트에 의존하지 않습니다. 이것은 
 
 | 프로젝트 | 역할 |
 |---|---|
-| [python-multiplatform](https://github.com/thisisthepy/python-multiplatform) | Kotlin Multiplatform 에 임베딩한 CPython — 온디바이스 추론으로 가는 길 |
+| [python-multiplatform](https://github.com/thisisthepy/python-multiplatform) | Kotlin Multiplatform 에 임베딩한 CPython: 온디바이스 추론으로 가는 길 |
 | [pythonx-compose](https://github.com/thisisthepy/pythonx-compose) | Compose Multiplatform 의 Python 래퍼 |
 | [toolchain](https://github.com/thisisthepy/toolchain) | Python Multiplatform 용 Gradle 빌드 플러그인과 도구 |
 | [torchnative](https://github.com/thisisthepy/torchnative) | 기기 위에서 그대로 도는 실제 PyTorch 생태계 |
@@ -189,7 +189,7 @@ Gemstone 은 아직 아래 프로젝트에 의존하지 않습니다. 이것은 
 ## 🤝 기여하기
 
 이슈와 풀 리퀘스트는 [LogitAI/Gemstone](https://github.com/LogitAI/Gemstone/issues) 에서 환영합니다.
-Gemstone 은 의도 우선, 테스트 우선으로 개발합니다 — 풀 리퀘스트를 열기 전에
+Gemstone 은 의도 우선, 테스트 우선으로 개발합니다: 풀 리퀘스트를 열기 전에
 [가이드의 기여 안내](https://logitai.github.io/Gemstone/faq.html?lang=ko#contributing) 를 읽어 주세요.
 
 ## 🙏 감사의 말

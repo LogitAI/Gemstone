@@ -1,4 +1,4 @@
-# Gemstone — Specification
+# Gemstone: Specification
 
 What Gemstone does: the behavioural contract between the client (`app/`), the model-serving API
 (`api/`) and the user. Every item serves a goal in [`INTENT.md`](INTENT.md) (`G1`–`G9`) and carries
@@ -29,7 +29,7 @@ with every change since. S1.11–S1.16 and S3.4 also record the maintainer's dec
 
 ## 1. Model-serving API (`api/`)
 
-### S1.1 Server process — `implemented` · G5
+### S1.1 Server process: `implemented` · G5
 
 - `uv run --extra torch python -m api run server [host] [port] [--reload]` starts a uvicorn server on `127.0.0.1:23100` by
   default, with a 300 s WebSocket ping interval and timeout. `GEMSTONE_HOST=host[:port]` overrides the
@@ -46,7 +46,7 @@ with every change since. S1.11–S1.16 and S3.4 also record the maintainer's dec
   Test: `api/tests/test_main_args.py`, `api/tests/test_security.py`.
 - Note: `python -m api` with fewer than two arguments raises `IndexError`.
 
-### S1.2 Model catalogue — `implemented` · G5
+### S1.2 Model catalogue: `implemented` · G5
 
 - `GET /api/models` returns the models the registry (S1.14) knows, keyed by id, each with
   `model_name` and `model_description`: Gemstone's catalogue, `qwen3` and `default` (an alias of
@@ -58,7 +58,7 @@ with every change since. S1.11–S1.16 and S3.4 also record the maintainer's dec
   (`models`). Test: `api/tests/test_residency.py` (`test_api_models_lists_the_registry_models_in_the_app_shape`,
   `test_v1_models_lists_the_same_models`).
 
-### S1.3 Sessions — `partial` · G5
+### S1.3 Sessions: `partial` · G5
 
 - `POST /api/models/{model_id}/sessions/` and `POST /api/sessions/` (model `default`) create a
   session and return `{model_id, session_id, message}`. The session id is
@@ -81,7 +81,7 @@ with every change since. S1.11–S1.16 and S3.4 also record the maintainer's dec
   one keeps the model (`api/tests/test_residency.py`); the 404s, the `detail` bodies and the
   create, chat, delete flow and deleting a Hugging Face id's session (`api/tests/test_sessions.py`).
 
-### S1.4 Streaming chat over WebSocket — `implemented` · G4
+### S1.4 Streaming chat over WebSocket: `implemented` · G4
 
 `WS /api/chat/streaming`. After the server accepts, the client sends exactly three text frames:
 
@@ -114,7 +114,7 @@ running first-time download; that needs a client change (follow-up).
 - Code: `api/src/main/server.py` (`chat_with_streaming`), `api/src/main/models/base.py`.
   Tests: `api/tests/test_server.py` (real model), `api/tests/test_residency.py` (fake engine).
 
-### S1.5 Non-streaming chat — `removed` · G5
+### S1.5 Non-streaming chat: `removed` · G5
 
 The session-based `POST /api/chat?user_prompt=…` (session id in the `Authorization` header) and
 `GET /api/hello` were removed (decided 2026-10-03). Both were broken: `BaseModel.chat` is always a
@@ -125,7 +125,7 @@ Test: `api/tests/test_ollama_api.py` (`test_legacy_chat_and_hello_routes_are_gon
 `test_no_client_or_document_uses_the_legacy_routes`, which scans `app/src`, the READMEs and
 `docs/guide/` for callers or descriptions of the old form).
 
-### S1.6 Tool calling — `implemented` · G6
+### S1.6 Tool calling: `implemented` · G6
 
 - Models that support tools receive a schema list; when the model emits
   `<tool_call>{"name": …, "arguments": …}</tool_call>`, the server runs the tool on a thread pool,
@@ -161,7 +161,7 @@ Test: `api/tests/test_ollama_api.py` (`test_legacy_chat_and_hello_routes_are_gon
 - Code: `api/src/main/utils/__init__.py`, `api/src/main/utils/*.py`, `api/src/main/models/base.py`.
   Tests: `api/tests/test_tool_cache.py` (cache), `api/tests/test_tool_robustness.py` (#113).
 
-### S1.7 Models — `implemented` · G5
+### S1.7 Models: `implemented` · G5
 
 | Id | Weights | Context | Tools |
 |---|---|---|---|
@@ -174,21 +174,21 @@ with no tools and the base sampling defaults.
 Code: `api/src/main/models/qwen3/model.py`, `api/src/main/registry.py`. Test: none for the Qwen3 checkpoint itself (it needs
 a download; tests use SmolLM2-135M through the same model layer, `api/tests/test_server.py`).
 
-### S1.8 Inference backends — `removed` · G5
+### S1.8 Inference backends: `removed` · G5
 
 The GGUF (`llama-cpp-python`), BIN (`transformers` + `bitsandbytes`) and GPTQ backends, the
 `CoreRuntime` registry and `BackendType` were removed in #84, along with the `llama3` model and the
 unused `utils/embedding.py`. The engine of S1.11 replaces them.
 Test: `api/tests/test_backends_removed.py`.
 
-### S1.9 Bundled web clients — `implemented` · G1
+### S1.9 Bundled web clients: `implemented` · G1
 
 - `GET /` serves the prebuilt Wasm client (`api/src/main/webpack/gemstone.html`); `/webpack/*` and
   `/composeResources/*` serve its assets.
 - `GET /chat` serves a minimal Brython test page (`api/src/main/static/`).
 - Code: `api/src/main/server.py`. Test: `api/tests/test_web_assets.py`.
 
-### S1.10 OpenAI-compatible API — `partial` · G5
+### S1.10 OpenAI-compatible API: `partial` · G5
 
 This API is how external clients attach to Gemstone, including agent harnesses (`INTENT.md` § 4).
 
@@ -256,7 +256,7 @@ several clients wait for one another until continuous batching (S1.12) lands.
 Test: `api/tests/test_openai_api.py` (a scripted fake engine, plus one SmolLM2-135M test that
 streams a greedy completion and compares it with the engine's own output).
 
-### S1.11 torchnative serving engine — `partial` · G5
+### S1.11 torchnative serving engine: `partial` · G5
 
 One serving system built on torchnative replaces S1.8. The goal is local, private LLM serving: an
 Ollama replacement.
@@ -324,7 +324,7 @@ API so a GPU server can run the same code on upstream PyTorch. Constraint: custo
 registered from Gemstone, because `torch.library` registrations are no-ops on torchnative. They
 must be torchnative operators. See [`serving/engine.md`](serving/engine.md).
 
-### S1.12 Continuous batching — `partial` · G5
+### S1.12 Continuous batching: `partial` · G5
 
 Concurrent requests to a loaded model are scheduled into one running batch. A request joins and
 leaves the batch between decode steps, and its tokens stream back on its own connection. Part of
@@ -345,7 +345,7 @@ Implemented (#63), `api/src/main/engine.py`:
   `ModelRunner._sample`; `distributed.py`, `set_tp_seed`), so a sample depends on the other
   requests in the batch. The engine runs the manager greedily and samples in its own per-request
   logits processors instead: the last one draws each row's token from that request's own
-  random stream (`random.Random(seed)`, plain Python, so no torch RNG is needed — torchnative has
+  random stream (`random.Random(seed)`, plain Python, so no torch RNG is needed: torchnative has
   no `torch.Generator` yet), so the draw sequence of a request depends only on its seed.
   Test: `api/tests/test_sampler_rng.py`.
 - Requests the batch does not serve take the exclusive path (S1.11).
@@ -380,7 +380,7 @@ Unverified:
 - Prefix sharing (reusing the KV blocks of an identical prompt prefix) is off, so that a reply does
   not depend on earlier requests. Turning it on is a later, measured decision.
 
-### S1.13 Paged attention (paged KV cache) — `partial` · G5
+### S1.13 Paged attention (paged KV cache): `partial` · G5
 
 The KV cache is allocated in fixed-size blocks shared by all requests of a model, so memory is held
 per token in use, not per maximum context. Part of S1.11.
@@ -396,7 +396,7 @@ tokens (default 256; longer prompts are prefilled in chunks) and `max_batch_requ
 Tests: `api/tests/test_batching.py` runs on `sdpa_paged`. `eager_paged` has no test on the real
 model. A torchnative paged-attention kernel for speed is still to come.
 
-### S1.14 Model management — `partial` · G5
+### S1.14 Model management: `partial` · G5
 
 Follows from *Ollama replacement*. Served through the Ollama-compatible API (S1.15); the local
 model store is the Hugging Face cache (`HF_HOME`).
@@ -520,7 +520,7 @@ listings; model-class mapping); `api/tests/test_lease_release.py` (the ASGI app 
 client gone before a stream starts, a stream dropped unsent, finished replies, and a
 cancelled acquire each release exactly once, and a switch to another model then completes).
 
-### S1.15 Ollama-compatible API — `partial` · G5
+### S1.15 Ollama-compatible API: `partial` · G5
 
 Follows from *Ollama replacement*, so existing Ollama clients can use Gemstone. Served next to the
 OpenAI-compatible API (S1.10). Code: `api/src/main/ollama_api.py` (an `APIRouter` included by
@@ -617,14 +617,14 @@ Status `partial` stays. Not yet: `format` (JSON / schema output), blobs (`/api/b
 text and templates, adapters, quantizing, `logprobs`, image input, and concurrent generation (requests on
 one model take turns until S1.12).
 
-Tests: `api/tests/test_ollama_api.py` — on a fake engine (streaming and non-streaming chat and
+Tests: `api/tests/test_ollama_api.py`: on a fake engine (streaming and non-streaming chat and
 generate, tool-call pass-through, option forwarding, stop, think, tags / show / ps, keep_alive,
 model switching and the no-unload-mid-generation rule, delete, pull with a mocked downloader, error
 format), and one test on the real engine (SmolLM2-135M, `test_chat_on_the_real_engine`);
-`api/tests/test_multi_resident.py` — copy, create (and what it refuses), derived models in the
+`api/tests/test_multi_resident.py`: copy, create (and what it refuses), derived models in the
 Ollama and OpenAI APIs, show, embed and the legacy embeddings, push 501, per-file pull progress.
 
-### S1.16 4-bit quantised weights — `planned` · G5
+### S1.16 4-bit quantised weights: `planned` · G5
 
 An Ollama replacement has to run models at roughly 4-bit quality. Today torchnative offers
 `TorchnativeConfig("q8_0")` through transformers' `HfQuantizer` slot. Its Q4_0 shows 29.5% logit
@@ -633,7 +633,7 @@ No code in Gemstone.
 
 ## 2. Client (`app/`)
 
-### S2.1 Targets — `partial` · G1
+### S2.1 Targets: `partial` · G1
 
 | Target | Source set | Status |
 |---|---|---|
@@ -643,13 +643,13 @@ No code in Gemstone.
 | iOS (static framework `Gemstone` for x64, arm64, simulator arm64) | `iosMain` | `partial` |
 
 iOS: the framework targets are configured, but the Xcode build phase runs
-`cd "$SRCROOT/.." && ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode` — there is no
+`cd "$SRCROOT/.." && ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode`: there is no
 `gradlew` at that path and no `:composeApp` module (the module is `:app`). The Xcode build is
 expected to fail until that script is corrected.
 
 Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pbxproj`. Test: none.
 
-### S2.2 Server address — `implemented` · G5
+### S2.2 Server address: `implemented` · G5
 
 - Android, iOS and desktop default to `127.0.0.1:23100`, overridable through
   `GEMSTONE_SERVER_HOST` and `GEMSTONE_SERVER_PORT` (JVM system property or environment variable).
@@ -673,7 +673,7 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
   `app/src/wasmJsMain/.../HttpClientFactory.js.kt`, `app/src/desktopMain/kotlin/gemstone/Main.desktop.kt`.
   Test: `app/src/commonTest/.../network/ServerAddressTest.kt`.
 
-### S2.3 Chat screen — `implemented` · G4, G6
+### S2.3 Chat screen: `implemented` · G4, G6
 
 - Sends the prompt over the WebSocket protocol of S1.4 and renders the reply as it streams, with
   incremental Markdown.
@@ -681,7 +681,7 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
 - Shows each tool call as a chip labelled `<function>(): <call id>`, and appends the server's
   `history` record to the local chat history so the next prompt carries the tool results.
 - Defect found by reading: a chip's completion flag is created as `false` and never set to
-  `true` — the `result` record has the same key as the `call` record and is ignored.
+  `true`: the `result` record has the same key as the `call` record and is ignored.
 - Code: `app/src/commonMain/kotlin/gemstone/framework/network/websocket/ChatWebSocketClient.kt`,
   `.../ui/viewmodel/ChatViewModel.kt`, `.../ui/compose/screen/chat/ChatScreen.kt`.
   Test: `app/src/commonTest/.../network/ChatCloseEventTest.kt` (close code to event).
@@ -690,13 +690,13 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
   reply is shown as an error too and kept out of the history, with its unanswered prompt dropped
   (#114; overlaps #39).
 
-### S2.4 Layout and navigation — `implemented` · G1
+### S2.4 Layout and navigation: `implemented` · G1
 
 In landscape the sidebar sits next to the chat; in portrait the sidebar is a start screen that
 navigates to the chat, with a swipe-back gesture to return. Code: `.../screen/chat/MainScreen.kt`,
 `.../navigation/AppNavigation.kt`. Test: none.
 
-### S2.5 Model selection — `implemented` · G5
+### S2.5 Model selection: `implemented` · G5
 
 The sidebar lists the models the server offers and selecting one opens a new server session for
 it, using the server id (`/api/models/{id}/sessions/`, lowercase, e.g. `qwen3`). The list is read
@@ -709,44 +709,44 @@ Code: `.../network/ModelCatalog.kt` (pure parsing), `.../network/http/ModelsApi.
 `.../ui/viewmodel/AIModelViewModel.kt`, `.../screen/chat/SideScreen.kt`.
 Test: `ModelCatalogTest` (commonTest).
 
-### S2.6 Chat list and history — `partial` · G4
+### S2.6 Chat list and history: `partial` · G4
 
 The sidebar has a "Recent Chats" section; conversations live in memory only and are lost when the
 app closes. No persistence layer exists. Test: none.
 
-### S2.7 Settings — `planned` · G1 (assumed)
+### S2.7 Settings: `planned` · G1 (assumed)
 
 `SettingsScreen.kt` is an empty file; the user name shown in the sidebar is hard-coded in
 `SettingsViewModel.kt`.
 
-### S2.8 Clean Architecture layers — `planned` · G9
+### S2.8 Clean Architecture layers: `planned` · G9
 
 `domain/entity/*` and `domain/usecase/chat/*` exist as empty declarations. All behaviour currently
 lives in `framework/` (view models and the network client). The README's detailed tree describes
 the target, not the current code.
 
-### S2.9 Localisation — `partial` · G1 (assumed)
+### S2.9 Localisation: `partial` · G1 (assumed)
 
 Android declares `en` and `ko` locales, but only English strings exist, and the reasoning status
 line is hard-coded in Korean (`"…초 동안"`, `ChatScreen.kt`).
 
 ## 3. Planned capabilities
 
-### S3.1 On-device inference through Python Multiplatform — `planned` · G2, G3
+### S3.1 On-device inference through Python Multiplatform: `planned` · G2, G3
 
 The client embeds the Python model code via Python Multiplatform and runs without the server.
 The engine is the torchnative-based system of S1.11.
 No code on `develop`.
 
-### S3.2 Offline operation — `planned` · G3
+### S3.2 Offline operation: `planned` · G3
 
 Depends on S3.1. Today every chat goes through the server.
 
-### S3.3 Cross-platform sync — `planned` · G7
+### S3.3 Cross-platform sync: `planned` · G7
 
 No code. The meaning of sync is an open question in `INTENT.md` § 5.
 
-### S3.4 Native desktop executable (GraalVM native-image) — `planned` · G8
+### S3.4 Native desktop executable (GraalVM native-image): `planned` · G8
 
 Managed long-term by `compose-multiplatform-extended` (decided 2026-10-02). That plugin has no code
 yet, so Gemstone keeps its own path in the meantime (on `develop` since #71): Gradle tasks `generateNativeResourceConfig`,
@@ -759,7 +759,7 @@ tasks become plugin configuration and only Gemstone-specific metadata stays here
 
 ---
 
-## Outside intent — needs a decision
+## Outside intent: needs a decision
 
 These exist in code (or in the README) but no goal in `INTENT.md` clearly covers them.
 

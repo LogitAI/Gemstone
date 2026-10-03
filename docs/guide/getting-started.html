@@ -34,7 +34,7 @@
 <div class="page-head"><div class="wrap">
   <p class="eyebrow" data-lang="en">Getting started</p><p class="eyebrow" data-lang="ko">시작하기</p>
   <h1 data-lang="en">From clone to first answer</h1><h1 data-lang="ko">클론부터 첫 답변까지</h1>
-  <p data-lang="en">Run the model server on your machine — a CPU is enough — then open any client.</p><p data-lang="ko">내 머신에서 모델 서버를 띄우고 — CPU 면 충분합니다 — 아무 클라이언트나 엽니다.</p>
+  <p data-lang="en">Run the model server on your machine, a CPU is enough, then open any client.</p><p data-lang="ko">내 머신에서 모델 서버를 띄우고, CPU 면 충분합니다, 아무 클라이언트나 엽니다.</p>
 </div></div>
 <div class="wrap content"><div class="prose">
   <h2 data-lang="en">Requirements</h2><h2 data-lang="ko">준비물</h2>
@@ -55,7 +55,7 @@ uv sync --extra torch</code></pre>
 <pre><code>uv run --extra torch python -m api run server                  <span class="c"># 127.0.0.1:23100 (loopback only)</span>
 uv run --extra torch python -m api run server 127.0.0.1 23100  <span class="c"># explicit host and port</span></code></pre>
   <p data-lang="en"><code>uv run</code> uses the environment <code>uv sync</code> created, so there is no virtual environment to activate. Use <code>--extra torchnative</code> if you installed that one. Logs go to the console at INFO; set <code>GEMSTONE_LOG_LEVEL=DEBUG</code> to also log prompts and answers.</p><p data-lang="ko"><code>uv run</code> 은 <code>uv sync</code> 가 만든 환경을 쓰므로 가상환경을 따로 활성화할 필요가 없습니다. torchnative 를 설치했다면 <code>--extra torchnative</code> 를 쓰세요. 로그는 INFO 수준으로 콘솔에 나가며, <code>GEMSTONE_LOG_LEVEL=DEBUG</code> 를 설정하면 프롬프트와 답변도 기록합니다.</p>
-  <p class="note" data-lang="en">The model downloads from Hugging Face the first time a session uses it — several gigabytes, once.</p><p class="note" data-lang="ko">모델은 세션이 처음 사용할 때 Hugging Face 에서 내려받습니다 — 수 GB, 한 번만.</p>
+  <p class="note" data-lang="en">The model downloads from Hugging Face the first time a session uses it: several gigabytes, once.</p><p class="note" data-lang="ko">모델은 세션이 처음 사용할 때 Hugging Face 에서 내려받습니다: 수 GB, 한 번만.</p>
 
   <h2 data-lang="en">3. Open a client</h2><h2 data-lang="ko">3. 클라이언트 열기</h2>
   <p data-lang="en">The quickest is the web client the server already bundles: open <a href="http://127.0.0.1:23100/">http://127.0.0.1:23100/</a>. For a native window:</p><p data-lang="ko">가장 빠른 것은 서버에 이미 들어 있는 웹 클라이언트입니다: <a href="http://127.0.0.1:23100/">http://127.0.0.1:23100/</a> 를 여세요. 네이티브 창은:</p>
@@ -65,7 +65,7 @@ uv run --extra torch python -m api run server 127.0.0.1 23100  <span class="c">#
 
   <h2 data-lang="en">If something goes wrong</h2><h2 data-lang="ko">문제가 생기면</h2>
   <ul>
-    <li data-lang="en"><code>ModuleNotFoundError</code> from a bare <code>python -m api run server</code> means that is the system Python, not the synced environment — start it with <code>uv run --extra torch</code> as above.</li><li data-lang="ko">그냥 <code>python -m api run server</code> 에서 <code>ModuleNotFoundError</code> 가 나면 동기화된 환경이 아니라 시스템 Python 인 것입니다 — 위처럼 <code>uv run --extra torch</code> 로 실행하세요.</li>
+    <li data-lang="en"><code>ModuleNotFoundError</code> from a bare <code>python -m api run server</code> means that is the system Python, not the synced environment: start it with <code>uv run --extra torch</code> as above.</li><li data-lang="ko">그냥 <code>python -m api run server</code> 에서 <code>ModuleNotFoundError</code> 가 나면 동기화된 환경이 아니라 시스템 Python 인 것입니다: 위처럼 <code>uv run --extra torch</code> 로 실행하세요.</li>
   </ul>
   <nav class="pager" aria-label="Pages"><a href="index.html"><span data-lang="en">← Home</span><span data-lang="ko">← 홈</span></a><a href="concepts.html"><span data-lang="en">Concepts →</span><span data-lang="ko">개념 →</span></a></nav>
 </div></div>
