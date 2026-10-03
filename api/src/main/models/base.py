@@ -1,4 +1,5 @@
 import logging
+import re
 from re import finditer, DOTALL
 from dataclasses import dataclass
 from typing import Generator, Optional, List, Dict, Union
@@ -172,6 +173,21 @@ class BaseModel:
                 else:
                     yield wd
 
+        tag_pattern = re.compile("(" + "|".join(re.escape(t) for t in (
+            self.special_tags.REASONING, self.special_tags.REASONING_END,
+            self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END,
+        )) + ")")
+
+        def split_special_tags(outs):
+            """
+            Give every special tag a frame of its own. The app matches `<think>`/`</think>` exactly, and a
+            streamer that emits at word boundaries glues tags to whitespace or text (`'<think>\\n'`).
+            """
+            for wd in outs:
+                for piece in tag_pattern.split(wd):
+                    if piece:
+                        yield piece
+
         initial_operation = True
         function_called = True
         while function_called:
@@ -206,7 +222,7 @@ class BaseModel:
             )
             generation_kwargs.update(kwargs)
             outputs = self.parse_tool_calling(
-                adaptive_special_tag_buffering(self.runtime(**generation_kwargs)),
+                split_special_tags(adaptive_special_tag_buffering(self.runtime(**generation_kwargs))),
                 chat_history=chat_history,
                 tools=tools,
                 stream=stream,
