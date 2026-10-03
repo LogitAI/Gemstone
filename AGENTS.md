@@ -31,6 +31,34 @@ ask first.**
 
 Writing to *another* repository is not an exception either. Do it only when told to work there.
 
+### Do not add top-level files or folders
+
+**Never add a new directory or file at the repository root on your own.** The root layout is the
+maintainer's. Work belongs inside an existing module or directory — Python under `api/`, the client
+under `app/`, documents under `docs/<topic>/`, CI under `.github/`, developer scripts under `tools/`,
+temporary files under the git-ignored `.tmp/`. If a new top-level entry seems necessary, propose it
+(what, why, and which existing directories you ruled out) and wait for approval; then add it to the
+list below in the same change.
+
+Approved tracked root entries (`api/tests/test_repo_layout.py` fails on anything else):
+
+| Entry | Purpose |
+|---|---|
+| `api/`, `app/` | The model-serving API (Python) and the client (Kotlin) |
+| `docs/` | Documents and the GitHub Pages guide |
+| `tools/` | Developer tooling (release sync, web bundle sync) |
+| `benchmarks/` | Measurement scripts |
+| `script/` | Desktop UI driving script for the native-image build (`script/drive-desktop.ps1`) |
+| `gradle/`, `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat` | Gradle build |
+| `pyproject.toml` | Python project (uv) |
+| `.github/` | CI workflows |
+| `.idea/` | Shared IDE settings (partly tracked) |
+| `README.md`, `AGENTS.md`, `PROJECT.md`, `LICENSE.md` | Root documents |
+| `.gitignore`, `.gitattributes`, `.env.example` | Git and environment templates |
+
+Local, git-ignored entries that tools create are fine: `.tmp/`, `.worktrees/`, `.venv/`, `.gradle/`,
+`.kotlin/`, `.env`, `local.properties`, `uv.lock`, `.claude/`, `.DS_Store`.
+
 ## 3. Worktrees link large artefacts instead of copying them
 
 A worktree is a full checkout. Copying large untracked artefacts (prebuilt runtimes, vendored trees,
