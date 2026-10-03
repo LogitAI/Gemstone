@@ -97,6 +97,10 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
   (Compose Gradle 플러그인 포크)가 종합 관리한다. 플러그인에 아직 코드가 없어서, 그때까지는 Gemstone 의
   현재 경로를 유지한다. JNA 의존성은 GraalVM 과 무관하므로 Gemstone 에 남긴다. 입력 디버그 프로브
   (`GEMSTONE_INPUT_PROBE`)는 커밋하지 않는다.
+- **우선순위 (2026-10-04)**: thisisthepy 저장소는 우선순위대로 하나씩 진행하고, Gemstone 은 마지막
+  순위다(torchnative → python-multiplatform → pypackpack/toolchain-lite → pythonx-compose → 기타 pythonx,
+  Gemstone). 사용자는 당분간 darkpyonix 에 집중한다. 새 무거운 작업(로컬 빌드, 서브 에이전트)은 리더의
+  신호를 받고 시작한다.
 
 ## 6. 열린 질문
 
@@ -104,9 +108,13 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
    의도와 맞는가? 범위 안인지, 선택 기능인지, 서버 전용인지 결정이 필요하다.
 2. **원격 모델 제공자**(OpenAI, Anthropic, HF Inference): 옛 README 트리에만 있고 코드·의도에 없다.
 3. **동기화(sync)** 가 무엇을 무엇으로 동기화하는지.
-4. **서빙 엔진 세부**: 방향은 torchnative 단일 시스템으로 확정(다중 백엔드·vLLM 사용 안 함). 엔진 구성은 미확정: 현재 제안은 transformers 5.x 연속 배칭 + 페이지드 KV 캐시를 엔진으로, 커널은 torchnative.
-   확정 전에 할 일: 작은 모델로 torchnative 위에서 `generate_batch`(`sdpa_paged`/`eager_paged`)를
-   돌려 정확도와 처리량을 잰다 ([`docs/serving/engine.md`](docs/serving/engine.md) § 7).
+4. **서빙 엔진 세부**: 구현됐다(#85, #91). transformers 5.x 연속 배칭과 페이지드 KV 캐시를 쓰고,
+   커널은 torchnative 에 둔다. torchnative 위 검증 현황(#84):
+   - torchnative 0.1.0b4, Linux CPU(CI): 411 통과, 연속 배칭 8개만 `pin_memory` 미지원으로 skip.
+   - 같은 버전, 이 맥의 mps: `generate` 가 transformers 의 `isin` 에서 멈춘다(torchnative #29).
+   - 배칭을 막던 torchnative 결함(#30, cb-path)은 torchnative develop 에 들어갔다. 그 휠을 CI 가 받을
+     URL(GitHub pre-release)은 사용자 승인을 기다린다. `test-torchnative.yml` 은 `wheel_url` 입력을 받는다.
+   - 처리량 측정(`benchmarks/batching_throughput.py`)은 아직 돌리지 않았다.
 5. **Python 테스트의 위치**: 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산도
    `api/src/test/` 에서 `api/src/main/{static,webpack}/` 로 옮겼다(#83).
 6. **릴리스 흐름**: 해결됨. develop push 마다 CI 가 `release` 를 만들고 release → main PR 을 연다.
@@ -117,10 +125,17 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 8. **GitHub Pages 배포**: 해결됨(2026-10-03). Pages 소스는 GitHub Actions, main 에서만 배포한다
    (`pages.yml`). 주소는 https://logitai.github.io/Gemstone/ 이고, 첫 배포는 release → main PR 이
    머지되면 일어난다.
-9. **Ollama 대체의 범위**: 모델 pull/list/rm/ps, keep-alive, 여러 모델 동시 상주, Ollama 호환 API 중
-   어디까지 할지. 4비트 품질과 GGUF 읽기는 torchnative 쪽 작업에 달려 있다.
+9. **Ollama 대체의 범위**: 핵심 엔드포인트, 여러 모델 상주와 축출, copy/create/embed 는 구현했다(#90, #107).
+   남은 것은 4비트 품질과 GGUF 읽기(#67)로, torchnative 작업에 달려 있다.
+10. **torchnative 버전 하한**: PyPI 최신은 `0.1.0b4` 이고 배칭 수정이 없다. 수정이 든 `0.1.0b5` 를
+    언제 올릴지, Gemstone 이 어떤 하한(`>=0.1.0b5` 등)을 걸지 사용자 결정을 기다린다.
+11. **`script/` 의 자리**: GraalVM 데스크톱 UI 구동 스크립트(`script/drive-desktop.ps1`) 하나만 있다.
+    개발 도구를 모아 둔 `tools/` 로 합칠지 정해야 한다. 지금은 AGENTS §2 승인 목록에 들어 있다.
 
 ## 7. 마일스톤 (2026-10-03 재조정: 11월 말 실사용)
+
+> 2026-10-04: Gemstone 이 thisisthepy 의 마지막 순위가 되어(§5) 아래 날짜는 다시 정해야 한다.
+> 코드는 M1~M3 범위가 develop 에 있고, 남은 것은 torchnative 위 검증과 출시 결정이다.
 
 서빙 전환(#57) 기준이다. GitHub 마일스톤과 같다. 사용자 지시에 따라 **실제로 쓸 수 있는 수준을
 2026-11-30 까지** 낸다. 실사용 수준이란 torchnative 단일 엔진으로 로컬 모델을 받아 스트리밍 채팅과
