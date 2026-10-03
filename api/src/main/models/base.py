@@ -1,4 +1,4 @@
-import traceback
+import logging
 from re import finditer, DOTALL
 from dataclasses import dataclass
 from typing import Generator, Optional, List, Dict, Union
@@ -6,6 +6,8 @@ from typing import Generator, Optional, List, Dict, Union
 from .config import ChatHistory
 from ..engine import Engine, ModelBusy
 from ..utils import FunctionCalling, FunctionCallResult
+
+log = logging.getLogger("gemstone.model")
 
 
 @dataclass
@@ -92,24 +94,21 @@ class BaseModel:
                 )
 
         # Finalize the tool calls
-        print("\n")
-        spinner = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
-        stat = 0
+        waiting = False
         while True:
             queued = len(result_obj.job_list)
             final_result = result_obj.finalize(
                 chat_history,
-                (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END),
-                print_output=print_output
+                (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END)
             )
-            if queued > 0 and final_result is False:
-                print(f"\r{spinner[stat % len(spinner)]} Waiting for tool calls to finish...", end="", flush=True)
+            if queued > 0 and final_result is False and not waiting:
+                waiting = True
+                log.debug("Waiting for %d tool call(s) to finish", queued)
             if final_result is False:
-                stat += 1
-                result_obj.wait(0.1)  # sleeps until a tool finishes; wakes to animate the spinner
+                result_obj.wait(0.1)  # sleeps until a tool finishes
                 continue
             if queued > 0:
-                print("\r[✔] Tool calls are finalized successfully.", flush=True)
+                log.debug("Tool calls are finalized")
 
             if stream:
                 yield final_result
@@ -150,7 +149,8 @@ class BaseModel:
             stream (bool, optional): Stream. Defaults to True.
             max_new_tokens (int, optional): Max new tokens. Defaults to 1024.
             repeat_penalty (float, optional): Repeat penalty. Defaults to 1.0.
-            print_output (bool, optional): Print output. Defaults to False.
+            print_output (bool, optional): Ignored, kept for callers. Prompts and answers are logged at DEBUG
+                (GEMSTONE_LOG_LEVEL=DEBUG), never printed.
             tool_call_caches (dict, optional): The session's tool-result cache (call id -> result).
             **kwargs: Additional arguments
         """
@@ -184,11 +184,8 @@ class BaseModel:
                 prompt = prompt[:-1]  # Remove the last user prompt if it's None
             user_prompt = None  # Reset user prompt to None after appending
 
-            if print_output and initial_operation:
-                print("PROMPT:")
-                for line in prompt:
-                    print(line)
-                print("\nANSWER:")
+            if initial_operation and log.isEnabledFor(logging.DEBUG):
+                log.debug("PROMPT:\n%s", "\n".join(str(line) for line in prompt))
             if initial_operation:
                 initial_operation = False
                 # TODO: Add kv cache control for tool-calling here
@@ -213,36 +210,37 @@ class BaseModel:
                 chat_history=chat_history,
                 tools=tools,
                 stream=stream,
-                print_output=print_output,
                 tool_call_caches=tool_call_caches
             )
 
             if stream:
+                answer = []
                 try:
                     for word in outputs:
                         if word:
                             if self.special_tags.TOOLCALL in word and self.special_tags.TOOLCALL_END in word:
                                 function_called = True  # flag on
-                            if print_output: print(word, end="", flush=True)
+                            answer.append(word)
                             yield word
                 except ValueError as e:  # Over token limit error
-                    traceback.print_exc()
+                    log.exception("Chat failed")
                     if "token" in str(e) and "limit" in str(e):
                         message = "\n\nERROR: Chat is unexpectedly terminated due to token limit. Please shorten your prompt or chat history."
                     else:
                         message = f"\n\nERROR: {type(e)} - Something went wrong while processing the chat. Please try again later.\n{e}"
-                    if print_output: print(message, end="", flush=True)
+                    answer.append(message)
                     yield message
                 except ModelBusy:
                     raise  # the server maps it to 503 / WebSocket close 1013, so it must not become text
                 except Exception as e:  # never let a failure kill the stream without a message
-                    traceback.print_exc()
+                    log.exception("Chat failed")
                     message = f"\n\nERROR: {type(e).__name__} - Something went wrong while processing the chat.\n{e}"
-                    if print_output: print(message, end="", flush=True)
+                    answer.append(message)
                     yield message
                 finally:
-                    print()
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug("ANSWER:\n%s", "".join(answer))
             else:
                 if self.special_tags.TOOLCALL in outputs and self.special_tags.TOOLCALL_END in outputs:
                     function_called = True  # flag on
-                print(outputs, flush=True)
+                log.debug("ANSWER:\n%s", outputs)

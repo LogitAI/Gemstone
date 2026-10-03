@@ -11,11 +11,12 @@ def main(argv):
         sys.exit("usage: python -m api run server [host] [port] [--reload]\n"
                  "env: GEMSTONE_HOST=host[:port], GEMSTONE_API_KEY, GEMSTONE_ORIGINS, GEMSTONE_DEV=1")
     try:
-        from api.src.main import security
+        from api.src.main import security, settings
         server_object = "api.src.main.server:app"
     except ImportError:
-        from src.main import security
+        from src.main import security, settings
         server_object = "src.main.server:app"
+    settings.configure_logging()
     config = security.resolve_server_config(argv)
     security.warn_if_open(config.host)
     run_uvicorn(

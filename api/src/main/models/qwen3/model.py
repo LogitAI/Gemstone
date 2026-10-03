@@ -1,3 +1,4 @@
+import logging
 from typing import List, Dict, Union, Generator, Optional
 
 from ..base import ChatHistory, FunctionCalling, BaseModel
@@ -42,7 +43,7 @@ Earlier tool results appear in the conversation as `<cached_result:ID>`. Before 
 3. Call a new tool only when there is no relevant cache or the cached data is insufficient.
 
 Remember: Your role is to be a reliable, knowledgeable professional assistant who thinks carefully before responding and actively seeks current information when needed."""
-print("INFO:     Use default system prompt -", system_prompt)
+logging.getLogger("gemstone.model").debug("Use default system prompt - %s", system_prompt)
 
 
 class Qwen3Model(BaseModel):

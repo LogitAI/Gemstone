@@ -12,6 +12,7 @@ dependencies = [
     "bs4>=0.0.2",
     "serpapi>=0.1.5",
     "python-dotenv>=1.1.0",
+    "requests>=2.32",  # utils/web_search.py
     "huggingface_hub>=0.31.2",
     "transformers>=5.18",  # the continuous-batching API the engine uses was read and tested against 5.18
     "psutil>=7.0",  # transformers sizes the paged KV cache on CPU from psutil; without it continuous batching cannot start

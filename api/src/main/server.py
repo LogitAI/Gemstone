@@ -5,12 +5,13 @@ from starlette.concurrency import run_in_threadpool
 import anyio
 import uvicorn
 
-import traceback
+import contextlib
+import logging
 import threading
 import json
 import os
 
-from .settings import STATIC_DIR, WEBPACK_DIR, Session
+from .settings import STATIC_DIR, WEBPACK_DIR, Session, configure_logging
 from . import registry as registry_module
 from .leases import acquire
 from .registry import DEFAULT_KEEP_ALIVE, ModelBusy, ModelUnavailable, in_catalogue
@@ -20,7 +21,23 @@ from .ollama_api import router as ollama_router
 from . import security
 
 
-app = FastAPI()
+configure_logging()  # GEMSTONE_LOG_LEVEL
+log = logging.getLogger("gemstone.server")
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app):
+    """ On shutdown close every loaded engine (stops the batching loops, frees the memory). """
+    yield
+    log.info("Shutting down: unloading models")
+    try:
+        # Read the module attribute at call time: the registry may be replaced (tests).
+        await run_in_threadpool(registry_module.registry.unload)
+    except Exception:
+        log.exception("Unloading models on shutdown failed")
+
+
+app = FastAPI(lifespan=lifespan)
 security.install(app)  # Origin policy and the optional API key (SPEC S1.1)
 app.include_router(ollama_router)  # Ollama-compatible API (SPEC S1.15), including POST /api/chat
 app.mount("/static", StaticFiles(directory=STATIC_DIR, html=True), name="static")
@@ -105,7 +122,7 @@ async def chat_with_streaming(websocket: WebSocket):
         session = Session(session_id=session_id)
         hf_id = registry_module.registry.resolve(session.model_id)  # derived models too
     except Exception:
-        traceback.print_exc()
+        log.exception("WebSocket chat failed")
         await websocket.close(code=1008, reason="Invalid session ID or model not found.")
         return
 
@@ -126,7 +143,7 @@ async def chat_with_streaming(websocket: WebSocket):
         await websocket.close(code=1011, reason=_reason(e.reason))
         return
     except Exception:
-        traceback.print_exc()
+        log.exception("Loading the model failed")
         await websocket.close(code=1008, reason="Model not found or failed to load.")
         return
 
@@ -138,7 +155,7 @@ async def chat_with_streaming(websocket: WebSocket):
     done = object()
     try:
         tokens = lease.model.chat(  # a generator: nothing runs until the first `next`
-            chat_history, user_prompt, print_output=True, cancel=cancel, tool_call_caches=session.tool_call_caches
+            chat_history, user_prompt, cancel=cancel, tool_call_caches=session.tool_call_caches
         )
         while (token := await run_in_threadpool(next, tokens, done)) is not done:
             await websocket.send_text(token)
