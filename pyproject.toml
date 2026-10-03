@@ -48,15 +48,17 @@ conflicts = [
 prerelease = "if-necessary"
 
 
+# The engine runs on CPU (CUDA is planned for M4 as a `cuda` extra), so Windows and Linux take the
+# PyTorch CPU wheels instead of multi-GB CUDA builds; macOS uses the PyPI default (CPU/MPS).
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-windows", marker = "platform_system == 'Windows'" },
+    { index = "pytorch-cpu", marker = "platform_system == 'Windows' or platform_system == 'Linux'" },
 ]
 
 
 [[tool.uv.index]]
-name = "pytorch-windows"
-url = "https://download.pytorch.org/whl/cu128"
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 
