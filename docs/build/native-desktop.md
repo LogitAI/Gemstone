@@ -59,7 +59,7 @@ comes from a tracing agent run:
 ```powershell
 $env:JAVA_HOME = "<a GraalVM 22 installation>"
 Start-Job { ./gradlew :app:run -Pagent }
-./script/drive-desktop.ps1     # exercises the UI, then closes the window cleanly
+./tools/drive-desktop.ps1     # exercises the UI, then closes the window cleanly
 ./gradlew :app:metadataCopy
 ```
 
