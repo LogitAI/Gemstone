@@ -196,6 +196,9 @@ at: Gradle 8.13 cannot configure this build on JDK 25. A JDK 21 must be installe
 Verification follows rule 8: redirect Gradle output to a file and read `$?`; run each target's test
 task as its own invocation; delete `app/build/test-results/` before counting.
 
+CI runs `:app:desktopTest` and `:app:compileKotlinWasmJs` on every pull request into `develop`
+(`.github/workflows/app-tests.yml`), and the Python tests (`.github/workflows/api-tests.yml`).
+
 **Current test reality.** Python tests live in `api/tests/`: the engine and continuous batching
 (`test_engine.py`, `test_batching.py`), the WebSocket stream (`test_server.py`), the OpenAI and
 Ollama APIs, model residency and lease release, the tool-result cache, and the backend removal.
