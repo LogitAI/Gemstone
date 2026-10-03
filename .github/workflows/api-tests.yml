@@ -41,4 +41,4 @@ jobs:
         run: uv sync --extra torch
 
       - name: Test
-        run: uv run --extra torch pytest -v
+        run: uv run --extra torch pytest -v -m "real_model or not real_model"

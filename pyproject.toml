@@ -62,3 +62,7 @@ explicit = true
 [tool.pytest.ini_options]
 testpaths = ["api/tests"]
 pythonpath = ["."]
+# Real-model tests are heavy and the machine is shared: they run in CI (`-m "real_model or not real_model"`),
+# not by default. `api/tests/conftest.py` marks every test that uses the `engine` fixture.
+addopts = ["-m", "not real_model"]
+markers = ["real_model: loads or downloads a real model (deselected by default; CI runs it)"]

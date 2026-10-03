@@ -46,3 +46,10 @@ def engine():
             f"Test model {TEST_MODEL} is not in the Hugging Face cache and downloads are off. "
             f"Set GEMSTONE_TEST_ALLOW_DOWNLOAD=1 to fetch it. ({e})"
         )
+
+
+def pytest_collection_modifyitems(config, items):
+    """ Mark every test that loads the real model, so it is deselected by default (see pyproject). """
+    for item in items:
+        if "engine" in getattr(item, "fixturenames", ()):
+            item.add_marker(pytest.mark.real_model)

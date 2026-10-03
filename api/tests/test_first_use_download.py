@@ -131,6 +131,7 @@ def test_acquire_with_fetch_refetches_an_interrupted_pull(hub):
     assert HFStore().get(REPO) is not None
 
 
+@pytest.mark.real_model
 @pytest.mark.skipif(not CI_DOWNLOAD, reason="downloads a real model; set GEMSTONE_TEST_ALLOW_DOWNLOAD=1")
 def test_real_pull_into_an_empty_hf_home_loads_offline(monkeypatch):
     from huggingface_hub import constants
