@@ -171,6 +171,7 @@ uv sync --extra torch                     # upstream PyTorch; or --extra torchna
 uv run --extra torch python -m api run server   # serve on 127.0.0.1:23100 (GEMSTONE_HOST=host[:port] overrides)
 uv run --extra torch pytest                     # api/tests without the real-model tests (marker real_model)
 uv run --extra torch pytest -m "real_model or not real_model"   # all, as CI runs them (SmolLM2-135M)
+GEMSTONE_TEST_DEVICE=mps uv run --extra torch pytest -m real_model   # the real-model tests on another device
 ```
 
 Run on torchnative by the non-blocking `.github/workflows/torchnative-tests.yml` (manual, with a

@@ -6,7 +6,7 @@ q8_0 (`needs_quantization`), or, for the concurrent test, without batching (`nee
 """
 import pytest
 
-from api.tests.conftest import ALLOW_DOWNLOAD, CHAT_TEMPLATE, TEST_MODEL
+from api.tests.conftest import ALLOW_DOWNLOAD, CHAT_TEMPLATE, TEST_DEVICE, TEST_MODEL
 from api.tests.test_batching import PROMPTS, generate, run_concurrently
 
 pytestmark = [pytest.mark.real_model, pytest.mark.needs_quantization, pytest.mark.torchnative_only]
@@ -20,6 +20,7 @@ def q8_engine():
     engine = Engine(
         TEST_MODEL,
         dtype=torch.float32,
+        device=TEST_DEVICE,
         quantization="q8_0",
         chat_template=CHAT_TEMPLATE,
         local_files_only=not ALLOW_DOWNLOAD,
