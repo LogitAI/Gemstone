@@ -221,11 +221,20 @@ object ChatViewModel {
                     is ChatEvent.MessageComplete -> {
                         // Add assistant message to history and UI
                         val data = _uiState.value.currentMessage?.assistant?.trim()
-                        val assistantMessage = if (data.isNullOrEmpty()) {
-                            "[ERROR] The connection was closed unexpectedly, please try again."
-                        } else {
-                            data
+                        if (data.isNullOrEmpty()) {
+                            // An empty reply is an error, not a message: show it, keep it out of the history
+                            // (and drop the unanswered prompt so the next request has no two user turns).
+                            if (chatHistory.lastOrNull()?.role == ChatRole.USER.value) {
+                                chatHistory.removeAt(chatHistory.lastIndex)
+                            }
+                            _uiState.value = _uiState.value.copy(
+                                currentMessage = null,
+                                isResponding = false,
+                                error = "The server sent an empty reply, please try again."
+                            )
+                            return@collect
                         }
+                        val assistantMessage = data
                         chatHistory.add(ChatRole.ASSISTANT.value, assistantMessage)
                         val currentMessage = Conversation(
                             user = _uiState.value.currentMessage?.user ?: "",

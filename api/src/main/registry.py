@@ -509,6 +509,47 @@ def load_engine(hf_id: str):
     return Engine(hf_id, context_length=cls.context_length or None, local_files_only=True, **cls.engine_options)
 
 
+class ModelUnavailable(Exception):
+    """
+    A model that should be fetched could not be: the machine is offline, or the download failed
+    (#114). Not a LookupError: the model exists, it just cannot be had now. `str()` is the full
+    advice; `reason` is a short form for a WebSocket close frame.
+    """
+
+    def __init__(self, message: str, reason: str, offline: bool):
+        super().__init__(message)
+        self.reason, self.offline = reason, offline
+
+    @classmethod
+    def offline(cls, hf_id: str) -> "ModelUnavailable":
+        return cls(f"Model '{hf_id}' is not downloaded and the server is offline, so it cannot be downloaded now. "
+                   f"Connect to the internet once so it can download, or pull it while online.",
+                   f"Model '{hf_id}' is offline and not downloaded. Connect once to download it.", True)
+
+    @classmethod
+    def failed(cls, hf_id: str, cause: BaseException) -> "ModelUnavailable":
+        detail = (str(cause) or type(cause).__name__)[:200]
+        return cls(f"The download of model '{hf_id}' failed: {detail}. Check the connection and free disk space, "
+                   f"then retry or pull it again.",
+                   f"The download of model '{hf_id}' failed. Retry or pull it again.", False)
+
+    @classmethod
+    def from_error(cls, hf_id: str, error: BaseException) -> "ModelUnavailable":
+        """ Classify a failure while fetching `hf_id`: offline or connection errors, else a failed download. """
+        import httpx
+        import requests
+        from huggingface_hub import constants
+        from huggingface_hub.errors import LocalEntryNotFoundError, OfflineModeIsEnabled
+        seen, e = [], error
+        while e is not None and e not in seen:  # the cause chain: the Hub client wraps connection errors
+            seen.append(e)
+            if isinstance(e, (OfflineModeIsEnabled, LocalEntryNotFoundError, requests.ConnectionError,
+                              requests.Timeout, httpx.TransportError, ConnectionError, TimeoutError)):
+                return cls.offline(hf_id)
+            e = e.__cause__ or e.__context__
+        return cls.offline(hf_id) if constants.HF_HUB_OFFLINE else cls.failed(hf_id, error)
+
+
 class ModelBusy(TimeoutError):
     """ A load waited `load_timeout` for room, and every resident model stayed busy. """
 
@@ -668,7 +709,12 @@ class Registry:
         try:
             info = self.store.get(hf_id)
             if info is None and fetch:
-                self.store.download(hf_id)
+                try:
+                    self.store.download(hf_id)
+                except (LookupError, ModelBusy):
+                    raise
+                except Exception as e:  # offline or a broken download (#114)
+                    raise ModelUnavailable.from_error(hf_id, e) from e
                 info = self.store.get(hf_id)
             if info is None:
                 raise LookupError(f"model '{hf_id}' not found, try pulling it first")

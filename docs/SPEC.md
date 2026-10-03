@@ -87,6 +87,14 @@ system prompt, sampling defaults and server-side tools wrap the engine. A catalo
 from the local cache is downloaded on first use; any other model must be pulled first
 (`POST /api/pull`), otherwise the socket closes with code `1008`.
 
+A model that must be fetched but cannot be (the machine is offline, or the download fails) closes
+the socket with code `1011` and a reason of at most 123 bytes that names the model, says whether
+it is offline or the download failed, and what to do (connect once, or pull again) (#114). `1011`
+(server error) is chosen over `1013` (busy, try again later), which keeps meaning "every resident
+model is busy": a retry at once does not help when offline. Close codes the app reads: `1000`
+completes the reply, anything else is an error whose reason it shows (S2.3). No frame announces a
+running first-time download; that needs a client change (follow-up).
+
 - Code: `api/src/main/server.py` (`chat_with_streaming`), `api/src/main/models/base.py`.
   Tests: `api/tests/test_server.py` (real model), `api/tests/test_residency.py` (fake engine).
 
@@ -176,7 +184,10 @@ Implemented (#65), `api/src/main/openai_api.py`:
 - `model` is any name the registry resolves (S1.14). The engine is leased from the registry for
   the whole reply, so it is the one the WebSocket and the Ollama API use. The lease is released
   once the reply ends, also when a stream's client is gone before the response starts (S1.14). A catalogue model missing
-  from the cache is downloaded on first use; another model that is not pulled is a 404. The
+  from the cache is downloaded on first use; another model that is not pulled is a 404. When that
+  download cannot happen (offline, or it fails) the answer is 503 in OpenAI's error shape with
+  `type: "server_error"`, `code: "model_unavailable"` and a message naming the model and saying
+  "offline" or that the download failed (#114). The
   extension `keep_alive` (as in Ollama, default 5 minutes) sets how long the model stays loaded.
 - `POST /v1/chat/completions` accepts `model`, `messages` (`system`, `user`, `assistant` with
   optional `tool_calls`, `tool` with `tool_call_id`; content as a string or a list of text parts),
@@ -450,7 +461,8 @@ Implemented (M3 scope, #66; the rest of the commands, #75):
   `POST /api/push` (below).
 - Streaming is NDJSON by default; `"stream": false` returns one JSON object. Errors are
   `{"error": "..."}`: 400 for a malformed request, 404 for an unknown or not-pulled model, 501 for what Gemstone does
-  not offer, 503 when a load timed out waiting for room (S1.14), 500 for a failed pull. An error after streaming has started arrives as a final `{"error": ...}` line.
+  not offer, 503 when a load timed out waiting for room (S1.14) or a model cannot be downloaded because the
+  machine is offline or the download failed (the message names the model, #114; `/api/pull` too), 500 for a pull of an unknown repository. An error after streaming has started arrives as a final `{"error": ...}` line.
   A stream whose client is gone before it starts still releases the model (S1.14).
 - **Chat.** `messages` (`role`, `content`, `tool_calls`, `tool_name`); `images` are dropped (no
   vision support). `tools` go to the chat template; a `<tool_call>{json}</tool_call>` block the
@@ -563,7 +575,12 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
 - Defect found by reading: a chip's completion flag is created as `false` and never set to
   `true` — the `result` record has the same key as the `call` record and is ignored.
 - Code: `app/src/commonMain/kotlin/gemstone/framework/network/websocket/ChatWebSocketClient.kt`,
-  `.../ui/viewmodel/ChatViewModel.kt`, `.../ui/compose/screen/chat/ChatScreen.kt`. Test: none.
+  `.../ui/viewmodel/ChatViewModel.kt`, `.../ui/compose/screen/chat/ChatScreen.kt`.
+  Test: `app/src/commonTest/.../network/ChatCloseEventTest.kt` (close code to event).
+- A server close with a code other than 1000 (or none) is an error, not a finished reply: the app
+  shows the close reason (S1.4: 1008, 1011, 1013) and stores nothing in the chat history. An empty
+  reply is shown as an error too and kept out of the history, with its unanswered prompt dropped
+  (#114; overlaps #39).
 
 ### S2.4 Layout and navigation — `implemented` · G1
 

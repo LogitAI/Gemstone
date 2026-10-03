@@ -13,7 +13,7 @@ import os
 from .settings import STATIC_DIR, WEBPACK_DIR, Session
 from . import registry as registry_module
 from .leases import acquire
-from .registry import DEFAULT_KEEP_ALIVE, ModelBusy, in_catalogue
+from .registry import DEFAULT_KEEP_ALIVE, ModelBusy, ModelUnavailable, in_catalogue
 from .models.config import ChatHistory
 from .openai_api import router as openai_router
 from .ollama_api import router as ollama_router
@@ -24,6 +24,11 @@ app.include_router(ollama_router)  # Ollama-compatible API (SPEC S1.15), includi
 app.mount("/static", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 app.mount("/webpack", StaticFiles(directory=WEBPACK_DIR, html=True), name="webpack")
 app.include_router(openai_router)  # /v1/*: OpenAI-compatible API (SPEC S1.10)
+
+
+def _reason(text: str) -> str:
+    """ A close-frame reason: at most 123 bytes of UTF-8 (the frame's limit), cut on a character. """
+    return text.encode()[:123].decode(errors="ignore")
 
 
 @app.get("/")
@@ -108,6 +113,9 @@ async def chat_with_streaming(websocket: WebSocket):
         lease = await acquire(registry, hf_id, DEFAULT_KEEP_ALIVE, in_catalogue(session.model_id))
     except ModelBusy as e:  # every resident model stayed busy (SPEC S1.14): 1013 "try again later"
         await websocket.close(code=1013, reason=str(e)[:120])
+        return
+    except ModelUnavailable as e:  # offline or a failed download (#114): 1011, not the "busy" 1013
+        await websocket.close(code=1011, reason=_reason(e.reason))
         return
     except Exception:
         traceback.print_exc()
