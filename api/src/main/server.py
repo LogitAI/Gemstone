@@ -57,14 +57,15 @@ def models():
     }
 
 
-@app.post("/api/models/{model_id}/sessions/")
+@app.post("/api/models/{model_id:path}/sessions/")  # `path`: a Hugging Face id contains a "/"
 @app.post("/api/sessions/")
 def create_session(model_id: str = "default"):
-    """ Create a new session for the specified model """
+    """ Create a new session for the specified model; 404 if the model is unknown (SPEC S1.3) """
     try:
-        session = Session(model_id=model_id)
-    except ValueError as e:
-        return HTTPException(status_code=404, detail=e)
+        registry_module.registry.check_known(model_id)  # resolves the name; loads and fetches nothing
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e.args[0]) if e.args else "Model not found.")
+    session = Session(model_id=model_id)
 
     return dict(model_id=model_id, session_id=session.session_id, message="A session is created successfully.")
 
@@ -72,11 +73,11 @@ def create_session(model_id: str = "default"):
 @app.delete("/api/sessions/{session_id}")
 @app.post("/api/sessions/{session_id}")
 def delete_session(session_id: str):
-    """ Delete a session by its ID """
+    """ Delete a session by its ID; 404 if there is no such session """
     try:
         Session.close(session_id)
-    except KeyError:
-        return HTTPException(status_code=404, detail="The session is not found.")
+    except ValueError:
+        raise HTTPException(status_code=404, detail="The session is not found.")
 
     return dict(message="Session deleted successfully")
 

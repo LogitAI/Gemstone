@@ -55,15 +55,15 @@ and S3.4 also record the maintainer's decisions of the same day ([`serving/engin
   WebSocket chat (S1.4) loads the model through the registry, so sessions on one model, the
   OpenAI API and the Ollama API share one loaded engine. Model classes are not singletons; the
   registry creates one model-class instance per loaded engine.
-- Defects found by reading:
-  - An unknown `model_id` is not rejected at creation; it fails only when the model is first used.
-  - Error paths `return` an `HTTPException` instead of raising it, so the client receives HTTP 200
-    with an error body.
-  - Deleting an unknown session raises `ValueError`, but the endpoint catches `KeyError`, so the
-    response is HTTP 500 instead of 404.
+- Creating a session for an unknown model is `404` with a JSON `detail`: the name must resolve
+  and be a catalogue name (fetched on first use, so not yet downloaded is fine) or a model in the
+  local store (`Registry.check_known`, which loads and fetches nothing). `{model_id}` may hold a
+  "/" (a Hugging Face id). Deleting an unknown session is `404`. Errors are raised, never returned,
+  so every error response has a non-2xx status and a JSON `detail`.
 - Code: `api/src/main/server.py`, `api/src/main/settings.py` (`Session`). Tests: session-id
   uniqueness (`api/tests/test_tool_cache.py`); sessions share the registry's engine and closing
-  one keeps the model (`api/tests/test_residency.py`).
+  one keeps the model (`api/tests/test_residency.py`); the 404s, the `detail` bodies and the
+  create, chat, delete flow (`api/tests/test_sessions.py`).
 
 ### S1.4 Streaming chat over WebSocket — `implemented` · G4
 
