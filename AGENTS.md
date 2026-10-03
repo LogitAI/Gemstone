@@ -163,10 +163,11 @@ status, decisions and open questions.
 
 Gradle and Python are independent toolchains. Neither needs the other to build.
 
-**Python API** (requires Python `>=3.13`, managed with `uv`):
+**Python API** (requires Python 3.13 — `>=3.13,<3.14` until torchnative is measured on 3.14 — managed with `uv`):
 
 ```bash
 uv sync --extra torch                     # upstream PyTorch; or --extra torchnative (never both)
+# torchnative comes from PyPI as a pre-release (0.1.0b4 on 2026-10-03); no version floor is pinned yet
 uv run --extra torch python -m api run server   # serve on 0.0.0.0:23100
 uv run --extra torch pytest                     # api/tests, on SmolLM2-135M from the HF cache
 ```
