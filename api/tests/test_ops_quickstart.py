@@ -177,5 +177,5 @@ def test_quick_start_works_without_an_activated_venv(path):
 
 
 def test_ci_runs_the_documented_command():
-    wf = (ROOT / ".github/workflows/api-tests.yml").read_text()
+    wf = (ROOT / ".github/workflows/test.yml").read_text()
     assert START in wf and "/api/version" in wf

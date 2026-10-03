@@ -211,7 +211,7 @@ uv run --extra torch pytest -m "real_model or not real_model"   # all, as CI run
 GEMSTONE_TEST_DEVICE=mps uv run --extra torch pytest -m real_model   # the real-model tests on another device
 ```
 
-Run on torchnative by the non-blocking `.github/workflows/torchnative-tests.yml` (manual, with a
+Run on torchnative by the non-blocking `.github/workflows/test-torchnative.yml` (manual, with a
 torchnative version input, and weekly; `-rs` lists skips). There a test marked `needs_batching`
 (`engine.batching` is False; the reason is `engine.batching_unavailable`) or `needs_quantization`
 (`torchnative.quant` lacks `TorchnativeConfig` / q8_0) skips with a reason naming that capability and
@@ -244,8 +244,10 @@ at: Gradle 8.13 cannot configure this build on JDK 25. A JDK 21 must be installe
 Verification follows rule 8: redirect Gradle output to a file and read `$?`; run each target's test
 task as its own invocation; delete `app/build/test-results/` before counting.
 
-CI runs `:app:desktopTest` and `:app:compileKotlinWasmJs` on every pull request into `develop`
-(`.github/workflows/app-tests.yml`), and the Python tests (`.github/workflows/api-tests.yml`).
+CI runs the Python tests, the quick-start check, `:app:desktopTest` with `:app:compileKotlinWasmJs`,
+and the web bundle check on every pull request into `develop`, as the jobs `pytest`, `quickstart`,
+`gradle` and `web-bundle` of `.github/workflows/test.yml`. Test workflows are named `test.yml`, or
+`test-<target>.yml` only when their triggers or environment differ (`test-torchnative.yml`).
 
 **Current test reality.** Python tests live in `api/tests/`: the engine and continuous batching
 (`test_engine.py`, `test_batching.py`), the WebSocket stream (`test_server.py`), the OpenAI and
