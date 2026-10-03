@@ -1,0 +1,5 @@
+[
+  {"name":"com.intellij.openapi.diagnostic.Logger"},
+  {"name":"org.slf4j.Logger", "methods":[{"name":"debug", "parameterTypes":["java.lang.String", "java.lang.Throwable"]}, {"name":"error", "parameterTypes":["java.lang.String", "java.lang.Throwable"]}, {"name":"info", "parameterTypes":["java.lang.String", "java.lang.Throwable"]}, {"name":"trace", "parameterTypes":["java.lang.String", "java.lang.Throwable"]}, {"name":"warn", "parameterTypes":["java.lang.String", "java.lang.Throwable"]}]},
+  {"name":"org.slf4j.LoggerFactory", "methods":[{"name":"getLogger", "parameterTypes":["java.lang.String"]}]}
+]

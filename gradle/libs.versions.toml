@@ -1,33 +1,36 @@
 [versions]
-agp = "8.7.3"
-android-compileSdk = "35"
+agp = "8.12.0"
+android-compileSdk = "37"
 android-minSdk = "24"
-android-targetSdk = "35"
-androidx-activity = "1.10.1"
+android-targetSdk = "37"
+androidx-activity = "1.13.0"
 androidx-appcompat = "1.7.1"
 androidx-constraintlayout = "2.2.1"
-androidx-core = "1.16.0"
-androidx-espresso = "3.6.1"
-androidx-lifecycle = "2.9.0"
-androidx-testExt = "1.2.1"
-compose-hotReload = "1.0.0-alpha10"
-compose-multiplatform = "1.8.1"
-compose-navigation = "2.9.0-beta01"
-compose-webview = "1.9.40"
-jewel = "0.28.0-252.15920"
+androidx-core = "1.18.0"
+androidx-espresso = "3.7.0"
+androidx-lifecycle = "2.10.0"
+androidx-testExt = "1.3.0"
+compose-hotReload = "1.0.0"
+compose-multiplatform = "1.9.0"
+compose-navigation = "2.9.2"
+compose-webview = "2.0.3"
+jewel = "0.34.0-253.32098.37"
+jna = "5.14.0"
 junit = "4.13.2"
-kotlin = "2.1.21"
+kotlin = "2.3.20"
 kotlinx-coroutines = "1.10.2"
-kotlinx-serialization = "1.8.1"
-kotlinx-datetime = "0.6.2"
-runtime-android = "1.8.2"
-ktor = "3.0.0"
+kotlinx-serialization = "1.11.0"
+kotlinx-datetime = "0.7.1"
+runtime-android = "1.10.6"
+ktor = "3.4.2"
 
 [libraries]
 compose-webview-multiplatform = { module = "io.github.kevinnzou:compose-webview-multiplatform", version.ref = "compose-webview" }
 jewel-standalone = { module = "org.jetbrains.jewel:jewel-int-ui-standalone", version.ref = "jewel" }
 jewel-decorated-window = { module = "org.jetbrains.jewel:jewel-int-ui-decorated-window", version.ref = "jewel" }
 jewel-foundation = { module = "org.jetbrains.jewel:jewel-foundation", version.ref = "jewel" }
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
+jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jna" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-testJunit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 junit = { module = "junit:junit", version.ref = "junit" }

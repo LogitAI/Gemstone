@@ -3,7 +3,9 @@ name = "gemstone"
 version = "1.0.0"
 description = "This is a open-source multi-platform AI Chat UI written with Compose Multiplatform."
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+license = "Apache-2.0"
+license-files = ["LICENSE.md"]
+requires-python = ">=3.13,<3.14"  # 3.14 once torchnative is measured on it
 dependencies = [
     "uvicorn>=0.34.2",
     "fastapi>=0.115.12",
@@ -12,40 +14,65 @@ dependencies = [
     "bs4>=0.0.2",
     "serpapi>=0.1.5",
     "python-dotenv>=1.1.0",
+    "requests>=2.32",  # utils/web_search.py
     "huggingface_hub>=0.31.2",
-    "transformers>=4.45.3",
-    "bitsandbytes>=0.45.5",
-    "accelerate>=1.7.0",
-    "llama-cpp-python @ https://github.com/thisisthepy/llama-cpp-python/releases/download/v0.3.9/llama_cpp_python-0.3.9-cp311-cp311-win_amd64.whl ; python_version == '3.11' and platform_system == 'Windows'",
-    "llama-cpp-python @ https://github.com/thisisthepy/llama-cpp-python/releases/download/v0.3.9/llama_cpp_python-0.3.9-cp312-cp312-win_amd64.whl ; python_version == '3.12' and platform_system == 'Windows'",
-    "llama-cpp-python @ https://github.com/thisisthepy/llama-cpp-python/releases/download/v0.3.9/llama_cpp_python-0.3.9-cp311-cp311-linux_x86_64.whl ; python_version == '3.11' and platform_system == 'Linux'",
-    "llama-cpp-python @ https://github.com/thisisthepy/llama-cpp-python/releases/download/v0.3.9/llama_cpp_python-0.3.9-cp312-cp312-linux_x86_64.whl ; python_version == '3.12' and platform_system == 'Linux'",
-    "llama-cpp-python>=0.3.9 ; platform_system != 'Windows' and platform_system != 'Linux'",
-    "pynvml>=12.0.0 ; platform_system == 'Windows'",
-    "pynvml>=12.0.0 ; platform_system == 'Linux'",
-    "torch ; platform_system == 'Windows'",
-    "torchvision ; platform_system == 'Windows'",
-    "torchaudio ; platform_system == 'Windows'",
-    "torch ; platform_system == 'Linux'",
-    "torchvision ; platform_system == 'Linux'",
-    "torchaudio ; platform_system == 'Linux'",
-    "torchaudio ; platform_system == 'Linux'",
+    "transformers>=5.18",  # the continuous-batching API the engine uses was read and tested against 5.18
+    "psutil>=7.0",  # transformers sizes the paged KV cache on CPU from psutil; without it continuous batching cannot start
+]
+
+
+# The serving engine runs on whatever `import torch` resolves to. Pick exactly one substrate:
+#   uv sync --extra torch          upstream PyTorch
+#   uv sync --extra torchnative    torchnative, which replaces `import torch` and cannot coexist with it
+[project.optional-dependencies]
+torch = [
+    "torch",
 ]  # !do not add version-specfic torch here!
+torchnative = [
+    "torchnative",
+]
 
 
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+]
+
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "torch" },
+        { extra = "torchnative" },
+    ],
+]
+prerelease = "if-necessary"
+
+
+# The engine runs on CPU (CUDA is planned for M4 as a `cuda` extra), so Windows and Linux take the
+# PyTorch CPU wheels instead of multi-GB CUDA builds; macOS uses the PyPI default (CPU/MPS).
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-windows", marker = "platform_system == 'Windows'" },
-]
-torchvision = [
-    { index = "pytorch-windows", marker = "platform_system == 'Windows'" },
-]
-torchaudio = [
-    { index = "pytorch-windows", marker = "platform_system == 'Windows'" },
+    { index = "pytorch-cpu", marker = "platform_system == 'Windows' or platform_system == 'Linux'" },
 ]
 
 
 [[tool.uv.index]]
-name = "pytorch-windows"
-url = "https://download.pytorch.org/whl/cu128"
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
+
+
+[tool.pytest.ini_options]
+testpaths = ["api/tests"]
+pythonpath = ["."]
+# Real-model tests are heavy and the machine is shared: they run in CI (`-m "real_model or not real_model"`),
+# not by default. `api/tests/conftest.py` marks every test that uses the `engine` fixture.
+addopts = ["-m", "not real_model"]
+markers = [
+    "real_model: loads or downloads a real model (deselected by default; CI runs it)",
+    "needs_batching: needs continuous batching; skipped (reason given) on torchnative when engine.batching is False, never skipped on upstream PyTorch",
+    "needs_quantization: needs torchnative's q8_0 quantisation; skipped (reason given) on torchnative when it is missing, never skipped on upstream PyTorch",
+    "torchnative_only: not collected when `import torch` is upstream PyTorch",
+]

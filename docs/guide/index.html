@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en" data-title-en="Gemstone Guide" data-title-ko="Gemstone 가이드">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gemstone Guide</title>
+<meta name="description" content="Gemstone: one AI chat client for every platform, built to run the model on your own device.">
+<meta name="theme-color" content="#c2185b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c2185b' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M6 3h12l4 6-10 12L2 9z'/%3E%3Cpath d='M2 9h20M7.5 9 12 3l4.5 6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html" data-i18n="none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20M9 3l-1.5 6L12 21l4.5-12L15 3M7.5 9 12 3l4.5 6"/></svg>Gemstone</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="getting-started.html"><span data-lang="en">Get started</span><span data-lang="ko">시작하기</span></a>
+      <a href="concepts.html"><span data-lang="en">Concepts</span><span data-lang="ko">개념</span></a>
+      <a href="guide-server.html"><span data-lang="en">Guides</span><span data-lang="ko">가이드</span></a>
+      <a href="ecosystem.html"><span data-lang="en">Ecosystem</span><span data-lang="ko">생태계</span></a>
+      <a href="faq.html"><span data-lang="en">FAQ &amp; status</span><span data-lang="ko">FAQ · 현황</span></a>
+    </nav>
+    <div class="controls">
+      <button class="btn-icon" id="lang-toggle" type="button" data-i18n="none"><span data-lang="en">한국어</span><span data-lang="ko">English</span></button>
+      <button class="btn-icon" id="theme-toggle" type="button" aria-label="Toggle light and dark theme" data-i18n="none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+    </div>
+  </div>
+</header>
+<main>
+
+<div class="hero"><div class="wrap">
+  <p class="eyebrow" data-i18n="none">Gemstone</p>
+  <h1 data-lang="en">One AI chat client for every platform, <em>built to run the model on your own device.</em></h1><h1 data-lang="ko">모든 플랫폼에 하나의 AI 채팅 클라이언트, <em>모델은 내 기기에서.</em></h1>
+  <p class="lede" data-lang="en">Gemstone pairs a Compose Multiplatform client with a Python model server you run yourself: and is on its way to putting the model inside the app.</p><p class="lede" data-lang="ko">Gemstone 은 Compose Multiplatform 클라이언트와 직접 띄우는 Python 모델 서버를 짝지은 프로젝트이며, 모델을 앱 안으로 옮기는 중입니다.</p>
+  <div class="cta">
+    <a class="button primary" href="getting-started.html"><span data-lang="en">Get started</span><span data-lang="ko">시작하기</span></a>
+    <a class="button" href="https://github.com/LogitAI/Gemstone"><span data-lang="en">View on GitHub</span><span data-lang="ko">GitHub 에서 보기</span></a>
+  </div>
+</div></div>
+<section><div class="wrap">
+  <h2 data-lang="en">The idea</h2><h2 data-lang="ko">생각</h2>
+  <p class="muted prose" data-lang="en">Most AI chat apps are a thin window onto someone else's server. Gemstone starts from the other end.</p><p class="muted prose" data-lang="ko">대부분의 AI 채팅 앱은 남의 서버를 들여다보는 얇은 창입니다. Gemstone 은 반대편에서 출발합니다.</p>
+  <figure class="figure">
+<svg viewBox="0 0 860 300" role="img" aria-label="Today the client talks to a Python server; next, the model runs inside the app.">
+  <text x="20" y="28" class="dg-m" data-lang="en">TODAY</text><text x="20" y="28" class="dg-m" data-lang="ko">지금</text>
+  <rect x="20" y="50" width="170" height="200" rx="14" class="dg-box hot"/>
+  <text x="40" y="84" class="dg-t" data-lang="en">Your device</text><text x="40" y="84" class="dg-t" data-lang="ko">내 기기</text>
+  <rect x="40" y="104" width="130" height="56" rx="8" class="dg-fill"/>
+  <text x="56" y="129" class="dg-t" data-lang="en">Chat client</text><text x="56" y="129" class="dg-t" data-lang="ko">채팅 클라이언트</text>
+  <text x="56" y="148" class="dg-s" data-i18n="none">Compose MP</text>
+  <text x="40" y="196" class="dg-s" data-lang="en">Android · iOS</text><text x="40" y="196" class="dg-s" data-lang="ko">Android · iOS</text>
+  <text x="40" y="216" class="dg-s" data-lang="en">Desktop · Web</text><text x="40" y="216" class="dg-s" data-lang="ko">데스크톱 · 웹</text>
+  <path d="M190 132 H 260" class="dg-line"/>
+  <text x="196" y="122" class="dg-s" data-i18n="none">WebSocket</text>
+  <rect x="260" y="50" width="170" height="200" rx="14" class="dg-box"/>
+  <text x="280" y="84" class="dg-t" data-lang="en">Your server</text><text x="280" y="84" class="dg-t" data-lang="ko">내 서버</text>
+  <rect x="280" y="104" width="130" height="56" rx="8" class="dg-box"/>
+  <text x="296" y="129" class="dg-t" data-lang="en">Model</text><text x="296" y="129" class="dg-t" data-lang="ko">모델</text>
+  <text x="296" y="148" class="dg-s" data-i18n="none">Python · torch</text>
+  <text x="280" y="196" class="dg-s" data-lang="en">Qwen 3 · 0.6B</text><text x="280" y="196" class="dg-s" data-lang="ko">Qwen 3 · 0.6B</text>
+  <text x="280" y="216" class="dg-s" data-lang="en">+ tools</text><text x="280" y="216" class="dg-s" data-lang="ko">+ 도구</text>
+  <path d="M470 150 H 540" class="dg-dash"/><path d="M532 144 L540 150 L532 156" class="dg-dash"/>
+  <text x="580" y="28" class="dg-m" data-lang="en">NEXT</text><text x="580" y="28" class="dg-m" data-lang="ko">다음</text>
+  <rect x="580" y="50" width="260" height="200" rx="14" class="dg-box hot"/>
+  <text x="600" y="84" class="dg-t" data-lang="en">Your device: nothing else</text><text x="600" y="84" class="dg-t" data-lang="ko">내 기기: 그것뿐</text>
+  <rect x="600" y="104" width="105" height="56" rx="8" class="dg-fill"/>
+  <text x="614" y="129" class="dg-t" data-lang="en">Client</text><text x="614" y="129" class="dg-t" data-lang="ko">클라이언트</text>
+  <rect x="715" y="104" width="105" height="56" rx="8" class="dg-fill"/>
+  <text x="729" y="129" class="dg-t" data-lang="en">Model</text><text x="729" y="129" class="dg-t" data-lang="ko">모델</text>
+  <text x="729" y="148" class="dg-s" data-i18n="none">Python</text>
+  <text x="600" y="196" class="dg-s" data-lang="en">via Python Multiplatform</text><text x="600" y="196" class="dg-s" data-lang="ko">Python Multiplatform 으로</text>
+  <text x="600" y="216" class="dg-s" data-lang="en">offline · private</text><text x="600" y="216" class="dg-s" data-lang="ko">오프라인 · 프라이빗</text>
+</svg>
+<figcaption data-lang="en">Today the model runs on a machine you own. Next, it moves into the app itself.</figcaption><figcaption data-lang="ko">지금은 내가 가진 머신에서 모델이 돕니다. 다음에는 앱 안으로 들어옵니다.</figcaption>
+</figure>
+</div></section>
+<section><div class="wrap">
+  <h2 data-lang="en">Principles</h2><h2 data-lang="ko">원칙</h2>
+  <div class="grid"><div class="cell"><span class="num" data-i18n="none">01</span><h3 data-lang="en">Your model, your device</h3><h3 data-lang="ko">내 모델, 내 기기</h3><p data-lang="en">Open-weight models, quantised to fit, run on hardware you control: never on someone else's account.</p><p data-lang="ko">공개 가중치 모델을 양자화해, 내가 통제하는 하드웨어에서 돌립니다. 남의 계정 위가 아닙니다.</p></div><div class="cell"><span class="num" data-i18n="none">02</span><h3 data-lang="en">One client, every screen</h3><h3 data-lang="ko">하나의 클라이언트, 모든 화면</h3><p data-lang="en">Android, iOS, desktop and web share one Kotlin codebase: the UI, the view models and the protocol.</p><p data-lang="ko">Android, iOS, 데스크톱, 웹이 하나의 Kotlin 코드베이스, UI, 뷰모델, 프로토콜, 를 공유합니다.</p></div><div class="cell"><span class="num" data-i18n="none">03</span><h3 data-lang="en">Show the work</h3><h3 data-lang="ko">과정을 보여준다</h3><p data-lang="en">Tokens stream as they are generated. Reasoning and tool calls are visible, not hidden behind a spinner.</p><p data-lang="ko">토큰은 생성되는 즉시 흐릅니다. 추론과 도구 호출은 스피너 뒤에 숨지 않고 보입니다.</p></div><div class="cell"><span class="num" data-i18n="none">04</span><h3 data-lang="en">Honest about status</h3><h3 data-lang="ko">현황에 정직하다</h3><p data-lang="en">Every capability is marked implemented, partial or planned: and the spec may not outgrow the intent.</p><p data-lang="ko">모든 기능은 구현 · 부분 · 예정으로 표시됩니다. 스펙은 의도를 넘어설 수 없습니다.</p></div></div>
+</div></section>
+<section><div class="wrap">
+  <h2 data-lang="en">Where to next</h2><h2 data-lang="ko">다음으로</h2>
+  <div class="grid"><a class="cell" href="getting-started.html"><h3 data-lang="en">Get started →</h3><h3 data-lang="ko">시작하기 →</h3><p data-lang="en">Run the server and a client in five minutes.</p><p data-lang="ko">5분 안에 서버와 클라이언트를 띄웁니다.</p></a><a class="cell" href="concepts.html"><h3 data-lang="en">Concepts →</h3><h3 data-lang="ko">개념 →</h3><p data-lang="en">Two programs, one protocol, and the road to on-device.</p><p data-lang="ko">두 프로그램, 하나의 프로토콜, 그리고 온디바이스로 가는 길.</p></a><a class="cell" href="guide-protocol.html"><h3 data-lang="en">Streaming protocol →</h3><h3 data-lang="ko">스트리밍 프로토콜 →</h3><p data-lang="en">Talk to Gemstone's server from your own code.</p><p data-lang="ko">내 코드에서 Gemstone 서버와 대화하기.</p></a><a class="cell" href="guide-tools.html"><h3 data-lang="en">Add a tool →</h3><h3 data-lang="ko">도구 추가 →</h3><p data-lang="en">Give the model a new function to call.</p><p data-lang="ko">모델이 호출할 새 함수를 줍니다.</p></a></div>
+</div></section>
+
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <p data-lang="en">Gemstone is Apache-2.0-licensed. Source on <a href="https://github.com/LogitAI/Gemstone">GitHub</a>.</p><p data-lang="ko">Gemstone 은 Apache-2.0 라이선스입니다. 소스는 <a href="https://github.com/LogitAI/Gemstone">GitHub</a> 에 있습니다.</p>
+    <p data-lang="en">Part of the <a href="ecosystem.html">thisisthepy ecosystem</a>.</p><p data-lang="ko"><a href="ecosystem.html">thisisthepy 생태계</a>의 일부입니다.</p>
+  </div>
+</footer>
+</body>
+</html>

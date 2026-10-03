@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en" data-title-en="Concepts · Gemstone Guide" data-title-ko="개념 · Gemstone 가이드">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concepts · Gemstone Guide</title>
+<meta name="description" content="How Gemstone is put together.">
+<meta name="theme-color" content="#c2185b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c2185b' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M6 3h12l4 6-10 12L2 9z'/%3E%3Cpath d='M2 9h20M7.5 9 12 3l4.5 6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html" data-i18n="none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20M9 3l-1.5 6L12 21l4.5-12L15 3M7.5 9 12 3l4.5 6"/></svg>Gemstone</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="getting-started.html"><span data-lang="en">Get started</span><span data-lang="ko">시작하기</span></a>
+      <a href="concepts.html" aria-current="page"><span data-lang="en">Concepts</span><span data-lang="ko">개념</span></a>
+      <a href="guide-server.html"><span data-lang="en">Guides</span><span data-lang="ko">가이드</span></a>
+      <a href="ecosystem.html"><span data-lang="en">Ecosystem</span><span data-lang="ko">생태계</span></a>
+      <a href="faq.html"><span data-lang="en">FAQ &amp; status</span><span data-lang="ko">FAQ · 현황</span></a>
+    </nav>
+    <div class="controls">
+      <button class="btn-icon" id="lang-toggle" type="button" data-i18n="none"><span data-lang="en">한국어</span><span data-lang="ko">English</span></button>
+      <button class="btn-icon" id="theme-toggle" type="button" aria-label="Toggle light and dark theme" data-i18n="none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+    </div>
+  </div>
+</header>
+<main>
+<div class="page-head"><div class="wrap">
+  <p class="eyebrow" data-lang="en">Concepts</p><p class="eyebrow" data-lang="ko">개념</p>
+  <h1 data-lang="en">Two programs, one protocol</h1><h1 data-lang="ko">두 프로그램, 하나의 프로토콜</h1>
+  <p data-lang="en">What runs where, how a message travels, and where the project is heading.</p><p data-lang="ko">무엇이 어디서 돌고, 메시지가 어떻게 오가며, 프로젝트가 어디로 가는지.</p>
+</div></div>
+<div class="wrap content"><div class="prose">
+  <h2 data-lang="en">The client</h2><h2 data-lang="ko">클라이언트</h2>
+  <p data-lang="en"><code>app/</code> is a Kotlin Compose Multiplatform application. Almost everything lives in <code>commonMain</code>: the screens, the view models and the network client. Each platform contributes only an entry point and, for Android, iOS and desktop, the shared Ktor CIO engine in <code>cioMain</code>.</p><p data-lang="ko"><code>app/</code> 은 Kotlin Compose Multiplatform 앱입니다. 거의 모든 것이 <code>commonMain</code> 에 있습니다: 화면, 뷰모델, 네트워크 클라이언트. 각 플랫폼은 진입점만, 그리고 Android · iOS · 데스크톱은 <code>cioMain</code> 의 공유 Ktor CIO 엔진만 보탭니다.</p>
+  <div class="table-wrap"><table><thead><tr><th><span data-lang="en">Source set</span><span data-lang="ko">소스셋</span></th><th><span data-lang="en">Holds</span><span data-lang="ko">내용</span></th></tr></thead><tbody><tr><td><span data-i18n="none"><code>commonMain</code></span></td><td><span data-lang="en">UI, view models, protocol</span><span data-lang="ko">UI, 뷰모델, 프로토콜</span></td></tr><tr><td><span data-i18n="none"><code>cioMain</code></span></td><td><span data-lang="en">Ktor CIO HTTP/WebSocket engine</span><span data-lang="ko">Ktor CIO HTTP/WebSocket 엔진</span></td></tr><tr><td><span data-i18n="none"><code>androidMain</code> · <code>iosMain</code></span></td><td><span data-lang="en">Activity / UIViewController entry</span><span data-lang="ko">Activity / UIViewController 진입점</span></td></tr><tr><td><span data-i18n="none"><code>desktopMain</code></span></td><td><span data-lang="en">Jewel window, command-line flags</span><span data-lang="ko">Jewel 창, 명령줄 옵션</span></td></tr><tr><td><span data-i18n="none"><code>wasmJsMain</code></span></td><td><span data-lang="en">Browser entry, Ktor JS engine</span><span data-lang="ko">브라우저 진입점, Ktor JS 엔진</span></td></tr></tbody></table></div>
+
+  <h2 data-lang="en">The server</h2><h2 data-lang="ko">서버</h2>
+  <p data-lang="en"><code>api/</code> is a FastAPI application. A <strong>model</strong> (Qwen 3) owns its prompt, sampling defaults and the tools it may call; a single transformers-based <strong>engine</strong> (on upstream PyTorch or torchnative) owns the weights and the generation loop. A <strong>session</strong> binds a client to a model; models are loaded lazily and shared by sessions.</p><p data-lang="ko"><code>api/</code> 은 FastAPI 앱입니다. <strong>모델</strong>(Qwen 3)은 프롬프트, 샘플링 기본값, 호출 가능한 도구를 가지고, transformers 기반 단일 <strong>엔진</strong>(upstream PyTorch 또는 torchnative 위)은 가중치와 생성 루프를 가집니다. <strong>세션</strong>은 클라이언트를 모델에 묶습니다. 모델은 처음 쓸 때 로드되고 세션끼리 공유됩니다.</p>
+
+  <h2 data-lang="en">One message, end to end</h2><h2 data-lang="ko">메시지 하나의 여정</h2>
+  <ol>
+    <li data-lang="en">The client creates a session: <code>POST /api/models/qwen3/sessions/</code>.</li><li data-lang="ko">클라이언트가 세션을 만듭니다: <code>POST /api/models/qwen3/sessions/</code>.</li>
+    <li data-lang="en">It opens <code>/api/chat/streaming</code> and sends three frames: the session id, the history, the prompt.</li><li data-lang="ko"><code>/api/chat/streaming</code> 을 열고 프레임 세 개를 보냅니다: 세션 id, 대화 기록, 프롬프트.</li>
+    <li data-lang="en">The server streams text back. <code>&lt;think&gt;</code> … <code>&lt;/think&gt;</code> frames bracket reasoning; <code>&lt;tool_call&gt;</code> frames report tool activity.</li><li data-lang="ko">서버가 텍스트를 흘려 보냅니다. <code>&lt;think&gt;</code> … <code>&lt;/think&gt;</code> 프레임이 추론을 감싸고, <code>&lt;tool_call&gt;</code> 프레임이 도구 활동을 알립니다.</li>
+    <li data-lang="en">If the model called tools, the server runs them in parallel, adds the results to the history and generates again.</li><li data-lang="ko">모델이 도구를 호출했다면 서버가 병렬로 실행해 결과를 기록에 넣고 다시 생성합니다.</li>
+    <li data-lang="en"><code>&lt;EOS&gt;</code> ends the answer and the socket closes.</li><li data-lang="ko"><code>&lt;EOS&gt;</code> 가 답을 끝내고 소켓이 닫힙니다.</li>
+  </ol>
+  <p data-lang="en">The details are in <a href="guide-protocol.html">Streaming protocol</a>.</p><p data-lang="ko">자세한 내용은 <a href="guide-protocol.html">스트리밍 프로토콜</a>에 있습니다.</p>
+
+  <h2 data-lang="en">The road to on-device</h2><h2 data-lang="ko">온디바이스로 가는 길</h2>
+  <p data-lang="en">The server exists because phones cannot yet run the Python model code. <a href="https://github.com/thisisthepy/python-multiplatform">Python Multiplatform</a> embeds CPython in Kotlin Multiplatform; once Gemstone adopts it, the model moves into the app and the network step disappears. That is the project's intent: the server is the bridge, not the destination.</p><p data-lang="ko">서버가 있는 이유는 아직 휴대폰이 Python 모델 코드를 돌릴 수 없기 때문입니다. <a href="https://github.com/thisisthepy/python-multiplatform">Python Multiplatform</a> 은 CPython 을 Kotlin Multiplatform 에 임베딩합니다. Gemstone 이 이를 채택하면 모델이 앱 안으로 들어오고 네트워크 단계가 사라집니다. 그것이 이 프로젝트의 의도입니다: 서버는 다리이지 목적지가 아닙니다.</p>
+  <p class="note" data-lang="en">Status: planned. See <a href="faq.html#status">FAQ &amp; status</a>.</p><p class="note" data-lang="ko">상태: 예정. <a href="faq.html#status">FAQ · 현황</a>을 보세요.</p>
+  <nav class="pager" aria-label="Pages"><a href="getting-started.html"><span data-lang="en">← Get started</span><span data-lang="ko">← 시작하기</span></a><a href="guide-server.html"><span data-lang="en">Run the server →</span><span data-lang="ko">서버 운영 →</span></a></nav>
+</div></div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <p data-lang="en">Gemstone is Apache-2.0-licensed. Source on <a href="https://github.com/LogitAI/Gemstone">GitHub</a>.</p><p data-lang="ko">Gemstone 은 Apache-2.0 라이선스입니다. 소스는 <a href="https://github.com/LogitAI/Gemstone">GitHub</a> 에 있습니다.</p>
+    <p data-lang="en">Part of the <a href="ecosystem.html">thisisthepy ecosystem</a>.</p><p data-lang="ko"><a href="ecosystem.html">thisisthepy 생태계</a>의 일부입니다.</p>
+  </div>
+</footer>
+</body>
+</html>

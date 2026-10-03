@@ -1,12 +1,11 @@
+import logging
 from typing import List, Dict, Union, Generator, Optional
 
 from ..base import ChatHistory, FunctionCalling, BaseModel
-from ...backend import BackendType, CoreRuntime
 
 
 # Set model id
-model_id = "Qwen/Qwen3-14B-Instruct"
-gguf_model_id = "Qwen/Qwen3-14B-GGUF"
+model_id = "Qwen/Qwen3-0.6B"
 context_length = 40960  # Set context length to 40960 tokens (max 40960)
 
 
@@ -37,41 +36,24 @@ RESPONSE GUIDELINES:
 - When interpreting relative time expressions, always use calendar week boundaries (Monday-Sunday), not rolling periods from today
 - Always prioritize accuracy over speed
 
+**[Cache-First Principle]** (from PR #53 by @Mir47-47)
+Earlier tool results appear in the conversation as `<cached_result:ID>`. Before calling a tool:
+1. If an earlier tool call could answer the user's question, call `get_cache_data` with its ID first.
+2. If the cached data answers the question, use it. Do not call the original tool again.
+3. Call a new tool only when there is no relevant cache or the cached data is insufficient.
+
 Remember: Your role is to be a reliable, knowledgeable professional assistant who thinks carefully before responding and actively seeks current information when needed."""
-print("INFO:     Use default system prompt -", system_prompt)
+logging.getLogger("gemstone.model").debug("Use default system prompt - %s", system_prompt)
 
 
 class Qwen3Model(BaseModel):
     """
-    Qwen 3 14B 4bitQ Instruct model implementation.
+    Qwen 3 0.6B model implementation.
     This class extends BaseModel and provides methods for chatting and token streaming.
     """
     model_id = model_id
-    gguf_model_id = gguf_model_id
     context_length = context_length
-    supported_backends = tuple([BackendType.GGUF, BackendType.BIN])
     supported_tools: FunctionCalling = BaseModel.supported_tools
-
-    def _get_runtime(self, backend: BackendType | None = None):
-        if backend is None:  # Default to GGUF backend
-            backend = self.supported_backends[0]
-        super()._get_runtime(backend)
-
-        if backend == BackendType.GGUF:
-            return CoreRuntime(
-                model_id=self.gguf_model_id,
-                context_length=self.context_length,
-                filename="*Q4_K_M.gguf",  # 4bit quantized model
-                verbose=False,
-                backend=backend.value
-            )
-        elif backend == BackendType.BIN:
-            return CoreRuntime(
-                model_id=self.model_id,
-                context_length=self.context_length,
-                device_map="cuda:0",
-                backend=backend.value
-            )
 
     def chat(
         self,

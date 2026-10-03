@@ -6,6 +6,8 @@
 .gradle/
 .kotlin/
 build/
+!docs/build/
+!docs/build/**
 **/build/
 !src/**/build/
 kotlin-js-store/
@@ -71,6 +73,8 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+!docs/build/
+!docs/build/**
 develop-eggs/
 dist/
 downloads/
@@ -227,7 +231,7 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 *.*~
 
 # Ruff stuff:
@@ -235,3 +239,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+############################################
+# Agent workspace (see AGENTS.md section 2)
+#
+.worktrees/
+.tmp/
