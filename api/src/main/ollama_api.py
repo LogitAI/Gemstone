@@ -14,6 +14,7 @@ returned as `message.tool_calls` and never executed. Model names resolve through
 """
 from importlib import metadata
 from typing import Iterator, List, Optional
+import itertools
 import json
 import threading
 import time
@@ -392,13 +393,28 @@ async def _run(body: dict, messages: list, tools, render, finish):
     if body.get("stream", True) is False:
         try:
             collected = await run_in_threadpool(list, events)
+        except ModelBusy:
+            raise  # 503: the model stayed busy past the queue timeout (the generator released the lease)
         except Exception as e:
             return _error(500, str(e))
         return JSONResponse(render(name, collected, stream=False))
 
+    # The first step runs before the response starts, so a request that waited past the queue
+    # timeout is still an HTTP 503 (the generator released the lease when it failed).
+    end = object()
+    failure = None
+    try:
+        first = await run_in_threadpool(next, events, end)
+    except ModelBusy:
+        raise
+    except Exception as e:  # reported on the stream, as before
+        first, failure = end, e
+
     def lines():
         try:
-            for event in events:
+            if failure is not None:
+                raise failure
+            for event in ([] if first is end else itertools.chain([first], events)):
                 line = render(name, [event], stream=True)
                 if line is not None:
                     yield line
