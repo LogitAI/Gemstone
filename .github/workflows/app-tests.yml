@@ -1,0 +1,45 @@
+name: App tests
+
+# Runs the Kotlin client's common tests on the JVM and compiles the web (Wasm) target, so client
+# changes are verified on every pull request instead of only on a developer machine.
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gradle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Common tests on the JVM
+        run: ./gradlew :app:desktopTest --console=plain
+
+      - name: Compile the web target
+        run: ./gradlew :app:compileKotlinWasmJs --console=plain
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-test-results
+          path: app/build/test-results/desktopTest/
+          if-no-files-found: ignore
