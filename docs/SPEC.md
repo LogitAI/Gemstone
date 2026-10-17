@@ -195,7 +195,8 @@ Test: `api/tests/test_backends_removed.py`.
 ### S1.9 Bundled web clients: `implemented` · G1
 
 - `GET /` serves the prebuilt Wasm client (`api/src/main/webpack/gemstone.html`); `/webpack/*` and
-  `/composeResources/*` serve its assets.
+  `/composeResources/*` serve its assets. The bundle is committed, so a git clone serves it without
+  a JDK; develop CI rebuilds it from `app/` and commits it when it differs (#197).
 - `GET /chat` serves a minimal Brython test page (`api/src/main/static/`).
 - Code: `api/src/main/server.py`. Test: `api/tests/test_web_assets.py`.
 

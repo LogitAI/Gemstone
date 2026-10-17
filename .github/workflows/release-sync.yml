@@ -6,6 +6,9 @@ name: Release sync
 on:
   push:
     branches: [develop]
+  # Started by test.yml (web-bundle) after it commits the web bundle: a push made with
+  # GITHUB_TOKEN starts no workflow (#197)
+  workflow_dispatch:
 
 permissions:
   contents: write
