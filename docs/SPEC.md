@@ -284,7 +284,17 @@ Implemented (#84), `api/src/main/engine.py`:
   `from_pretrained`. `quantization="q8_0"` goes through torchnative's `TorchnativeConfig`; this is the
   November weight format but is unverified until torchnative's #15 gate measures q8_0 with batching.
 - Calling it with chat messages streams the reply as text chunks. Temperature 0 is greedy and
-  equals `transformers` `generate`; `seed` makes sampling reproducible.
+  equals `transformers` `generate`; `seed` makes sampling reproducible. Both paths sample with
+  the per-request sampler of S1.12 (on the exclusive path `generate` runs greedily and the sampler
+  is its logits processor), so a seed gives the same tokens batched or exclusive, and no path seeds
+  or draws from torch's process-wide RNG, which concurrent requests on other engines would share
+  (#182, FT7 of `serving/free-threading.md`). The exclusive path also applies `typical_p` there,
+  after `min_p`, with transformers' `TypicalLogitsWarper` rule; `repeat_penalty` stays
+  transformers' own processor and runs first.
+- **Changed in 1.1.0:** before #182 the exclusive path seeded `torch.manual_seed` and sampled
+  with `generate`'s own warpers, so a seeded reply on that path (a request with `typical_p` or
+  `repeat_penalty` set, extra `generate` arguments, batching off, or a budget larger than the KV
+  cache) differs once from what the same seed gave in 1.0.x. Seeded batched replies are unchanged.
 - Concurrent callers are batched (S1.12). A request the batch cannot serve takes the exclusive
   path, where one `generate` runs at a time and concurrent callers wait and get the same output as
   sequential calls (#36). The exclusive path is used when batching is off (`batching=False`) or
@@ -352,8 +362,11 @@ Implemented (#63), `api/src/main/engine.py`:
   requests in the batch. The engine runs the manager greedily and samples in its own per-request
   logits processors instead: the last one draws each row's token from that request's own
   random stream (`random.Random(seed)`, plain Python, so no torch RNG is needed: torchnative has
-  no `torch.Generator` yet), so the draw sequence of a request depends only on its seed.
-  Test: `api/tests/test_sampler_rng.py`.
+  no `torch.Generator` yet), so the draw sequence of a request depends only on its seed. The
+  exclusive path uses the same filters and draw (S1.11), so a seed gives the same tokens on both.
+  Tests: `api/tests/test_sampler_rng.py` (draws, request ids, `typical_p` against transformers);
+  `api/tests/test_batching.py` (`test_same_seed_sample_is_identical_batched_or_exclusive`);
+  `api/tests/test_engine.py` (`test_seeded_exclusive_sample_reproduces_without_the_global_rng`).
 - Each batched request gets a request id unique across engines (the sampler state is keyed by
   it), drawn under a lock so concurrent requests never share one without the GIL either (#180).
 - Requests the batch does not serve take the exclusive path (S1.11).

@@ -51,3 +51,17 @@ def test_request_ids_are_unique_across_threads():
     for t in threads:
         t.join()
     assert len(ids) == 16 * 2000 and len(set(ids)) == len(ids)
+
+
+def test_typical_p_filter_matches_transformers():
+    # The exclusive path filters typical_p itself (#182); it must keep the same tokens as
+    # transformers' TypicalLogitsWarper, the filter `generate` applied before.
+    import torch
+    from transformers.generation.logits_process import TypicalLogitsWarper
+
+    torch.manual_seed(3)
+    scores = torch.randn(2, 64) * 3
+    for mass in (0.2, 0.5, 0.9):
+        expected = TypicalLogitsWarper(mass)(None, scores.clone())
+        actual = engine_module._typical_p(scores.clone(), torch.full((2, 1), mass))
+        assert torch.equal(torch.isinf(actual), torch.isinf(expected)), mass

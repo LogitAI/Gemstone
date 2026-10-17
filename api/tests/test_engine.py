@@ -43,6 +43,25 @@ def test_same_seed_gives_same_sample(engine):
     assert first == second
 
 
+def test_seeded_exclusive_sample_reproduces_without_the_global_rng(engine, monkeypatch):
+    # FT7 (#182): the exclusive path draws from the request's own seed, never from torch's
+    # process-wide RNG, which another engine or thread may be using at the same time.
+    import torch
+
+    monkeypatch.setattr(engine, "_batcher", None)  # every request takes the exclusive path
+    sampled = dict(temperature=1.0, top_p=0.9, top_k=50, typical_p=0.9, repeat_penalty=1.1, seed=7)
+
+    torch.manual_seed(0)
+    before = torch.get_rng_state()
+    first = generate(engine, **sampled)
+    assert torch.equal(torch.get_rng_state(), before), "the exclusive path used the global torch RNG"
+
+    torch.manual_seed(12345)  # someone else reseeds the global RNG in between
+    second = generate(engine, **sampled)
+
+    assert first.strip() and first == second
+
+
 def test_unbatchable_requests_run_one_at_a_time_and_match_sequential(engine, monkeypatch):
     # Extra `generate` keyword arguments (here `min_new_tokens`) take the exclusive path, which
     # runs one `generate` at a time with no batched request alongside it.

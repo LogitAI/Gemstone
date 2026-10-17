@@ -271,7 +271,7 @@ class Engine:
     ) -> Generator[str, None, None]:
         """ One `model.generate`, with no other generation running (the M1 engine). """
         import torch
-        from transformers import StoppingCriteria, StoppingCriteriaList, TextIteratorStreamer
+        from transformers import LogitsProcessorList, StoppingCriteria, StoppingCriteriaList, TextIteratorStreamer
 
         stop = threading.Event()
 
@@ -282,29 +282,34 @@ class Engine:
         with self._gate.exclusive(self._wait()):
             inputs = torch.tensor([input_ids], dtype=torch.long, device=self.model.device)
             streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
-            do_sample = temperature > 0
+            # `generate` runs greedily and Gemstone's own sampler, the one the batch uses (S1.12),
+            # picks the token from the request's seed: no torch RNG is touched (FT7, #182).
             generation_kwargs = dict(
                 input_ids=inputs,
                 attention_mask=torch.ones_like(inputs),
                 max_new_tokens=max_new_tokens,
-                do_sample=do_sample,
+                do_sample=False,
                 repetition_penalty=repeat_penalty,
                 streamer=streamer,
                 stopping_criteria=StoppingCriteriaList([_Stop()]),
                 pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             )
-            if do_sample:
-                generation_kwargs.update(temperature=temperature, top_p=top_p, top_k=top_k, typical_p=typical_p)
-                if min_p:
-                    generation_kwargs.update(min_p=min_p)
+            if temperature > 0:
+                generation_kwargs.update(logits_processor=LogitsProcessorList([_ExclusiveSampler(
+                    temperature=float(temperature),
+                    top_k=int(top_k or 0),
+                    top_p=float(top_p if top_p is not None else 1.0),
+                    min_p=float(min_p or 0.0),
+                    typical_p=float(typical_p if typical_p is not None else 1.0),
+                    seed=int(seed) if seed is not None else random.SystemRandom().randrange(2**62),
+                    prompt_length=len(input_ids),
+                )]))
             generation_kwargs.update(kwargs)
 
             failure = []
 
             def run():
                 try:
-                    if seed is not None:
-                        torch.manual_seed(seed)
                     with torch.no_grad():
                         self.model.generate(**generation_kwargs)
                 except BaseException as e:  # re-raised in the consumer
@@ -638,6 +643,107 @@ def _next_request_id() -> str:
         return f"gemstone-{next(_REQUEST_IDS)}"
 
 
+# The filters and the draw, shared by the batch's processors and the exclusive path's sampler so
+# both pick the same token for the same seed. Each takes `scores` [B, V] and a [B, 1] argument.
+
+def _temperature(scores, temperature):
+    return scores / temperature
+
+
+def _top_k(scores, k):
+    import torch
+
+    vocab = scores.size(-1)
+    k = k.to(torch.int64)
+    k = torch.where(k <= 0, torch.full_like(k, vocab), k.clamp(max=vocab))  # 0 = off
+    sorted_scores = torch.sort(scores, dim=-1, descending=True)[0]
+    thresholds = sorted_scores.gather(-1, k - 1)
+    return scores.masked_fill(scores < thresholds, float("-inf"))
+
+
+def _top_p(scores, top_p):
+    import torch
+
+    sorted_logits, sorted_indices = torch.sort(scores, descending=False, dim=-1)
+    cumulative = sorted_logits.softmax(dim=-1).cumsum(dim=-1)
+    remove = (cumulative <= 1 - top_p) & (top_p < 1)
+    remove[..., -1:] = False  # always keep the most likely token
+    remove = remove.scatter(-1, sorted_indices, remove)
+    return scores.masked_fill(remove, float("-inf"))
+
+
+def _min_p(scores, min_p):
+    probs = scores.softmax(dim=-1)
+    remove = probs < min_p * probs.max(dim=-1, keepdim=True).values
+    return scores.masked_fill(remove, float("-inf"))
+
+
+def _typical_p(scores, mass):
+    """ Locally typical sampling, as transformers' TypicalLogitsWarper (1 = off). """
+    import torch
+
+    normalized = torch.nn.functional.log_softmax(scores, dim=-1)
+    entropy = -(normalized * normalized.exp()).nansum(-1, keepdim=True)
+    shifted = torch.abs(-normalized - entropy)
+    sorted_shifted, sorted_indices = torch.sort(shifted, descending=False, dim=-1)
+    cumulative = scores.gather(-1, sorted_indices).softmax(dim=-1).cumsum(dim=-1)
+    last = (cumulative < mass).sum(dim=-1, keepdim=True).clamp(max=scores.size(-1) - 1)
+    remove = sorted_shifted > sorted_shifted.gather(-1, last)
+    remove[..., :1] = False  # always keep the most typical token
+    remove = remove & (mass < 1)
+    remove = remove.scatter(-1, sorted_indices, remove)
+    return scores.masked_fill(remove, float("-inf"))
+
+
+def _draw(scores, u):
+    """ Inverse-CDF draw with each row's uniform number `u`; a negative `u` leaves the row as is. """
+    import torch
+
+    probs = scores.softmax(dim=-1)
+    cdf = probs.cumsum(dim=-1)
+    target = u.clamp(min=0.0, max=1.0 - 2.0**-24) * cdf[..., -1:]
+    # First token whose cumulative probability exceeds the target: it has non-zero probability.
+    token = (cdf <= target).sum(dim=-1, keepdim=True).clamp(max=scores.size(-1) - 1)
+    chosen = torch.full_like(scores, float("-inf")).scatter(-1, token, 0.0)
+    return torch.where(u < 0, scores, chosen)
+
+
+class _ExclusiveSampler:
+    """
+    The exclusive path's sampler: a transformers logits processor for a greedy `generate` that
+    applies the batch's filters in the batch's order (temperature, top_k, top_p, min_p), then
+    typical_p, which only the exclusive path serves, and leaves selectable only the token drawn
+    with the request's own uniform numbers (`random.Random(seed)`, indexed by generated token).
+    """
+
+    def __init__(self, temperature, top_k, top_p, min_p, typical_p, seed, prompt_length):
+        self.args = (temperature, top_k, top_p, min_p, typical_p)
+        self.random, self.draws = random.Random(seed), []
+        self.prompt_length = prompt_length
+
+    def uniform(self, index: int) -> float:
+        while len(self.draws) <= index:
+            self.draws.append(self.random.random())
+        return self.draws[index]
+
+    def __call__(self, input_ids, scores):
+        import torch
+
+        temperature, top_k, top_p, min_p, typical_p = self.args
+        rows = scores.size(0)
+
+        def arg(value, dtype=torch.float32):
+            return torch.full((rows, 1), value, dtype=dtype, device=scores.device)
+
+        scores = _temperature(scores, arg(temperature))
+        scores = _top_k(scores, arg(top_k, torch.int64))
+        scores = _top_p(scores, arg(top_p))
+        scores = _min_p(scores, arg(min_p))
+        if typical_p < 1.0:
+            scores = _typical_p(scores, arg(typical_p))
+        return _draw(scores, arg(self.uniform(input_ids.size(-1) - self.prompt_length)))
+
+
 def _define_samplers():
     import torch
     from transformers.generation.continuous_batching.cb_logits_processors import ContinuousBatchingLogitsProcessor
@@ -659,7 +765,7 @@ def _define_samplers():
             return as_float([r.state.logit_processor_kwargs.get("temperature", 1.0) for r in requests])
 
         def __call__(self, scores, tensor_arg):
-            return scores / float_arg(tensor_arg, scores.size(0))
+            return _temperature(scores, float_arg(tensor_arg, scores.size(0)))
 
     class TopK(ContinuousBatchingLogitsProcessor):
         supported_kwargs = {"top_k": int}
@@ -674,12 +780,7 @@ def _define_samplers():
             )
 
         def __call__(self, scores, tensor_arg):
-            vocab = scores.size(-1)
-            k = tensor_arg[: scores.size(0)].to(torch.int64)
-            k = torch.where(k <= 0, torch.full_like(k, vocab), k.clamp(max=vocab))  # 0 = off
-            sorted_scores = torch.sort(scores, dim=-1, descending=True)[0]
-            thresholds = sorted_scores.gather(-1, (k - 1).unsqueeze(-1))
-            return scores.masked_fill(scores < thresholds, float("-inf"))
+            return _top_k(scores, tensor_arg[: scores.size(0)].unsqueeze(-1))
 
     class TopP(ContinuousBatchingLogitsProcessor):
         supported_kwargs = {"top_p": float}
@@ -692,13 +793,7 @@ def _define_samplers():
             return as_float([r.state.logit_processor_kwargs.get("top_p", 1.0) for r in requests])
 
         def __call__(self, scores, tensor_arg):
-            top_p = float_arg(tensor_arg, scores.size(0))
-            sorted_logits, sorted_indices = torch.sort(scores, descending=False, dim=-1)
-            cumulative = sorted_logits.softmax(dim=-1).cumsum(dim=-1)
-            remove = (cumulative <= 1 - top_p) & (top_p < 1)
-            remove[..., -1:] = False  # always keep the most likely token
-            remove = remove.scatter(-1, sorted_indices, remove)
-            return scores.masked_fill(remove, float("-inf"))
+            return _top_p(scores, float_arg(tensor_arg, scores.size(0)))
 
     class MinP(ContinuousBatchingLogitsProcessor):
         supported_kwargs = {"min_p": float}
@@ -711,10 +806,7 @@ def _define_samplers():
             return as_float([r.state.logit_processor_kwargs.get("min_p", 0.0) for r in requests])
 
         def __call__(self, scores, tensor_arg):
-            min_p = float_arg(tensor_arg, scores.size(0))
-            probs = scores.softmax(dim=-1)
-            remove = probs < min_p * probs.max(dim=-1, keepdim=True).values
-            return scores.masked_fill(remove, float("-inf"))
+            return _min_p(scores, float_arg(tensor_arg, scores.size(0)))
 
     class Draw(ContinuousBatchingLogitsProcessor):
         """ Inverse-CDF draw with the request's own uniform number; a negative seed means greedy. """
@@ -741,14 +833,7 @@ def _define_samplers():
             return as_float(uniforms)
 
         def __call__(self, scores, tensor_arg):
-            u = float_arg(tensor_arg, scores.size(0))  # [B, 1]
-            probs = scores.softmax(dim=-1)
-            cdf = probs.cumsum(dim=-1)
-            target = u.clamp(min=0.0, max=1.0 - 2.0**-24) * cdf[..., -1:]
-            # First token whose cumulative probability exceeds the target: it has non-zero probability.
-            token = (cdf <= target).sum(dim=-1, keepdim=True).clamp(max=scores.size(-1) - 1)
-            chosen = torch.full_like(scores, float("-inf")).scatter(-1, token, 0.0)
-            return torch.where(u < 0, scores, chosen)
+            return _draw(scores, float_arg(tensor_arg, scores.size(0)))
 
     return [Temperature, TopK, TopP, MinP, Draw]
 
