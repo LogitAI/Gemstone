@@ -39,7 +39,7 @@
 <div class="wrap content"><div class="prose">
   <h2 data-lang="en">Requirements</h2><h2 data-lang="ko">준비물</h2>
   <ul>
-    <li data-lang="en">Git, <strong>Python 3.13</strong> (the project pins <code>&gt;=3.13,&lt;3.14</code> until torchnative is measured on 3.14) and <a href="https://docs.astral.sh/uv/">uv</a>.</li><li data-lang="ko">Git, <strong>Python 3.13</strong> (torchnative 가 3.14 에서 측정될 때까지 <code>&gt;=3.13,&lt;3.14</code> 로 고정), <a href="https://docs.astral.sh/uv/">uv</a>.</li>
+    <li data-lang="en">Git, <strong>Python 3.13</strong> for upstream PyTorch or free-threaded <strong>3.15t</strong> for torchnative, and <a href="https://docs.astral.sh/uv/">uv</a>. uv can install either one for you.</li><li data-lang="ko">Git, upstream PyTorch 용 <strong>Python 3.13</strong> 또는 torchnative 용 free-threaded <strong>3.15t</strong>, <a href="https://docs.astral.sh/uv/">uv</a>. 둘 다 uv 가 설치해 줍니다.</li>
     <li data-lang="en">JDK 21 or newer for the Kotlin client.</li><li data-lang="ko">Kotlin 클라이언트용 JDK 21 이상.</li>
     <li data-lang="en">No GPU is needed: the engine runs on the CPU (GPU support is planned) and the default model, Qwen 3 0.6B, is small enough for it.</li><li data-lang="ko">GPU 는 필요 없습니다. 엔진은 CPU 에서 돌고(GPU 지원은 예정) 기본 모델인 Qwen 3 0.6B 는 그걸로 충분합니다.</li>
     <li data-lang="en">Xcode, for iOS only.</li><li data-lang="ko">iOS 에만 Xcode.</li>
@@ -48,8 +48,8 @@
   <h2 data-lang="en">1. Install the server</h2><h2 data-lang="ko">1. 서버 설치</h2>
 <pre><code>git clone https://github.com/LogitAI/Gemstone.git
 cd Gemstone
-uv sync --extra torch</code></pre>
-  <p data-lang="en">That installs upstream PyTorch. To use <a href="https://github.com/thisisthepy/torchnative">torchnative</a> instead, run <code>uv sync --extra torchnative</code>. The two extras cannot be installed together.</p><p data-lang="ko">이렇게 하면 upstream PyTorch 가 설치됩니다. 대신 <a href="https://github.com/thisisthepy/torchnative">torchnative</a> 를 쓰려면 <code>uv sync --extra torchnative</code> 를 실행하세요. 두 extra 는 함께 설치할 수 없습니다.</p>
+uv sync --python 3.13 --extra torch</code></pre>
+  <p data-lang="en">That installs upstream PyTorch. To use <a href="https://github.com/thisisthepy/torchnative">torchnative</a> instead, run <code>uv sync --python 3.15t --extra torchnative</code>. The two extras cannot be installed together.</p><p data-lang="ko">이렇게 하면 upstream PyTorch 가 설치됩니다. 대신 <a href="https://github.com/thisisthepy/torchnative">torchnative</a> 를 쓰려면 <code>uv sync --python 3.15t --extra torchnative</code> 를 실행하세요. 두 extra 는 함께 설치할 수 없습니다.</p>
 
   <h2 data-lang="en">2. Start it</h2><h2 data-lang="ko">2. 실행</h2>
 <pre><code>uv run --extra torch python -m api run server                  <span class="c"># 127.0.0.1:23100 (loopback only)</span>
