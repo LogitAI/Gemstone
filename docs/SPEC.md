@@ -76,10 +76,16 @@ with every change since. S1.11–S1.16 and S3.4 also record the maintainer's dec
   `DELETE`/`POST /api/sessions/{session_id}` is a path parameter and may hold "/" too (#117); ids
   are unchanged, so the WebSocket and clients need no change. Deleting an unknown session is `404`. Errors are raised, never returned,
   so every error response has a non-2xx status and a JSON `detail`.
+- Sessions are created, looked up, expired and closed from several threads at once (the HTTP
+  routes run on worker threads, the WebSocket on the event loop), with or without the GIL (#180).
+  The session map is changed only under one lock: an expiry sweep never fails because another
+  thread created a session, and two concurrent closes of one session close it once; the other
+  is the `404` of an unknown session.
 - Code: `api/src/main/server.py`, `api/src/main/settings.py` (`Session`). Tests: session-id
   uniqueness (`api/tests/test_tool_cache.py`); sessions share the registry's engine and closing
   one keeps the model (`api/tests/test_residency.py`); the 404s, the `detail` bodies and the
-  create, chat, delete flow and deleting a Hugging Face id's session (`api/tests/test_sessions.py`).
+  create, chat, delete flow and deleting a Hugging Face id's session, and concurrent sweep and
+  close (`api/tests/test_sessions.py`).
 
 ### S1.4 Streaming chat over WebSocket: `implemented` · G4
 
@@ -348,6 +354,8 @@ Implemented (#63), `api/src/main/engine.py`:
   random stream (`random.Random(seed)`, plain Python, so no torch RNG is needed: torchnative has
   no `torch.Generator` yet), so the draw sequence of a request depends only on its seed.
   Test: `api/tests/test_sampler_rng.py`.
+- Each batched request gets a request id unique across engines (the sampler state is keyed by
+  it), drawn under a lock so concurrent requests never share one without the GIL either (#180).
 - Requests the batch does not serve take the exclusive path (S1.11).
 - A request must fit the cache on its own (prompt + new tokens <= `kv_cache_tokens`). transformers
   cannot serve a lone request that outgrows the cache: when the cache is full and nothing else can

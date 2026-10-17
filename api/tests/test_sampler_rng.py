@@ -31,3 +31,23 @@ def test_forgetting_a_request_drops_its_stream():
     state.forget("a")
 
     assert "a" not in state._draws
+
+
+def test_request_ids_are_unique_across_threads():
+    # The sampler state is keyed by request id, so two batched requests must never share one (#180,
+    # docs/serving/free-threading.md FT2). The GIL build cannot show the race; 3.15t can.
+    import threading
+
+    ids, start = [], threading.Barrier(16)
+
+    def take():
+        start.wait()
+        mine = [engine_module._next_request_id() for _ in range(2000)]
+        ids.extend(mine)
+
+    threads = [threading.Thread(target=take) for _ in range(16)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(ids) == 16 * 2000 and len(set(ids)) == len(ids)

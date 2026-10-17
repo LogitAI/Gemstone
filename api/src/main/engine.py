@@ -532,7 +532,7 @@ class _Batcher:
 
     def stream(self, input_ids, max_new_tokens, params, cancel) -> Generator[str, None, None]:
         with self._gate.shared(self._start, self._stop, self.queue_timeout):
-            request_id = f"gemstone-{next(_REQUEST_IDS)}"  # unique across engines: the sampler state is shared
+            request_id = _next_request_id()
             with self._queues_lock:
                 outputs = self._queues[request_id] = queue.Queue()
             finished = False
@@ -628,6 +628,14 @@ class _SamplerState:
 
 _SAMPLER_STATE = _SamplerState()
 _REQUEST_IDS = itertools.count(1)
+_REQUEST_IDS_LOCK = threading.Lock()
+
+
+def _next_request_id() -> str:
+    """ A batched request's id, unique across engines because the sampler state is shared. Drawn
+    under a lock: itertools.count is not documented as atomic without the GIL (#180). """
+    with _REQUEST_IDS_LOCK:
+        return f"gemstone-{next(_REQUEST_IDS)}"
 
 
 def _define_samplers():
