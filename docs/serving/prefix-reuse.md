@@ -1,7 +1,8 @@
 # Reusing the prefix KV across turns
 
 Design note for #211, which replaces #37. Status: `planned`. Nothing here is built; this note
-states the question, what the engine already offers, the trade-off, and how to measure it.
+states the question, what the engine already offers, the trade-off, the measurements, and the
+options.
 
 ## The problem
 
@@ -85,23 +86,53 @@ TypedPython MEASURING flag and the machine lock (or in CI):
 The decision (option 1, 2 or 3) goes to the maintainer with these numbers, and then into SPEC
 S1.12.
 
-## First results (2026-10-17)
+## Results (2026-10-17)
 
-`benchmarks/prefix_reuse.py` runs the plan above for one model at a time. First run: SmolLM2-135M
-(`api/tests/conftest.py` chat template), CPU, upstream PyTorch, transformers 5.20.1, a 300-word
-system prompt, 10 turns of 48 greedy tokens.
+`benchmarks/prefix_reuse.py`, CPU (Mac mini), upstream PyTorch, transformers 5.20.1, a 300-word system
+prompt, 10 turns of 48 greedy tokens, sharing off, on (cold: the chat played once) and on (warm: the
+same chat played again). Each model loads as the engine loads it, with no dtype given (both
+checkpoints declare bfloat16). The run started at 22:43 with a 5-minute load average of 2.36, under
+the MEASURING flag and the machine lock; the load during the run is mostly the run itself. Single
+outliers (SmolLM2 "off" turn 10: 27 s against 9.7 s for turn 9) look like interference, so the
+medians below leave turn 1 out (no turn before it to share) and are the figures to compare.
 
-These results do not depend on the machine's load:
+**Time to first token** (seconds; median of turns 2 to 10; total of all 10 turns):
 
-- **Matched tokens.** With sharing on, turn *n* reuses the previous turn's prompt rounded down to
-  whole pages (64 tokens): 1088 of 1116 tokens, then 1152 of 1184, and so on. The previous reply is
-  not matched, as expected above. Played a second time (warm), each turn reuses its whole prompt
-  except the last partial page.
-- **Greedy equality.** All 10 replies were identical with sharing off, on (cold) and on (warm).
-  This is one model and one chat; it does not show that the replies never differ.
+| Model | Prompt tokens | Off | On, cold | On, warm |
+|---|---|---|---|---|
+| SmolLM2-135M (tests' template) | 1116 to 1689 | 6.83 (total 86.0) | 0.83 (total 24.3) | 0.26 (total 3.1) |
+| Qwen3-0.6B (its own template) | 1120 to 1722 | 38.64 (total 385.9) | 1.75 (total 43.6) | 1.76 (total 17.8) |
 
-The time to first token is not recorded here yet. The machine had a load average of 4 to 7 from
-other work during these runs, so the timings are not measurements (AGENTS.md rule 8). They showed
-the expected direction: each turn's prefill shrank from the whole prompt (1116 to 1689 tokens) to
-the new part. The timing run is still to do on an idle machine, for SmolLM2-135M and Qwen3-0.6B
-(Qwen3-0.6B is not in the local cache; downloading it needs approval).
+With sharing off, the time grows with the chat (Qwen3: 32 s at turn 1, 49 s at turn 10). With it on,
+from turn 2 each turn prefills only what is new: about 8 times faster on SmolLM2 and 22 times on
+Qwen3. Turn 1 is the same in every mode (nothing to share; SmolLM2 "on, cold" turn 1 took 15 s, an
+outlier).
+
+**Matched tokens.** SmolLM2: turn *n* reuses the previous prompt in whole 64-token pages (1088 of
+1116, then 1152 of 1184), never the previous reply. Qwen3: turn 2 reused 1152 tokens, more than the
+whole previous prompt (1120), so part of the previous turn's rendered reply matched as well. Warm,
+both reuse each prompt but its last partial page.
+
+**Greedy equality.** SmolLM2: all 10 replies identical in the three modes. Qwen3: turn 1 identical,
+**turn 2 different** with sharing on (cold and warm alike). From turn 3 on the histories differ, so
+the later differences follow from turn 2 and are not independent. This is the reproducibility cost
+above, observed: on a bfloat16 model the reused KV changes a greedy reply.
+
+## Options, with these numbers
+
+1. **Off (today).** Replies reproduce exactly (S1.11, S1.12, #182). Every turn prefills the whole
+   history: on Qwen3-0.6B on this CPU, 32 s to the first token at turn 1, 49 s at turn 10.
+2. **On.** About 1.8 s to the first token from turn 2 on Qwen3-0.6B (22 times faster). A reply can
+   differ from the same request on a cold engine (observed at turn 2 on Qwen3); SPEC S1.11 and S1.12
+   and the greedy and seed tests must say "on a cold cache" or be rewritten. The real-model tests
+   would need sharing off, or a fresh engine per comparison.
+3. **Per request.** Off for a request that asks for reproducibility (a `seed`, or temperature 0),
+   on otherwise. Keeps the promises where they are asked for and gives the speed to ordinary chats.
+   transformers sets sharing per manager, not per request, so this needs either two managers (two
+   KV caches: double the cache memory, which the residency budget S1.14 counts) or an upstream
+   change to `ContinuousBatchingManager`.
+
+Recommendation for the decision: option 3 if the reproducibility promises stay, as an upstream
+change rather than two caches; otherwise option 2 with the SPEC and tests restated. Option 1 keeps
+every turn's prefill proportional to the whole history (measured above). The choice belongs to the
+maintainer.
