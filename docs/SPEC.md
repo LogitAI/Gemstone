@@ -722,6 +722,11 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
 - Sends the prompt over the WebSocket protocol of S1.4 and renders the reply as it streams, with
   incremental Markdown.
 - Shows the model's reasoning as a collapsible block with elapsed seconds.
+- The text of a prompt, a reply and the reasoning can be selected and copied (#202): with the mouse
+  on desktop and web, with a long press on Android and iOS. Styled Markdown copies as its text,
+  without the markers. A message bubble is therefore a plain surface, not a button: a press on it
+  starts a selection. Test: `app/src/desktopTest/.../ui/MessageSelectionTest.kt` (drag across a
+  prompt, a reply and a styled reply, then copy).
 - Shows each tool call as a chip labelled `<function>(): <call id>`, and appends the server's
   `history` record to the local chat history so the next prompt carries the tool results.
 - Defect found by reading: a chip's completion flag is created as `false` and never set to
