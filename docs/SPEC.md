@@ -412,7 +412,8 @@ Unverified:
   bfloat16 either.
 - torchnative: transformers' continuous-batching modules import there but have not run.
 - Prefix sharing (reusing the KV blocks of an identical prompt prefix) is off, so that a reply does
-  not depend on earlier requests. Turning it on is a later, measured decision.
+  not depend on earlier requests. Turning it on is a later, measured decision (#211; the trade-off
+  and the measurement plan are in [`serving/prefix-reuse.md`](serving/prefix-reuse.md)).
 
 ### S1.13 Paged attention (paged KV cache): `partial` · G5
 
