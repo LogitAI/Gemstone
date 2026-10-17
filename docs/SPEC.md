@@ -59,13 +59,16 @@ with every change since. S1.11–S1.16 and S3.4 also record the maintainer's dec
   (`models`). Test: `api/tests/test_residency.py` (`test_api_models_lists_the_registry_models_in_the_app_shape`,
   `test_v1_models_lists_the_same_models`).
 
-### S1.3 Sessions: `partial` · G5
+### S1.3 Sessions: `implemented` · G5
 
 - `POST /api/models/{model_id}/sessions/` and `POST /api/sessions/` (model `default`) create a
   session and return `{model_id, session_id, message}`. The session id is
   `<model_id>_<YYYYmmddHHMMSS>_<8 hex>`, unique even within one second.
 - `DELETE /api/sessions/{session_id}` (also accepted as `POST`) closes a session and drops its
   tool-result cache. It does not unload the model: the registry's keep_alive does (S1.14).
+- A session idle longer than `GEMSTONE_SESSION_TTL` seconds (default 86400, one day; `0` never
+  expires) is dropped with its tool-result cache. The sweep runs whenever a session is created or
+  looked up, so an expired id is an unknown session (`404`, WebSocket `1008`).
 - A session holds a model name, never an engine (#89). Creating one loads nothing; the first
   WebSocket chat (S1.4) loads the model through the registry, so sessions on one model, the
   OpenAI API and the Ollama API share one loaded engine. Model classes are not singletons; the
@@ -82,11 +85,12 @@ with every change since. S1.11–S1.16 and S3.4 also record the maintainer's dec
   The session map is changed only under one lock: an expiry sweep never fails because another
   thread created a session, and two concurrent closes of one session close it once; the other
   is the `404` of an unknown session.
-- Code: `api/src/main/server.py`, `api/src/main/settings.py` (`Session`). Tests: session-id
-  uniqueness (`api/tests/test_tool_cache.py`); sessions share the registry's engine and closing
-  one keeps the model (`api/tests/test_residency.py`); the 404s, the `detail` bodies and the
-  create, chat, delete flow and deleting a Hugging Face id's session, and concurrent sweep and
-  close (`api/tests/test_sessions.py`).
+- Code: `api/src/main/server.py`, `api/src/main/settings.py` (`Session`). Tests: the session-id
+  format and its uniqueness within one second, the 404s, the `detail` bodies, the create, chat,
+  delete flow, deleting a Hugging Face id's session, and concurrent sweep and close
+  (`api/tests/test_sessions.py`); sessions share the registry's engine and closing one keeps the
+  model (`api/tests/test_residency.py`); idle expiry, `0` and the one-day default
+  (`api/tests/test_ops_quickstart.py`).
 
 ### S1.4 Streaming chat over WebSocket: `implemented` · G4
 
@@ -774,7 +778,7 @@ No code on `develop`. Tracked in #42.
 
 ### S3.2 Offline operation: `planned` · G3
 
-Depends on S3.1. Today every chat goes through the server.
+Depends on S3.1. Today every chat goes through the server. Tracked in #190.
 
 ### S3.3 Cross-platform sync: `planned` · G7
 
@@ -789,7 +793,7 @@ metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 o
 are not yet registered in the native build (under investigation), and sending a chat message there
 is unverified. `./gradlew :app:compileKotlinDesktop` succeeds; the native build itself has not been
 run on `develop`. When the plugin takes over, the Gradle
-tasks become plugin configuration and only Gemstone-specific metadata stays here.
+tasks become plugin configuration and only Gemstone-specific metadata stays here. Tracked in #191.
 
 ---
 
