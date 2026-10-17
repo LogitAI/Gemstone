@@ -105,6 +105,12 @@ kotlin {
         commonTest.dependencies {
             api(libs.kotlin.test)
         }
+        // Compose UI tests on the JVM: the chat input's cursor (#41)
+        val desktopTest by getting {
+            dependencies {
+                implementation(libs.compose.ui.test.junit4)
+            }
+        }
         desktopMain.dependencies {
             api(compose.desktop.currentOs) {
                 exclude(group = "org.jetbrains.compose.material3")
