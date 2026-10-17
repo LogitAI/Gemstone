@@ -49,13 +49,13 @@ Approved tracked root entries (`api/tests/test_repo_layout.py` fails on anything
 | `tools/` | Developer tooling (release sync, web bundle sync, desktop UI driver for the native-image build) |
 | `benchmarks/` | Measurement scripts |
 | `gradle/`, `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat` | Gradle build |
-| `pyproject.toml` | Python project (uv) |
+| `pyproject.toml`, `uv.lock` | Python project (uv) and its lock: CI installs exactly the locked versions (#186) |
 | `.github/` | CI workflows |
 | `README.md`, `AGENTS.md`, `PROJECT.md`, `LICENSE.md` | Root documents |
 | `.gitignore`, `.gitattributes`, `.env.example` | Git and environment templates |
 
 Local, git-ignored entries that tools create are fine: `.tmp/`, `.worktrees/`, `.venv/`, `.gradle/`,
-`.kotlin/`, `.idea/`, `.env`, `local.properties`, `uv.lock`, `.claude/`, `.DS_Store`.
+`.kotlin/`, `.idea/`, `.env`, `local.properties`, `.claude/`, `.DS_Store`.
 
 ## 3. Worktrees link large artefacts instead of copying them
 
@@ -285,6 +285,11 @@ report it as coverage. New behaviour starts with a real failing test (rule 5).
   configured under `[tool.uv.sources]` (the engine runs on CPU; CUDA returns in M4 as a `cuda` extra).
 - The engine uses only the public `torch` / `transformers` API. Custom kernels cannot be registered
   from Gemstone (`torch.library` is a no-op on torchnative); they belong in torchnative.
+- Python versions are locked in the tracked `uv.lock` (#186). CI installs with `uv sync --locked`,
+  so a run never takes an upstream release the lock has not been upgraded to. Change a dependency
+  with `uv add` / `uv lock` and commit the lock with it. `.github/workflows/lock-upgrade.yml` opens a
+  weekly pull request with `uv lock --upgrade`; upstream breakage shows up there, not on develop.
+  `test-torchnative.yml` still takes the newest torchnative pre-release (`--upgrade-package`).
 - Kotlin and library versions live in `gradle/libs.versions.toml`. Bump them there, not inline.
 - Example commands use `uv`, `ppp` or `tcl` only. Never write a `pip install` example (in docs,
   messages or comments); a missing Python dependency is fixed with `uv sync` (or `uv add` when it

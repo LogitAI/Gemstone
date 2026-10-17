@@ -47,3 +47,11 @@ def test_no_em_dash_in_tracked_text():
     text_files = [n for n in names if not n.endswith((".png", ".ico", ".icns", ".webp", ".wasm", ".jar"))]
 
     assert text_files == [], f"em-dash found in: {text_files}"
+
+
+def test_the_python_lock_is_tracked():
+    """ #186: CI installs from the tracked uv.lock (`uv sync --locked`), so a run never picks up an
+    upstream release the lock has not been upgraded to. """
+    tracked = subprocess.run(["git", "ls-files", "--error-unmatch", "uv.lock"], cwd=ROOT, capture_output=True)
+    assert tracked.returncode == 0, "uv.lock is not tracked"
+    assert "uv.lock" in approved_entries()
