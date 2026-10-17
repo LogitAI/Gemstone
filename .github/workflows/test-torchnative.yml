@@ -56,6 +56,14 @@ jobs:
           # Free-threaded CPython 3.15t is the standard interpreter for torchnative (#177); the
           # upstream PyTorch comparison (test.yml) stays on 3.13.
           python-version: ${{ inputs.python || '3.15t' }}
+          # Some native dependencies have no cp315t wheel yet and are built from source here, and
+          # only here (#178): tokenizers and hf-xet (Rust), psutil and pyyaml (C). uv keeps the
+          # wheels it built in its cache, and setup-uv's end-of-job prune keeps exactly those, so a
+          # run rebuilds only when pyproject.toml or the interpreter changes. Remove once every one
+          # of them ships a cp315t wheel.
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+          cache-suffix: py${{ inputs.python || '3.15t' }}
 
       - name: Cache the Hugging Face model
         uses: actions/cache@v4
@@ -69,6 +77,7 @@ jobs:
         # pyproject sets `prerelease = "if-necessary"`, and a pinned spec with a pre-release
         # version allows it too.
         run: |
+          exec > >(tee "$RUNNER_TEMP/install.log") 2>&1  # read by the source-build report below
           if [ -n "$TORCHNATIVE_WHEEL_URL" ]; then
             uv sync --extra torchnative
             curl -fsSL -o "$RUNNER_TEMP/$(basename "$TORCHNATIVE_WHEEL_URL")" "$TORCHNATIVE_WHEEL_URL"
@@ -84,6 +93,19 @@ jobs:
             uv sync --extra torchnative --upgrade-package torchnative
           fi
           uv run --no-sync python -c "import importlib.metadata as m, sys, torch; print('torchnative', m.version('torchnative'), 'torch', torch.__version__, 'python', sys.version, 'GIL', getattr(sys, '_is_gil_enabled', lambda: True)())"
+
+      - name: Report source builds (#178)
+        if: always()
+        run: |
+          {
+            echo "### Packages built from source (#178)"
+            echo
+            echo "Built in this run:"
+            grep -E "^ *Built " "$RUNNER_TEMP/install.log" || echo "none (all from wheels or the uv cache)"
+            echo
+            echo "Source-built wheels kept in the uv cache:"
+            ls "$(uv cache dir)"/sdists-v*/pypi 2>/dev/null || echo "none"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Test
         run: uv run --no-sync pytest -v -m "real_model or not real_model" -rs
