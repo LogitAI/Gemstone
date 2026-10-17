@@ -9,6 +9,7 @@
     <string name="sidebar_models_section_desc">Model Settings</string>
     <string name="sidebar_recent_chats_section">Recent Chats</string>
     <string name="sidebar_recent_chats_section_desc">Search Recent Chats</string>
+    <string name="sidebar_search_placeholder">Search chats</string>
 
     <!-- Chatting -->
     <string name="chat_title_placeholder">New Chat</string>

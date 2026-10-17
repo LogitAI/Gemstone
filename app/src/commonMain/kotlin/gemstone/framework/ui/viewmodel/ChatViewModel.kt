@@ -123,6 +123,14 @@ object ChatViewModel {
     /** The saved chats for the sidebar, most recently updated first. */
     var savedChats by mutableStateOf(emptyList<SavedChat>())
         private set
+    /** The chat search query; null when the search field is closed (SPEC S2.6). */
+    var searchQuery by mutableStateOf<String?>(null)
+
+    /** Opens the search field, or closes it and clears the query. */
+    fun toggleSearch() {
+        searchQuery = if (searchQuery == null) "" else null
+    }
+
     /** A deletion waiting for confirmation: one chat's id, or [DELETE_ALL]. */
     var pendingDeletion by mutableStateOf<String?>(null)
         private set
