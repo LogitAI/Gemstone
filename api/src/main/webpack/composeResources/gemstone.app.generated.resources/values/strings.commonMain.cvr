@@ -21,9 +21,14 @@ string|settings_open_desc|T3BlbiBzZXR0aW5ncw==
 string|settings_save|U2F2ZQ==
 string|settings_server_address|U2VydmVyIGFkZHJlc3M=
 string|settings_set_at_launch|U2V0IGF0IGxhdW5jaA==
+string|settings_theme_dark|RGFyaw==
+string|settings_theme_light|TGlnaHQ=
+string|settings_theme_system|U3lzdGVt
+string|settings_theme|VGhlbWU=
 string|settings_title|U2V0dGluZ3M=
 string|sidebar_models_section_desc|TW9kZWwgU2V0dGluZ3M=
 string|sidebar_models_section|TW9kZWxz
 string|sidebar_notification_section|Tm90aWZpY2F0aW9ucw==
 string|sidebar_recent_chats_section_desc|U2VhcmNoIFJlY2VudCBDaGF0cw==
 string|sidebar_recent_chats_section|UmVjZW50IENoYXRz
+string|sidebar_search_placeholder|U2VhcmNoIGNoYXRz
