@@ -3,8 +3,7 @@ package gemstone.framework.network.websocket
 import gemstone.framework.network.http.HttpClientFactory
 import gemstone.framework.network.ServerAddress
 import gemstone.framework.network.authorize
-import gemstone.framework.network.http.defaultApiKey
-import gemstone.framework.network.http.defaultServerAddress
+import gemstone.framework.network.http.serverSettings
 import gemstone.framework.ui.viewmodel.ChatHistory
 import gemstone.framework.ui.viewmodel.ChatRole
 import io.ktor.client.plugins.websocket.*
@@ -64,14 +63,11 @@ data class SessionResponse(
 
 
 class ChatWebSocketClient(
-    private val address: ServerAddress = defaultServerAddress,
-    private val apiKey: String? = defaultApiKey
+    // Read on every request, so a change saved in the settings applies at once (SPEC S2.7)
+    private val address: () -> ServerAddress = { serverSettings.address },
+    private val apiKey: () -> String? = { serverSettings.apiKey }
 ) {
     private val httpClient = HttpClientFactory.create()
-
-    init {
-        println("INFO: ChatWebSocketClient initialized using server URL - $address")
-    }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -100,7 +96,7 @@ class ChatWebSocketClient(
 
     suspend fun createSession(modelId: String): Result<String> {
         return try {
-            val response = httpClient.post(address.httpUrl("/api/models/$modelId/sessions/")) { authorize(apiKey) }
+            val response = httpClient.post(address().httpUrl("/api/models/$modelId/sessions/")) { authorize(apiKey()) }
             if (response.status == HttpStatusCode.OK) {
                 val sessionResponse = json.decodeFromString<SessionResponse>(response.bodyAsText())
                 sessionId = sessionResponse.session_id
@@ -116,7 +112,7 @@ class ChatWebSocketClient(
     private suspend fun connect(): Result<Unit> {
         return try {
             _state.value = ChatState.Connecting
-            webSocketSession = httpClient.webSocketSession(address.wsUrl("/api/chat/streaming")) { authorize(apiKey) }
+            webSocketSession = httpClient.webSocketSession(address().wsUrl("/api/chat/streaming")) { authorize(apiKey()) }
             _state.value = ChatState.Connected
             Result.success(Unit)
         } catch (e: Exception) {
@@ -263,11 +259,16 @@ class ChatWebSocketClient(
     suspend fun deleteSession() {
         val currentSessionId = sessionId ?: return
         try {
-            httpClient.delete(address.httpUrl("/api/sessions/$currentSessionId")) { authorize(apiKey) }
+            httpClient.delete(address().httpUrl("/api/sessions/$currentSessionId")) { authorize(apiKey()) }
             sessionId = null
         } catch (e: Exception) {
             println("Failed to delete session: ${e.message}")
         }
+    }
+
+    /** Forgets the session without telling the server: it belongs to a server no longer in use (S2.7). */
+    fun forgetSession() {
+        sessionId = null
     }
 
     fun close() {

@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import gemstone.framework.network.settings.AndroidSettings
 import gemstone.framework.ui.viewmodel.ChatViewModel
 import gemstone.App
 
@@ -14,6 +15,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        AndroidSettings.init(this)  // the settings stores need a context (SPEC S2.7)
 
         setContent {
             App()

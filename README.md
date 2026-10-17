@@ -91,10 +91,12 @@ a header, use it on a loopback server without a key). `think: false` (Ollama) an
 ./gradlew :app:installDebug  # Android
 ```
 
-The server listens on `127.0.0.1` only. For an Android device or emulator, run the server on the same
-machine and `adb reverse tcp:23100 tcp:23100`. To serve other machines on your LAN, start it with
-`GEMSTONE_HOST=0.0.0.0` and set `GEMSTONE_API_KEY=<secret>` on both sides; desktop clients take
-`--server http://<host>:23100` (or `GEMSTONE_SERVER_HOST`). See the [clients guide](https://logitai.github.io/Gemstone/guide-clients.html).
+The server listens on `127.0.0.1` only. To serve other machines on your LAN, start it with
+`GEMSTONE_HOST=0.0.0.0` and `GEMSTONE_API_KEY=<secret>`. In the Android, iOS and desktop apps, the
+user button in the sidebar opens the settings, where you enter the address and the key; the key is
+kept in the platform's secure storage, never in plain text. Desktop clients also take
+`--server http://<host>:23100` (or `GEMSTONE_SERVER_HOST`). An Android emulator or USB device can
+reach a server on the same computer with `adb reverse tcp:23100 tcp:23100`. See the [clients guide](https://logitai.github.io/Gemstone/guide-clients.html).
 
 **Talk to the server from your own code**: three frames in, tokens out:
 
@@ -161,7 +163,7 @@ that tracks it. Python tests (a real model included) and the Kotlin network-laye
 | Security defaults (loopback bind, origin checks, API key) | ✅ Implemented |
 | Android, desktop and web clients | ✅ Implemented |
 | Model list from the server | ✅ Implemented |
-| Server address and API key in the app | 🟡 Partial: desktop and web only; Android needs a settings screen ([#166](https://github.com/LogitAI/Gemstone/issues/166)) |
+| Server address and API key in the app | ✅ Implemented: a settings dialog on Android, iOS and desktop; the key in the platform's secure storage ([#166](https://github.com/LogitAI/Gemstone/issues/166)) |
 | iOS client | 🟡 Partial: builds for the simulator; not yet run on a simulator or a device |
 | Chat history | 🟡 Partial: kept in memory only ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
 | UI tests | ⏳ Planned |

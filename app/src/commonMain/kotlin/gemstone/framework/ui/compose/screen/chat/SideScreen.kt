@@ -62,7 +62,7 @@ fun SideScreen(
                 )
                 Spacer(modifier = Modifier.width(Dimen.LIST_ELEMENT_SPACING))
                 PrimaryFluxButton(
-                    onClick = { /* TODO: Handle new chat */ },
+                    onClick = { SettingsViewModel.open() },  // the user button opens the settings (S2.7)
                     modifier = Modifier.size(Dimen.BIG_BUTTON_SIZE),
                     shape = MaterialTheme.shapes.large.copy(Dimen.BIG_BUTTON_CORNER_RADIUS)
                 ) {

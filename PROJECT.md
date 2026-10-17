@@ -34,7 +34,8 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 | iOS | 부분 | Xcode 프로젝트가 시뮬레이터용으로 빌드된다(#165). 시뮬레이터나 기기에서 실행해 본 적은 없다 |
 | 모델 선택, 서버 주소 | 구현, 테스트 있음 | 서버의 `GET /api/models` 를 읽음 (S2.5). 서버 주소 파싱과 API 키 포함 (S2.2). Android 는 주소 설정 화면이 아직 없음 |
 | 대화 기록 | 부분 | 메모리에만 둔다. 저장은 #43 |
-| 설정 화면, 도메인 계층(Clean Architecture) | 계획 | 빈 파일. 설정 화면은 #166 |
+| 설정 화면 | 구현 | 서버 주소와 API 키 대화상자(#166). 키는 플랫폼 보안 저장소에 둔다. 사용자 이름은 아직 하드코딩 |
+| 도메인 계층(Clean Architecture) | 계획 | 빈 파일 |
 | 온디바이스 추론 · 오프라인 · 동기화 | 계획 | 코드 없음. 온디바이스는 #42, 오프라인은 #190, 동기화는 #167 |
 | 네이티브 데스크톱 (GraalVM) | 계획 (SPEC S3.4) | Windows x64 빌드 경로는 develop 에 있으나(#71) 네이티브 빌드는 실행해 본 적이 없다. 장기적으로 compose-multiplatform-extended 가 관리 (#191) |
 | Kotlin 테스트 | 부분 | 서버 주소, 모델 목록 파싱, 종료 코드 매핑은 테스트 있음(CI). 화면과 뷰모델은 테스트 없음 |
@@ -75,8 +76,8 @@ uv run --extra torch python -m api run server   # 127.0.0.1:23100 (GEMSTONE_HOST
 python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 ```
 
-클라이언트 서버 주소: `GEMSTONE_SERVER_HOST`, `GEMSTONE_SERVER_PORT`(값에 `:` 포함), 데스크톱은
-`--server host:port`. 웹 클라이언트는 자신을 서빙한 호스트를 쓰므로 API 서버가 서빙해야 한다.
+클라이언트 서버 주소: 앱의 설정 대화상자(#166), 또는 `GEMSTONE_SERVER_HOST`, `GEMSTONE_SERVER_PORT`
+(`:` 는 있어도 없어도 된다), 데스크톱은 `--server host:port`. 실행할 때 정한 값이 그 실행 동안 우선한다. 웹 클라이언트는 자신을 서빙한 호스트를 쓰므로 API 서버가 서빙해야 한다.
 
 ## 5. 결정 사항
 

@@ -8,12 +8,15 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 
 
-class ModelsApi(private val address: ServerAddress = defaultServerAddress, private val apiKey: String? = defaultApiKey) {
+class ModelsApi(
+    private val address: () -> ServerAddress = { serverSettings.address },
+    private val apiKey: () -> String? = { serverSettings.apiKey }
+) {
     private val httpClient = HttpClientFactory.create()
 
     /** Fetches `GET /api/models`; failure (server down, bad status, bad JSON) is returned, not thrown. */
     suspend fun fetch(): Result<ModelCatalog> = try {
-        val response = httpClient.get(address.httpUrl("/api/models")) { authorize(apiKey) }
+        val response = httpClient.get(address().httpUrl("/api/models")) { authorize(apiKey()) }
         if (response.status == HttpStatusCode.OK) {
             Result.success(ModelCatalog.parse(response.bodyAsText()))
         } else {

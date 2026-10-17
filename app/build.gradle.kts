@@ -118,8 +118,9 @@ kotlin {
             // Jewel's standalone cursor handling loads JNA at class-init, but Jewel does not
             // declare it -- inside the IDE the platform supplies it. Without these the desktop
             // app dies on first composition with NoClassDefFoundError: com/sun/jna/Library.
-            runtimeOnly(libs.jna)
-            runtimeOnly(libs.jna.platform)
+            // The API key's secure storage also calls it: the macOS Keychain and Windows DPAPI (S2.7).
+            implementation(libs.jna)
+            implementation(libs.jna.platform)
         }
     }
 }

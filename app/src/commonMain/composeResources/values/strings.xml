@@ -17,4 +17,14 @@
     <string name="chat_message_placeholder">Ask me anything...</string>
     <string name="chat_error_retry">Retry</string>
     <string name="chat_error_dismiss">Dismiss</string>
+
+    <!-- Settings -->
+    <string name="settings_open_desc">Open settings</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_server_address">Server address</string>
+    <string name="settings_api_key">API key</string>
+    <string name="settings_set_at_launch">Set at launch</string>
+    <string name="settings_key_this_run">Kept for this run only: this system has no secure storage</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_cancel">Cancel</string>
 </resources>

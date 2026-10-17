@@ -281,7 +281,8 @@ with a real failing test (rule 5).
   `SERPAPI_KEY`. Never commit `.env`, and never print a key into a log or a report.
 - The client finds the server through `GEMSTONE_SERVER_HOST` / `GEMSTONE_SERVER_PORT` (system
   property or environment variable; the port may be written with or without its leading colon,
-  `23100` or `:23100`).
+  `23100` or `:23100`), or through the in-app settings dialog (SPEC S2.7), which keeps the API key in
+  the platform's secure storage and never in plain text; a value set at launch wins for that run.
   The web client always uses the host it was served from.
 - The server reads `GEMSTONE_HOST` (`host[:port]`, default `127.0.0.1:23100`; the `run server [host] [port]`
   arguments win), `GEMSTONE_DEV=1` (auto-reload; also `--reload`), `GEMSTONE_ORIGINS` (extra allowed
