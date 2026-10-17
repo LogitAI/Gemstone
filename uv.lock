@@ -290,7 +290,7 @@ requires-dist = [
     { name = "serpapi", specifier = ">=0.1.5" },
     { name = "torch", marker = "(sys_platform == 'linux' and extra == 'torch') or (sys_platform == 'win32' and extra == 'torch')", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'torch'" },
-    { name = "torchnative", marker = "extra == 'torchnative'" },
+    { name = "torchnative", marker = "extra == 'torchnative'", specifier = ">=0.1.0b6" },
     { name = "transformers", specifier = ">=5.18" },
     { name = "uvicorn", specifier = ">=0.34.2" },
     { name = "websockets", specifier = ">=15.0.1" },
@@ -1189,7 +1189,7 @@ wheels = [
 
 [[package]]
 name = "torchnative"
-version = "0.1.0b5"
+version = "0.1.0b6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
@@ -1201,15 +1201,18 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6a/28/cafe49e9f074e71d1984786883b9597d526f4a26c3b6bd681cc7aea16ef1/torchnative-0.1.0b5-cp313-abi3-android_21_arm64_v8a.whl", hash = "sha256:2b809c3c4bca7744ea1e64b7f3cab3877c12c773588728ee759be4d003e8d7cd", size = 15233785, upload-time = "2026-10-05T08:56:10.786Z" },
-    { url = "https://files.pythonhosted.org/packages/2e/68/ec48396dce5d755644870a3de501f3e27e6f8c9bca08794f004ca4c8a5c5/torchnative-0.1.0b5-cp313-abi3-ios_12_0_arm64_iphoneos.whl", hash = "sha256:880afc72c6553defddbe958ff1106a20d664b98a49823c7207446678a4326372", size = 15207872, upload-time = "2026-10-05T08:56:14.358Z" },
-    { url = "https://files.pythonhosted.org/packages/ab/ae/5a7c6a03e3c9ad7f0a0614f8649b1cee62f6d820f37bed5b29e410aeacce/torchnative-0.1.0b5-cp313-abi3-ios_14_0_arm64_iphonesimulator.whl", hash = "sha256:7a00abb26d57b00e62f6f291f490ea6127be954fd47cbab198d4382a27f99b4a", size = 15135571, upload-time = "2026-10-05T08:56:17.065Z" },
-    { url = "https://files.pythonhosted.org/packages/23/70/59aae3c7ca51ab04d584afee7cb269fdc6e1bcb245ee01fd4a308bb91a9f/torchnative-0.1.0b5-cp313-abi3-macosx_11_0_arm64.whl", hash = "sha256:89bf1869502f5c29e54aa3d14820cb7a6a1504f5c8205f6b6bf84d3dd1a45d84", size = 15167086, upload-time = "2026-10-05T08:56:20.069Z" },
-    { url = "https://files.pythonhosted.org/packages/4f/86/3f6b2600b9a3e4c4e32b7e5414abfaf4f951a4cd950629af954deb376967/torchnative-0.1.0b5-cp313-abi3-manylinux_2_17_aarch64.whl", hash = "sha256:0c1660a47052a51d15e8eb2154276998a946e63eda926fac6465498218ca6838", size = 14972087, upload-time = "2026-10-05T08:56:23.326Z" },
-    { url = "https://files.pythonhosted.org/packages/5c/a6/8198d5f6d72181397afd01b6a6bd802d99799a0c11202f279f1690c98402/torchnative-0.1.0b5-cp313-abi3-manylinux_2_17_x86_64.whl", hash = "sha256:4065806ce81f1b22c46259056a06ef5fb3706f180eb81883a98df7f848c44e4f", size = 15261090, upload-time = "2026-10-05T08:56:26.297Z" },
-    { url = "https://files.pythonhosted.org/packages/69/a5/4724aae5562afbc2c07ebe3cafda07760d1ecbcbc6dc894339aea7df58a4/torchnative-0.1.0b5-cp313-abi3-pyemscripten_2026_0_wasm32.whl", hash = "sha256:28b837f628d5baeee305c4ad45c1cde060eb998496a035d80199daa8c39c11f6", size = 14072863, upload-time = "2026-10-05T08:56:29.581Z" },
-    { url = "https://files.pythonhosted.org/packages/69/a6/e3d150f624f68f69117befb263f5f4f7aa0632e24468f772e20abb089ee9/torchnative-0.1.0b5-cp313-abi3-win_amd64.whl", hash = "sha256:2a6bea9f533eca3c3c9e6dc98704f42ea4dc912e6b031ae7ef0ac8c598449b4f", size = 15290199, upload-time = "2026-10-05T08:56:32.556Z" },
-    { url = "https://files.pythonhosted.org/packages/c1/18/ff5fcf5658c0ffe9914d31fe6221f3f58c2303d58de447b4967928aa595b/torchnative-0.1.0b5-cp313-abi3-win_arm64.whl", hash = "sha256:7786d16784d4b9dc026e49ad212a5e521ce081f05877b379c6e2999dd56af8d2", size = 15042807, upload-time = "2026-10-05T08:56:35.714Z" },
+    { url = "https://files.pythonhosted.org/packages/46/1f/ee055c5245acf09b513287f1f5ad7d0eeb9775061152a90d2da70b373022/torchnative-0.1.0b6-cp313-abi3-android_21_arm64_v8a.whl", hash = "sha256:7ed34672ac9cf6383d05ebf1dcce476a6035079046cb313873f814c73433f8a9", size = 15331346, upload-time = "2026-10-17T09:05:36.186Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/bc/e967b5f1e4a367398f30551a3de02abe0375e29bd15489e044205ad316d1/torchnative-0.1.0b6-cp313-abi3-ios_12_0_arm64_iphoneos.whl", hash = "sha256:9bf7874ac1968dfbef377a7b10893c8edddaf25d83b7fb7cbb0da48a61bc9950", size = 15313085, upload-time = "2026-10-17T09:05:39.375Z" },
+    { url = "https://files.pythonhosted.org/packages/5d/4f/c6a854b413862dbe2f45f322b215f71cf1e48df30a3bf69ba1dd5acfe15e/torchnative-0.1.0b6-cp313-abi3-ios_14_0_arm64_iphonesimulator.whl", hash = "sha256:abffb0c6a33c96ba974385328acfb430e04c7c223f34414b2827139a91e4c4bc", size = 15235545, upload-time = "2026-10-17T09:05:42.331Z" },
+    { url = "https://files.pythonhosted.org/packages/59/69/8e42a5d5caa50ff308cdd0ec469c088b2af41749a6d145364694616f0eb3/torchnative-0.1.0b6-cp313-abi3-macosx_11_0_arm64.whl", hash = "sha256:55181b93f6767e132366f90e53938b15ec7fb80afc98b7510ed6aaa31bdd5894", size = 15269071, upload-time = "2026-10-17T09:05:45.161Z" },
+    { url = "https://files.pythonhosted.org/packages/57/44/4c57b801cf969fd21c3b8c9de059b5bc8225de43569c099ff679f3944c4a/torchnative-0.1.0b6-cp313-abi3-manylinux_2_17_aarch64.whl", hash = "sha256:5900c0f67649a3daa035b0051f84179efe3478e0db7ba79dbcb61be81a1fc787", size = 15062158, upload-time = "2026-10-17T09:05:48.087Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/84/50b6deea0148f3963e93e22f5ea2295a4861064c68ca8362441b489cb47e/torchnative-0.1.0b6-cp313-abi3-manylinux_2_17_x86_64.whl", hash = "sha256:927b6f842d102666ec18d26a1d755db5f3e70dfceadcb7c437aa9550b4380c5f", size = 15357710, upload-time = "2026-10-17T09:05:51.573Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/96/a3fa8f4f91769d33f5cba8fee791d376ef492f86a06ca6e70a7473ecf9cb/torchnative-0.1.0b6-cp313-abi3-pyemscripten_2026_0_wasm32.whl", hash = "sha256:c1bdeb1aa3e3df60ac5292b86a8e8659054e3bad9c03580718566f6962e04520", size = 14120807, upload-time = "2026-10-17T09:05:54.818Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/95/d04723687415a58c287850a3092c0b19398c6176d749832a8db54d1b7247/torchnative-0.1.0b6-cp313-abi3-win_amd64.whl", hash = "sha256:5762acd59e1608aaf962b796575326b9c89c6e2030c3427a6801f492d47a844d", size = 15405799, upload-time = "2026-10-17T09:05:58.288Z" },
+    { url = "https://files.pythonhosted.org/packages/09/ed/973c11529a1d8aaef93186980d2f8ad3ac6d95be1fb2983f21f814faef4b/torchnative-0.1.0b6-cp313-abi3-win_arm64.whl", hash = "sha256:ac749732ab2d8df120a5c123f9ceb4356f920fc932f9d3cd3e7941466cfffc04", size = 15129512, upload-time = "2026-10-17T09:06:01.6Z" },
+    { url = "https://files.pythonhosted.org/packages/db/e8/3c53b3b03c9260f02cdda775dc0039c8e970dca44cdf47cc986af42636ea/torchnative-0.1.0b6-cp315-cp315t-macosx_11_0_arm64.whl", hash = "sha256:5c2f119364338ece95d3abe26ebf8acfd2927615fcaa1483804a1027cb063eba", size = 15277998, upload-time = "2026-10-17T09:06:04.755Z" },
+    { url = "https://files.pythonhosted.org/packages/76/3a/250f46590883dea664233b1c3bae6373ebf017c513a4ee91c81be4f7bdac/torchnative-0.1.0b6-cp315-cp315t-manylinux_2_17_aarch64.whl", hash = "sha256:413a1c92d8c87fbdcbac1dfdf0ab134fd96711ebeffcdf153ff9e8a40757e29e", size = 15072595, upload-time = "2026-10-17T09:06:07.957Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/97/1068eea5c8e0b7c6247ee9f71c7dbe6074b6108e3416a6bda7d7d5fbbd07/torchnative-0.1.0b6-cp315-cp315t-manylinux_2_17_x86_64.whl", hash = "sha256:9cdce6cf0da34c5b40ae45f430fabf8e7ebffc6bc5dd715a69f724182af11414", size = 15367639, upload-time = "2026-10-17T09:06:11.476Z" },
 ]
 
 [[package]]

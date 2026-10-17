@@ -29,7 +29,7 @@ torch = [
     "torch",
 ]  # !do not add version-specfic torch here!
 torchnative = [
-    "torchnative",
+    "torchnative>=0.1.0b6",  # first release with cp315t wheels (free-threaded 3.15t, #177)
 ]
 
 
