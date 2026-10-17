@@ -81,3 +81,84 @@ def test_session_of_a_hugging_face_id_can_be_deleted(setup, method):
     r = getattr(setup["client"], method)(f"/api/sessions/{created['session_id']}")
     assert r.status_code == 200
     assert_error(getattr(setup["client"], method)(f"/api/sessions/{created['session_id']}"), 404)
+
+
+# Concurrency (#180, docs/serving/free-threading.md FT1). The races are forced with events, so they
+# fail without the session lock on the GIL build too, not only on free-threaded 3.15t.
+
+import threading
+
+from api.src.main import settings
+from api.src.main.settings import Session
+
+
+@pytest.fixture
+def sessions(monkeypatch):
+    table = {}
+    monkeypatch.setattr(Session, "_Session__sessions", table)
+    monkeypatch.setenv("GEMSTONE_SESSION_TTL", "3600")
+    return table
+
+
+def run_threads(*targets):
+    errors = []
+
+    def wrap(target):
+        def run():
+            try:
+                target()
+            except BaseException as e:  # reported by the test, not lost in the thread
+                errors.append(e)
+        return run
+
+    threads = [threading.Thread(target=wrap(t)) for t in targets]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    assert not any(t.is_alive() for t in threads), "a session call deadlocked"
+    return errors
+
+
+def test_sweep_does_not_fail_while_another_thread_creates_a_session(sessions):
+    sweeping, created = threading.Event(), threading.Event()
+
+    class Slow:
+        """ An entry whose idle time is read slowly: the first read lets the other thread in. """
+        tool_call_caches = {}
+
+        @property
+        def last_used(self):
+            if not sweeping.is_set():
+                sweeping.set()
+                created.wait(1)  # with the lock the creator waits for this sweep instead
+            return settings.clock()
+
+    sessions["slow"] = Slow()
+
+    def create():
+        sweeping.wait(5)
+        Session("model")
+        created.set()
+
+    errors = run_threads(Session.sweep, create)
+    assert errors == []
+    assert len(sessions) == 2
+
+
+def test_two_concurrent_closes_of_one_session_close_it_once(sessions):
+    session = Session("model")
+    both_in = threading.Barrier(2)
+
+    class Caches(dict):
+        def clear(self):
+            try:
+                both_in.wait(1)  # without the lock both closers get here before either pops
+            except threading.BrokenBarrierError:
+                pass
+            super().clear()
+
+    session.tool_call_caches = Caches()
+    errors = run_threads(lambda: Session.close(session.session_id), lambda: Session.close(session.session_id))
+    assert sessions == {}
+    assert [type(e) for e in errors] == [ValueError]  # the 404 of an unknown session, not a KeyError

@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import uuid4
 import logging
 import os
+import threading
 import time
 
 logger = logging.getLogger("gemstone.session")
@@ -47,17 +48,20 @@ class Session:
     the registry (registry.py, SPEC S1.14) loads, shares and unloads models.
     """
     __sessions: dict[str, 'Session'] = {}
+    # Routes run on worker threads and the WebSocket on the event loop: the map changes only under
+    # this lock, so it holds without the GIL too (#180)
+    __lock = threading.Lock()
     _initialized = False
 
     def __new__(cls, model_id: str = None, session_id: str = None):
         """ Create a new session or return an existing one """
         cls.sweep()
-        if session_id and session_id in cls.__sessions:
-            session = cls.__sessions[session_id]
-            session.last_used = clock()
-            return session
-        else:
-            return super().__new__(cls)
+        with cls.__lock:
+            session = cls.__sessions.get(session_id) if session_id else None
+            if session is not None:
+                session.last_used = clock()
+                return session
+        return super().__new__(cls)
 
     def __init__(self, model_id: str = None, session_id: str = None):
         """ Create a new session for the specified model """
@@ -70,9 +74,11 @@ class Session:
             # The random suffix keeps sessions created in the same second apart (each has its own cache)
             self.session_id = f"{model_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
             self.last_used = clock()
-            self.__sessions[self.session_id] = self
-            logger.info("Session %s is CREATED for model %s (%d open)", self.session_id, model_id, len(self.__sessions))
             self.tool_call_caches: dict[str, str] = {}  # tool call id -> result (S1.6)
+            with self.__lock:
+                self.__sessions[self.session_id] = self
+                count = len(self.__sessions)
+            logger.info("Session %s is CREATED for model %s (%d open)", self.session_id, model_id, count)
 
     @classmethod
     def sweep(cls) -> None:
@@ -81,15 +87,18 @@ class Session:
         if ttl <= 0:
             return
         now = clock()
-        for sid in [sid for sid, s in cls.__sessions.items() if now - s.last_used > ttl]:
+        with cls.__lock:
+            expired = [(sid, cls.__sessions.pop(sid)) for sid, s in list(cls.__sessions.items()) if now - s.last_used > ttl]
+        for sid, session in expired:
             logger.info("Session %s EXPIRED after %.0f s idle", sid, ttl)
-            cls.__sessions.pop(sid).tool_call_caches.clear()
+            session.tool_call_caches.clear()
 
     @classmethod
     def close(cls, session_id: str):
         """ Close the session. The model stays resident for its keep_alive (S1.14). """
-        if session_id in cls.__sessions:
-            cls.__sessions[session_id].tool_call_caches.clear()
-            logger.info("Session %s is DELETED for model %s", session_id, cls.__sessions.pop(session_id).model_id)
-        else:
+        with cls.__lock:
+            session = cls.__sessions.pop(session_id, None)
+        if session is None:
             raise ValueError(f"Session {session_id} not found")
+        session.tool_call_caches.clear()
+        logger.info("Session %s is DELETED for model %s", session_id, session.model_id)
