@@ -760,10 +760,45 @@ Code: `.../network/ModelCatalog.kt` (pure parsing), `.../network/http/ModelsApi.
 `.../ui/viewmodel/AIModelViewModel.kt`, `.../screen/chat/SideScreen.kt`.
 Test: `ModelCatalogTest` (commonTest).
 
-### S2.6 Chat list and history: `partial` · G4
+### S2.6 Chat list and history: `implemented` · G4
 
-The sidebar has a "Recent Chats" section; conversations live in memory only and are lost when the
-app closes. No persistence layer exists (#43). Test: none.
+Chats are kept on the client (#43). The server keeps none: each prompt carries the chat's history
+(S1.4).
+
+- A chat is saved after each completed reply. A failed turn (S2.3) saves nothing. Its title is the
+  first line of its first prompt, cut to 40 characters.
+- The sidebar's "Recent Chats" lists the saved chats, most recently updated first. Selecting one
+  shows its turns and continues it: the next prompt carries its saved history. "New Chat" starts
+  an empty chat, which is saved once its first reply completes.
+- **Where.** One file, `chats.json`, in storage that belongs to the user and the app:
+  - Android: the app's private files directory (`Context.filesDir`).
+  - iOS: the app's Application Support directory.
+  - Desktop: `~/Library/Application Support/Gemstone` on macOS, `%APPDATA%\Gemstone` on Windows,
+    `$XDG_DATA_HOME/gemstone` (default `~/.local/share/gemstone`) on Linux. On macOS and Linux the
+    file is readable and writable by its owner only.
+  - Web: the browser's `localStorage` for the server's origin, key `gemstone.chats`.
+- **Not encrypted.** Chats are stored as plain JSON. They are protected only by the platform: the
+  app sandbox on Android and iOS, the user's account and the file's owner-only permissions on the
+  desktop, the browser profile on the web. Anyone who can read that storage can read the chats.
+  (The API key is encrypted, S2.7; chats are not.)
+- **Deleting.** Each chat in the sidebar has a delete button, and the settings dialog (S2.7) has
+  "Delete all chats". Both ask for confirmation and remove the data from the file at once.
+  Removing the app's data (or the file) deletes everything.
+- **Versioned format.** The file is `{"version": 1, "chats": [...]}`. A chat holds its `id`,
+  `title`, `createdAt` and `updatedAt` (epoch milliseconds), its displayed turns and its history
+  records (S1.4 messages).
+  - A file with a newer version is left untouched. Saving is disabled for that run, so an older
+    app never overwrites a newer format.
+  - A file that cannot be read is renamed to `chats.unreadable.json` (on the web, copied to the
+    key `gemstone.chats.unreadable`), so nothing is lost, and the list starts empty.
+  - Unknown fields are ignored, so a later version can add fields without a migration.
+- Code: `app/src/commonMain/.../storage/ChatArchive.kt` and the platform files
+  (`.../storage/ChatFile.*.kt`), `.../ui/viewmodel/ChatViewModel.kt`,
+  `.../ui/compose/screen/chat/SideScreen.kt`. Test: `app/src/commonTest/.../storage/ChatArchiveTest.kt`
+  (saving, loading, ordering, titles, deleting, the version rules) with an in-memory file;
+  `app/src/desktopTest/.../storage/DiskChatFileTest.kt` (the desktop file: replacing it in one
+  step, owner-only permissions, keeping an unreadable file aside). The Android, iOS and web files
+  and the sidebar have no automated test.
 
 ### S2.7 Settings: `implemented` · G1 (assumed), G5
 

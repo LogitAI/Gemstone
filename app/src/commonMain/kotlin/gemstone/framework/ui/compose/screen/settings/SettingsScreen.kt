@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import gemstone.app.generated.resources.*
 import gemstone.framework.network.ServerAddress
 import gemstone.framework.network.http.serverSettings
+import gemstone.framework.ui.viewmodel.ChatViewModel
 import gemstone.framework.ui.viewmodel.SettingsViewModel
 import org.jetbrains.compose.resources.stringResource
 
@@ -59,6 +60,9 @@ fun SettingsDialog() {
                     )
                 }
                 SettingsViewModel.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { ChatViewModel.requestDeletion(ChatViewModel.DELETE_ALL) }) {
+                    Text(stringResource(Res.string.settings_delete_all_chats), color = MaterialTheme.colorScheme.error)
+                }
             }
         },
         confirmButton = {
@@ -66,6 +70,27 @@ fun SettingsDialog() {
         },
         dismissButton = {
             TextButton(onClick = { SettingsViewModel.cancel() }) { Text(stringResource(Res.string.settings_cancel)) }
+        }
+    )
+}
+
+
+/** Confirms deleting one saved chat or all of them (SPEC S2.6). */
+@Composable
+fun DeleteChatsDialog() {
+    val pending = ChatViewModel.pendingDeletion ?: return
+    val all = pending == ChatViewModel.DELETE_ALL
+    AlertDialog(
+        onDismissRequest = { ChatViewModel.cancelDeletion() },
+        title = { Text(stringResource(if (all) Res.string.chat_delete_all_title else Res.string.chat_delete_title)) },
+        text = { Text(stringResource(if (all) Res.string.chat_delete_all_text else Res.string.chat_delete_text)) },
+        confirmButton = {
+            TextButton(onClick = { ChatViewModel.confirmDeletion() }) {
+                Text(stringResource(Res.string.chat_delete_confirm), color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { ChatViewModel.cancelDeletion() }) { Text(stringResource(Res.string.settings_cancel)) }
         }
     )
 }

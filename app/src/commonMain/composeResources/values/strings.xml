@@ -27,4 +27,13 @@
     <string name="settings_key_this_run">Kept for this run only: this system has no secure storage</string>
     <string name="settings_save">Save</string>
     <string name="settings_cancel">Cancel</string>
+    <string name="settings_delete_all_chats">Delete all chats</string>
+
+    <!-- Saved chats -->
+    <string name="chat_delete_desc">Delete this chat</string>
+    <string name="chat_delete_title">Delete this chat?</string>
+    <string name="chat_delete_all_title">Delete all chats?</string>
+    <string name="chat_delete_text">This removes it from this device and cannot be undone.</string>
+    <string name="chat_delete_all_text">This removes every saved chat from this device and cannot be undone.</string>
+    <string name="chat_delete_confirm">Delete</string>
 </resources>

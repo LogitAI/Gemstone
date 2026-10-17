@@ -165,7 +165,7 @@ that tracks it. Python tests (a real model included) and the Kotlin network-laye
 | Model list from the server | ✅ Implemented |
 | Server address and API key in the app | ✅ Implemented: a settings dialog on Android, iOS and desktop; the key in the platform's secure storage ([#166](https://github.com/LogitAI/Gemstone/issues/166)) |
 | iOS client | 🟡 Partial: builds for the simulator; not yet run on a simulator or a device |
-| Chat history | 🟡 Partial: kept in memory only ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
+| Chat history | ✅ Implemented: saved on the device as plain JSON (not encrypted), deletable per chat or all at once ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
 | UI tests | ⏳ Planned |
 | Native desktop executable (GraalVM, no JVM) | ⏳ Planned: a Windows x64 build path exists but has not been run |
 | GPU (CUDA) inference | ⏳ Planned ([#164](https://github.com/LogitAI/Gemstone/issues/164)) |
