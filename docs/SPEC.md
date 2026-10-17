@@ -408,7 +408,10 @@ per token in use, not per maximum context. Part of S1.11.
 
 Implemented (#64), `api/src/main/engine.py`: batched requests run on transformers'
 `PagedAttentionCache` with `paged|sdpa` attention (`Engine(attn_implementation="sdpa_paged")`,
-the default) or `paged|eager` (`"eager_paged"`); both are plain torch ops (gather, matmul or
+the default) or `paged|eager` (`"eager_paged"`). From transformers 5.19 `paged|sdpa` is plain
+`sdpa` (transformers drops the prefix and serves the paged cache with it); the engine takes the
+implementation transformers settles on when it is the prefixless name of the requested one (#184,
+`api/tests/test_attention_switch.py`). Both are plain torch ops (gather, matmul or
 `scaled_dot_product_attention`, softmax). The cache holds `kv_cache_tokens` tokens (default 8192)
 in pages of `page_size` tokens (default 64); one forward pass takes at most `max_batch_tokens`
 tokens (default 256; longer prompts are prefilled in chunks) and `max_batch_requests` requests
