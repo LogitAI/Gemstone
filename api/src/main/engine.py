@@ -467,7 +467,12 @@ class _Batcher:
 
         self._set_attention(self._paged)
         try:
-            if model.config._attn_implementation != self._paged:
+            switched = model.config._attn_implementation
+            if switched != self._paged and switched == self._paged.split("|", 1)[1]:
+                # transformers 5.19+ runs continuous batching on the plain implementation and drops
+                # the `paged|` prefix (all but `paged|eager`; the prefix goes away in 5.23): use it
+                self._paged = switched
+            if switched != self._paged:
                 raise _BatchingUnavailable(f"{type(model).__name__} cannot switch to {self._paged} attention.")
             self.manager = model.init_continuous_batching(
                 generation_config=generation_config, continuous_batching_config=cb_config
