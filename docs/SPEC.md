@@ -792,6 +792,9 @@ Chats are kept on the client (#43). The server keeps none: each prompt carries t
 - The sidebar's "Recent Chats" lists the saved chats, most recently updated first. Selecting one
   shows its turns and continues it: the next prompt carries its saved history. "New Chat" starts
   an empty chat, which is saved once its first reply completes.
+- The search button next to "Recent Chats" opens a search field (#203). The list then shows only
+  the chats whose title, prompts or replies contain the query, ignoring case, in the same order.
+  A blank query shows every chat; closing the field clears it.
 - **Where.** One file, `chats.json`, in storage that belongs to the user and the app:
   - Android: the app's private files directory (`Context.filesDir`).
   - iOS: the app's Application Support directory.
@@ -818,6 +821,7 @@ Chats are kept on the client (#43). The server keeps none: each prompt carries t
   (`.../storage/ChatFile.*.kt`), `.../ui/viewmodel/ChatViewModel.kt`,
   `.../ui/compose/screen/chat/SideScreen.kt`. Test: `app/src/commonTest/.../storage/ChatArchiveTest.kt`
   (saving, loading, ordering, titles, deleting, the version rules) with an in-memory file;
+  `app/src/commonTest/.../storage/ChatSearchTest.kt` (the search filter);
   `app/src/desktopTest/.../storage/DiskChatFileTest.kt` (the desktop file: replacing it in one
   step, owner-only permissions, keeping an unreadable file aside). The Android, iOS and web files
   and the sidebar have no automated test.

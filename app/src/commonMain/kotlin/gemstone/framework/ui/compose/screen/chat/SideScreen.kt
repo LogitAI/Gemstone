@@ -9,6 +9,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -23,6 +25,7 @@ import gemstone.app.generated.resources.bell
 import gemstone.app.generated.resources.search
 import gemstone.app.generated.resources.sliders
 import gemstone.framework.network.ModelInfo
+import gemstone.framework.storage.searchChats
 import gemstone.framework.ui.viewmodel.AIModelViewModel
 import gemstone.framework.ui.viewmodel.ChatViewModel
 import gemstone.framework.ui.viewmodel.SettingsViewModel
@@ -167,12 +170,23 @@ fun SideScreen(
                 ) {
                     SubtitleText(title)
                     SecondaryFluxIconButton(
-                        onClick = {},
+                        onClick = { ChatViewModel.toggleSearch() },  // search the saved chats (#203)
                         iconResource = IconResource.Drawable(Res.drawable.search),
                         iconDescription = stringResource(Res.string.sidebar_recent_chats_section_desc),
                         elevation = ButtonDefaults.elevatedButtonElevation(0.4.dp),
                         shape = MaterialTheme.shapes.medium.copy(CornerSize(14.dp)),
                         modifier = Modifier,
+                    )
+                }
+            }
+            ChatViewModel.searchQuery?.let { query ->
+                item("search-field") {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { ChatViewModel.searchQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(stringResource(Res.string.sidebar_search_placeholder)) },
+                        singleLine = true
                     )
                 }
             }
@@ -182,7 +196,7 @@ fun SideScreen(
                     onChatSelected()
                 }
             }
-            items(ChatViewModel.savedChats, key = { it.id }) { chat ->
+            items(searchChats(ChatViewModel.savedChats, ChatViewModel.searchQuery.orEmpty()), key = { it.id }) { chat ->
                 ChatRow(chat.title, onDelete = { ChatViewModel.requestDeletion(chat.id) }) {
                     ChatViewModel.openChat(chat.id)
                     onChatSelected()
