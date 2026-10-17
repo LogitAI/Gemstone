@@ -84,3 +84,24 @@ TypedPython MEASURING flag and the machine lock (or in CI):
 
 The decision (option 1, 2 or 3) goes to the maintainer with these numbers, and then into SPEC
 S1.12.
+
+## First results (2026-10-17)
+
+`benchmarks/prefix_reuse.py` runs the plan above for one model at a time. First run: SmolLM2-135M
+(`api/tests/conftest.py` chat template), CPU, upstream PyTorch, transformers 5.20.1, a 300-word
+system prompt, 10 turns of 48 greedy tokens.
+
+These results do not depend on the machine's load:
+
+- **Matched tokens.** With sharing on, turn *n* reuses the previous turn's prompt rounded down to
+  whole pages (64 tokens): 1088 of 1116 tokens, then 1152 of 1184, and so on. The previous reply is
+  not matched, as expected above. Played a second time (warm), each turn reuses its whole prompt
+  except the last partial page.
+- **Greedy equality.** All 10 replies were identical with sharing off, on (cold) and on (warm).
+  This is one model and one chat; it does not show that the replies never differ.
+
+The time to first token is not recorded here yet. The machine had a load average of 4 to 7 from
+other work during these runs, so the timings are not measurements (AGENTS.md rule 8). They showed
+the expected direction: each turn's prefill shrank from the whole prompt (1116 to 1689 tokens) to
+the new part. The timing run is still to do on an idle machine, for SmolLM2-135M and Qwen3-0.6B
+(Qwen3-0.6B is not in the local cache; downloading it needs approval).
