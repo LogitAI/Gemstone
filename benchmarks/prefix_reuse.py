@@ -1,14 +1,15 @@
 """
 Time to first token over a multi-turn chat, with prefix sharing off and on (#211).
 
-    uv run --extra torch python benchmarks/prefix_reuse.py [--turns 10] [--tokens 48] [--system-words 300]
+    uv run --extra torch python benchmarks/prefix_reuse.py [--model ID] [--turns 10] [--tokens 48] [--system-words 300]
 
 The trade-off and the decision this feeds are in `docs/serving/prefix-reuse.md`. The engine keeps
 prefix sharing off (SPEC S1.12); this script turns it on only for its own engine, by handing the
 engine a `ContinuousBatchingConfig` with `allow_block_sharing=True`.
 
-Loads the test model (`GEMSTONE_TEST_MODEL`, default SmolLM2-135M) from the local Hugging Face cache
-only. Each run starts a fresh engine and plays one scripted chat, every turn greedy:
+Loads the test model (`GEMSTONE_TEST_MODEL`, default SmolLM2-135M, with the tests' chat template) or
+`--model` (with its own chat template, e.g. Qwen3's, which drops earlier turns' reasoning) from the
+local Hugging Face cache only. Each run starts a fresh engine and plays one scripted chat, every turn greedy:
 
 - `off`:       sharing off (what Gemstone does);
 - `on, cold`:  sharing on, the chat played for the first time;
@@ -103,6 +104,7 @@ def play(engine, matches, system, tokens, turns):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--model", help="a model with its own chat template (default: the test model and template)")
     parser.add_argument("--turns", type=int, default=len(TURNS))
     parser.add_argument("--tokens", type=int, default=48)
     parser.add_argument("--system-words", type=int, default=300, help="length of the system prompt, in words")
@@ -113,7 +115,8 @@ def main():
     turns = TURNS[: args.turns]
     # A long, fixed system prompt: the part every turn shares
     system = "You are a helpful history tutor. " + " ".join(f"rule{i}" for i in range(args.system_words))
-    print(f"model={TEST_MODEL} turns={len(turns)} tokens={args.tokens} system_words={args.system_words}")
+    model, template = (args.model, None) if args.model else (TEST_MODEL, CHAT_TEMPLATE)
+    print(f"model={model} turns={len(turns)} tokens={args.tokens} system_words={args.system_words}")
     try:
         print(f"load average: {os.getloadavg()}")
     except OSError:
@@ -124,7 +127,7 @@ def main():
     results = {}
     for on in (False, True):
         with prefix_sharing(on):
-            engine = Engine(TEST_MODEL, chat_template=CHAT_TEMPLATE, local_files_only=True)
+            engine = Engine(model, chat_template=template, local_files_only=True)
         if not engine.batching:
             print(f"batching unavailable: {engine.batching_unavailable}")
             return
