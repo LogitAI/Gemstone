@@ -11,7 +11,7 @@
 [![License: Apache-2.0](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](https://github.com/LogitAI/Gemstone/blob/main/LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.9-4285F4?logo=jetpackcompose&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
-[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/pyproject.toml)
+[![Python](https://img.shields.io/badge/Python-3.13%20%7C%203.15t-3776AB?logo=python&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/pyproject.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Desktop%20%7C%20Web-5b6270)](#-현황)
 
 [가이드](https://logitai.github.io/Gemstone/?lang=ko) ·
@@ -46,7 +46,7 @@ Python 서버로 이루어져 있습니다. 서버의 엔진은 CPU 에서 돌�
 
 ## 🚀 빠른 시작
 
-Git, Python 3.13, [uv](https://docs.astral.sh/uv/), JDK 21 이 필요합니다. 기본 모델(Qwen 3 0.6B)은
+Git, Python 3.13(torchnative 는 free-threaded 3.15t), [uv](https://docs.astral.sh/uv/), JDK 21 이 필요합니다. 기본 모델(Qwen 3 0.6B)은
 CPU 에서 돕니다.
 
 **1. 저장소를 받고 서버 의존성 설치**
@@ -54,7 +54,7 @@ CPU 에서 돕니다.
 ```bash
 git clone https://github.com/LogitAI/Gemstone.git
 cd Gemstone
-uv sync --extra torch          # 또는 --extra torchnative (둘은 함께 설치할 수 없습니다)
+uv sync --python 3.13 --extra torch   # 또는 --python 3.15t --extra torchnative (둘 다는 안 됩니다)
 ```
 
 **2. 모델 서버 실행** (포트 `23100`, 모델은 처음 쓸 때 내려받습니다)
@@ -128,7 +128,7 @@ flowchart LR
     subgraph Client["app/: Compose Multiplatform"]
         UI["채팅 UI<br/>commonMain"] --> VM["ChatViewModel"] --> WS["ChatWebSocketClient<br/>(Ktor)"]
     end
-    subgraph Server["api/: Python 3.13"]
+    subgraph Server["api/: Python 3.13+"]
         EP["FastAPI<br/>/api/chat/streaming"] --> M["모델<br/>Qwen 3"]
         M --> B["엔진<br/>PyTorch / torchnative 위의 transformers"]
         M <--> T["도구<br/>날씨 · 검색 · …"]

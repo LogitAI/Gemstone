@@ -5,7 +5,7 @@ description = "This is a open-source multi-platform AI Chat UI written with Comp
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE.md"]
-requires-python = ">=3.13,<3.14"  # 3.14 once torchnative is measured on it
+requires-python = ">=3.13"  # torchnative: free-threaded 3.15t; upstream torch: 3.13 (no 3.15 wheels on macOS)
 dependencies = [
     "uvicorn>=0.34.2",
     "fastapi>=0.115.12",
