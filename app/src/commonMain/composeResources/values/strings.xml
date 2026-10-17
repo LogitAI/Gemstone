@@ -15,4 +15,6 @@
     <string name="chat_new_chat_icon_desc">Start new chat</string>
     <string name="chat_option_icon_desc">Chatting options</string>
     <string name="chat_message_placeholder">Ask me anything...</string>
+    <string name="chat_error_retry">Retry</string>
+    <string name="chat_error_dismiss">Dismiss</string>
 </resources>

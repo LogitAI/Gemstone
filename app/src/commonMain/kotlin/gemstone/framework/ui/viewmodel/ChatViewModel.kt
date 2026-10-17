@@ -97,7 +97,8 @@ data class ChatUiState(
     val isBookmarked: Boolean = false,
     val isResponding: Boolean = true,
     val isConnected: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val failedPrompt: String? = null
 ) {
     val titleOrPlaceholder: String
         @Composable get() = title.ifEmpty { stringResource(Res.string.chat_title_placeholder) }
@@ -112,11 +113,18 @@ object ChatViewModel {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
+    // History size when the turn in flight started: a failed turn drops what it added from here
+    private var turnStart = 0
+    private var observing = false
+
     fun runBlocking(block: suspend CoroutineScope.() -> Unit) {
         coroutineScope.launch { block() }
     }
 
     fun initialize() {
+        // Called again while no session exists (server down): collecting twice would double every event
+        if (observing) return
+        observing = true
         observeClientEvents()
         observeClientState()
     }
@@ -222,16 +230,8 @@ object ChatViewModel {
                         // Add assistant message to history and UI
                         val data = _uiState.value.currentMessage?.assistant?.trim()
                         if (data.isNullOrEmpty()) {
-                            // An empty reply is an error, not a message: show it, keep it out of the history
-                            // (and drop the unanswered prompt so the next request has no two user turns).
-                            if (chatHistory.lastOrNull()?.role == ChatRole.USER.value) {
-                                chatHistory.removeAt(chatHistory.lastIndex)
-                            }
-                            _uiState.value = _uiState.value.copy(
-                                currentMessage = null,
-                                isResponding = false,
-                                error = "The server sent an empty reply, please try again."
-                            )
+                            // An empty reply is an error, not a message (SPEC S2.3)
+                            failTurn("The server sent an empty reply, please try again.")
                             return@collect
                         }
                         val assistantMessage = data
@@ -252,12 +252,7 @@ object ChatViewModel {
                         )
                     }
 
-                    is ChatEvent.ErrorOccurred -> {
-                        _uiState.value = _uiState.value.copy(
-                            error = event.error,
-                            isResponding = false
-                        )
-                    }
+                    is ChatEvent.ErrorOccurred -> failTurn(event.error)
                 }
             }
         }
@@ -290,12 +285,7 @@ object ChatViewModel {
                         )
                     }
 
-                    is ChatState.Error -> {
-                        _uiState.value = _uiState.value.copy(
-                            error = state.message,
-                            isResponding = false
-                        )
-                    }
+                    is ChatState.Error -> failTurn(state.message)
 
                     else -> { /* Handle other states */ }
                 }
@@ -313,7 +303,7 @@ object ChatViewModel {
         println("INFO: Sending message: $messageInput")
 
         coroutineScope.launch {
-            _uiState.value = _uiState.value.copy(isResponding = true)
+            _uiState.value = _uiState.value.copy(isResponding = true, error = null, failedPrompt = null)
 
             // Add user message to UI
             val userMessage = Conversation(messageInput)
@@ -332,18 +322,33 @@ object ChatViewModel {
                 initialize()
             }
 
+            turnStart = chatHistory.size
             val result = webSocketClient.sendMessage(messageInput, chatHistory)
             if (result.isFailure) {
-                _uiState.value = _uiState.value.copy(
-                    error = "Failed to send message: ${result.exceptionOrNull()?.message}",
-                    isResponding = false
-                )
+                failTurn("Failed to send message: ${result.exceptionOrNull()?.message}")
             }
         }
     }
 
+    /**
+     * Fails the turn in flight (SPEC S2.3, #39): shows [error] and removes the turn and its history
+     * records. An error with no turn in flight only shows the error.
+     */
+    private fun failTurn(error: String) {
+        if (_uiState.value.currentMessage != null) chatHistory.dropFrom(turnStart)
+        _uiState.update { it.failTurn(error) }
+    }
+
+    /** Sends the failed prompt again. */
+    fun retry() {
+        val retry = _uiState.value.retryInput() ?: return
+        _uiState.value = retry
+        sendMessage()
+    }
+
+    /** Hides the error and puts the failed prompt back in the input. */
     fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.update { it.dismissError() }
     }
 
     fun onCleared() {

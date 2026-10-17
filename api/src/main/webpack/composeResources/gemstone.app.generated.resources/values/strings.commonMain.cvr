@@ -1,6 +1,8 @@
 version:0
 string|app_name|R2Vtc3RvbmUgQUk=
 string|app_title|R2Vtc3RvbmU=
+string|chat_error_dismiss|RGlzbWlzcw==
+string|chat_error_retry|UmV0cnk=
 string|chat_message_placeholder|QXNrIG1lIGFueXRoaW5nLi4u
 string|chat_new_chat_icon_desc|U3RhcnQgbmV3IGNoYXQ=
 string|chat_option_icon_desc|Q2hhdHRpbmcgb3B0aW9ucw==

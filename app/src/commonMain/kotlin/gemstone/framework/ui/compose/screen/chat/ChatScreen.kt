@@ -201,6 +201,41 @@ fun ChatScreen(screenWidth: Dp) {
             }
         }
 
+        // A failed turn (SPEC S2.3, #39): the error, Retry (when there is a prompt to resend) and Dismiss
+        uiState.error?.let { error ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = Dimen.LAYOUT_PADDING),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = MaterialTheme.shapes.large,
+                    modifier = if (screenWidth >= 800.dp) Modifier.width(700.dp) else Modifier.weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontFamily = SuiteFontFamily,
+                            fontSize = 14.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (uiState.failedPrompt != null) {
+                            TextButton(onClick = { ChatViewModel.retry() }) {
+                                Text(stringResource(Res.string.chat_error_retry), fontFamily = SuiteFontFamily)
+                            }
+                        }
+                        TextButton(onClick = { ChatViewModel.clearError() }) {
+                            Text(stringResource(Res.string.chat_error_dismiss), fontFamily = SuiteFontFamily)
+                        }
+                    }
+                }
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = Dimen.LAYOUT_PADDING),
             horizontalArrangement = Arrangement.Center,

@@ -245,7 +245,8 @@ class ChatWebSocketClient(
             val toolCall = json.decodeFromString<JsonElement>(message.trim())
             _events.emit(ChatEvent.ToolCallReceived(toolCall))
         } catch (e: Exception) {
-            _events.emit(ChatEvent.ErrorOccurred("Failed to parse tool call: ${e.message}"))
+            // Skipped, not an error: the reply continues, and an error would fail the turn (SPEC S2.3)
+            println("WARNING: Skipping a tool call that cannot be parsed: ${e.message}")
         }
     }
 
