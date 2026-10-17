@@ -8,8 +8,8 @@ name: Tests
 #   web-bundle  the committed web client in api/src/main/webpack matches a fresh build of app/
 # The torchnative run is test-torchnative.yml (different triggers, non-blocking).
 on:
-  pull_request:
-    branches: [develop]
+  # Checked on develop after merging, not on every pull request (user decision,
+  # 2026-10-17). A red develop is fixed forward by its own pull request.
   push:
     branches: [develop]
   workflow_dispatch:
