@@ -853,6 +853,12 @@ The server address and the API key can be set in the app (#166).
   `SharedPreferences`, iOS `NSUserDefaults`, desktop `java.util.prefs`).
 - Web: the address is the page's origin (S2.2) and is shown read-only. There is no key field,
   because the web client sends no key (S2.2).
+- Theme (#205): System (the default, following the platform's light or dark setting), Light or
+  Dark, applied on Save and kept in the platform's preferences (on the web, `localStorage` key
+  `gemstone.theme_mode`). An unknown stored value means System. Only the Black color set has a
+  palette today, and its dark palette still has the light colors (`theme/Color.kt`), so Dark looks
+  like Light until a dark palette is designed. The Blue and Orange sets are not offered until they
+  have palettes. Test: `app/src/commonTest/.../ui/compose/theme/ThemeSettingsTest.kt`.
 - Code: `app/src/commonMain/.../network/ServerSettings.kt` and the platform stores
   (`.../network/settings/`), `.../ui/compose/screen/settings/SettingsScreen.kt`,
   `.../ui/viewmodel/SettingsViewModel.kt`.

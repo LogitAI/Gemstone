@@ -23,8 +23,8 @@ abstract class AppColorSet {
 
         val currentColorSet: ColorSet = ColorSet.Black  // Black is the default color set
 
-        val isLight
-            @Composable get() = !isSystemInDarkTheme()
+        val isLight  // the mode chosen in the settings (SPEC S2.7)
+            @Composable get() = !ThemeSettings.isDark(themeSettings.mode, isSystemInDarkTheme())
 
         val currentColorScheme
             @Composable get() = MaterialTheme.colorScheme
