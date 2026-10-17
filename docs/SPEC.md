@@ -704,10 +704,10 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
 - Desktop command line: `--server/-s <address>` (anything above), `--host/-h`, `--port/-p`, `--help`.
 - Web uses the protocol, host and port of the page (`window.location.origin`; default ports 80/443
   when it omits them), so the web client must be served by the API (S1.9).
-- Android has no address setting yet: a server on the same machine is reached with
-  `adb reverse tcp:23100 tcp:23100`; serving a LAN means `GEMSTONE_HOST=0.0.0.0` plus
-  `GEMSTONE_API_KEY` on the server, which desktop clients reach with `--server`. Pointing an Android
-  device at a LAN address needs a settings screen (S2.7, #166).
+- The settings dialog (S2.7) sets the address and the key on Android, iOS and desktop, and keeps
+  them; a value set at launch wins for that run. A server on the same machine as an Android
+  emulator or a USB device is also reached with `adb reverse tcp:23100 tcp:23100`. Serving a LAN
+  means `GEMSTONE_HOST=0.0.0.0` plus `GEMSTONE_API_KEY` on the server.
 - Code: `app/src/commonMain/.../network/ServerAddress.kt`, `app/src/cioMain/.../HttpClientFactory.cio.kt`,
   `app/src/wasmJsMain/.../HttpClientFactory.js.kt`, `app/src/desktopMain/kotlin/gemstone/Main.desktop.kt`.
   Test: `app/src/commonTest/.../network/ServerAddressTest.kt`.
@@ -765,10 +765,41 @@ Test: `ModelCatalogTest` (commonTest).
 The sidebar has a "Recent Chats" section; conversations live in memory only and are lost when the
 app closes. No persistence layer exists (#43). Test: none.
 
-### S2.7 Settings: `planned` · G1 (assumed)
+### S2.7 Settings: `implemented` · G1 (assumed), G5
 
-`SettingsScreen.kt` is an empty file. The user name shown in the sidebar is hard-coded in
-`SettingsViewModel.kt`. Tracked in #166.
+The server address and the API key can be set in the app (#166).
+
+- The user button in the sidebar opens the settings dialog. It has two fields, the server address
+  (any form `ServerAddress` accepts, S2.2) and the API key (masked), and Save and Cancel.
+- Save validates the address first. A malformed address shows the parser's message and saves
+  nothing. An empty address means the default (`127.0.0.1:23100`); an empty key means no key.
+- A value set at launch wins for that run: `GEMSTONE_SERVER_HOST` / `GEMSTONE_SERVER_PORT` and the
+  desktop `--server`, `--host`, `--port` for the address, `GEMSTONE_API_KEY` for the key. The dialog
+  shows such a field read-only, marked "set at launch". Otherwise the saved value applies, and
+  without one the default.
+- A saved change applies at once: the next request uses the new address and key, the chat session
+  of the old server is dropped, and the model list is reloaded.
+- **The API key is never stored in plain text.** It is kept in the platform's secure storage:
+  - Android: encrypted with AES-GCM under a non-exportable Android Keystore key; only the
+    ciphertext is written to the app's preferences.
+  - iOS: the Keychain (a generic password, readable after first unlock, on this device only).
+  - Desktop macOS: the login Keychain.
+  - Desktop Windows: DPAPI for the current user; only the ciphertext is written to the
+    preferences.
+  - Desktop Linux: the Secret Service through `secret-tool` (libsecret). Without `secret-tool` the
+    key is kept for this run only, and the dialog says so.
+  The address is not a secret and is kept in the platform's preferences (Android
+  `SharedPreferences`, iOS `NSUserDefaults`, desktop `java.util.prefs`).
+- Web: the address is the page's origin (S2.2) and is shown read-only. There is no key field,
+  because the web client sends no key (S2.2).
+- Code: `app/src/commonMain/.../network/ServerSettings.kt` and the platform stores
+  (`.../network/settings/`), `.../ui/compose/screen/settings/SettingsScreen.kt`,
+  `.../ui/viewmodel/SettingsViewModel.kt`.
+  Test: `app/src/commonTest/.../network/ServerSettingsTest.kt` (precedence, validation, saving, no
+  plain-text key in the preferences) with in-memory stores. The platform secure stores have no
+  automated test: CI runs on Linux without a Secret Service, and the Android, iOS, macOS and
+  Windows stores need their platform.
+- The user name shown in the sidebar is still hard-coded in `SettingsViewModel.kt`.
 
 ### S2.8 Clean Architecture layers: `planned` · G9
 

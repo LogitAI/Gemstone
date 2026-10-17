@@ -1,6 +1,10 @@
 package gemstone.framework.network.http
 
+import gemstone.framework.network.LaunchSettings
+import gemstone.framework.network.SecretStore
 import gemstone.framework.network.ServerAddress
+import gemstone.framework.network.ServerSettings
+import gemstone.framework.network.SettingsStore
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -12,11 +16,22 @@ import io.ktor.serialization.kotlinx.json.*
 internal expect fun setting(name: String): String?
 
 
-actual val defaultServerAddress: ServerAddress =
-    ServerAddress.resolve(setting("GEMSTONE_SERVER_HOST"), setting("GEMSTONE_SERVER_PORT"))
+/** The platform's preferences, for the server address. */
+internal expect fun platformSettingsStore(): SettingsStore
 
 
-actual val defaultApiKey: String? = setting("GEMSTONE_API_KEY")
+/** The platform's secure storage, for the API key (SPEC S2.7). */
+internal expect fun platformSecretStore(): SecretStore
+
+
+actual fun platformServerSettings(): ServerSettings {
+    // GEMSTONE_SERVER_HOST / _PORT (or the desktop --server, --host, --port) and GEMSTONE_API_KEY win for this run
+    val host = setting("GEMSTONE_SERVER_HOST")?.takeIf { it.isNotBlank() }
+    val port = setting("GEMSTONE_SERVER_PORT")?.takeIf { it.isNotBlank() }
+    val address = if (host != null || port != null) ServerAddress.resolve(host, port) else null
+    val launch = LaunchSettings(address, setting("GEMSTONE_API_KEY")?.takeIf { it.isNotBlank() })
+    return ServerSettings(launch, platformSettingsStore(), platformSecretStore())
+}
 
 
 actual object HttpClientFactory {

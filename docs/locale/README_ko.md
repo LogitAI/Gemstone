@@ -90,10 +90,12 @@ OPENAI_BASE_URL=http://127.0.0.1:23100/v1 OPENAI_API_KEY=x python my_script.py  
 ./gradlew :app:installDebug  # Android
 ```
 
-서버는 `127.0.0.1` 에서만 받습니다. Android 기기나 에뮬레이터에서는 서버를 같은 컴퓨터에서 실행하고
-`adb reverse tcp:23100 tcp:23100` 을 쓰세요. 같은 LAN 의 다른 기기에 서비스하려면 서버를
-`GEMSTONE_HOST=0.0.0.0` 으로 시작하고 양쪽에 `GEMSTONE_API_KEY=<비밀값>` 을 설정합니다. 데스크톱
-클라이언트는 `--server http://<호스트>:23100` (또는 `GEMSTONE_SERVER_HOST`)을 받습니다.
+서버는 `127.0.0.1` 에서만 받습니다. 같은 LAN 의 다른 기기에 서비스하려면 서버를
+`GEMSTONE_HOST=0.0.0.0` 과 `GEMSTONE_API_KEY=<비밀값>` 으로 시작합니다. Android, iOS, 데스크톱 앱에서는
+사이드바의 사용자 버튼이 설정을 열고, 거기서 주소와 키를 입력합니다. 키는 평문이 아니라 플랫폼의 보안
+저장소에 보관됩니다. 데스크톱 클라이언트는 `--server http://<호스트>:23100` (또는
+`GEMSTONE_SERVER_HOST`)도 받습니다. Android 에뮬레이터나 USB 로 연결한 기기는
+`adb reverse tcp:23100 tcp:23100` 으로 같은 컴퓨터의 서버에 닿을 수 있습니다.
 자세한 내용은 [클라이언트 가이드](https://logitai.github.io/Gemstone/guide-clients.html?lang=ko) 를 보세요.
 
 **내 코드에서 서버와 대화하기**: 프레임 세 개를 보내면 토큰이 흘러나옵니다:
@@ -161,7 +163,7 @@ Gemstone 은 초기 단계의, 동작하는 프로토타입입니다. 각 행에
 | 보안 기본값 (루프백 바인드, 오리진 검사, API 키) | ✅ 구현 |
 | Android, 데스크톱, 웹 클라이언트 | ✅ 구현 |
 | 서버에서 읽는 모델 목록 | ✅ 구현 |
-| 앱의 서버 주소와 API 키 | 🟡 부분: 데스크톱과 웹만. Android 는 설정 화면이 필요 ([#166](https://github.com/LogitAI/Gemstone/issues/166)) |
+| 앱의 서버 주소와 API 키 | ✅ 구현: Android, iOS, 데스크톱의 설정 대화상자. 키는 플랫폼의 보안 저장소에 ([#166](https://github.com/LogitAI/Gemstone/issues/166)) |
 | iOS 클라이언트 | 🟡 부분: 시뮬레이터용으로 빌드됨, 시뮬레이터나 기기에서 실행해 보지는 않음 |
 | 대화 기록 | 🟡 부분: 메모리에만 보관 ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
 | UI 테스트 | ⏳ 계획 |

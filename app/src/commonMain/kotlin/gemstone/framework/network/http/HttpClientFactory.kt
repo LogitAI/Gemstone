@@ -1,14 +1,15 @@
 package gemstone.framework.network.http
 
-import gemstone.framework.network.ServerAddress
+import gemstone.framework.network.ServerSettings
 import io.ktor.client.*
 
 
-expect val defaultServerAddress: ServerAddress
+/** The platform's settings: what was set at launch, its preferences and its secure storage (SPEC S2.7). */
+expect fun platformServerSettings(): ServerSettings
 
 
-/** `GEMSTONE_API_KEY`, or null when unset. */
-expect val defaultApiKey: String?
+/** The server address and API key in effect; read on every request, so a saved change applies at once. */
+val serverSettings: ServerSettings by lazy { platformServerSettings() }
 
 
 expect object HttpClientFactory {
