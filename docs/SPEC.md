@@ -722,11 +722,23 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
   `true`: the `result` record has the same key as the `call` record and is ignored.
 - Code: `app/src/commonMain/kotlin/gemstone/framework/network/websocket/ChatWebSocketClient.kt`,
   `.../ui/viewmodel/ChatViewModel.kt`, `.../ui/compose/screen/chat/ChatScreen.kt`.
-  Test: `app/src/commonTest/.../network/ChatCloseEventTest.kt` (close code to event).
-- A server close with a code other than 1000 (or none) is an error, not a finished reply: the app
-  shows the close reason (S1.4: 1008, 1011, 1013) and stores nothing in the chat history. An empty
-  reply is shown as an error too and kept out of the history, with its unanswered prompt dropped
-  (#114; overlaps #39).
+  Test: `app/src/commonTest/.../network/ChatCloseEventTest.kt` (close code to event),
+  `app/src/commonTest/.../ui/viewmodel/ChatFailureTest.kt` (failed turn, retry, dismiss). The
+  error banner itself has no UI test.
+- A server close with a code other than 1000 (or none) is an error, not a finished reply (S1.4:
+  1008, 1011, 1013; #114). An empty reply is an error too.
+- A failed turn (#39): the server cannot be reached, the prompt cannot be sent, the server closes
+  with an error, or the reply is empty. The chat screen then shows the error above the input with
+  two actions. **Retry** sends the same prompt again. **Dismiss** hides the error and puts the
+  prompt back in the input (unless something new was typed), so it is never lost. The failed
+  turn leaves nothing behind: its bubble, any partial reply and every chat-history record it
+  added (the prompt, tool records) are removed, so the next request carries no unanswered
+  prompt. An error after a turn has completed removes nothing.
+- There is no "disconnected" notice. The client opens one WebSocket per prompt and closes it
+  after the reply, so being disconnected between prompts is normal; an unreachable server shows
+  up as the next prompt's failed turn.
+- A tool-call record the client cannot parse is skipped with a warning; it does not fail the turn,
+  because the reply itself continues.
 
 ### S2.4 Layout and navigation: `implemented` · G1
 
