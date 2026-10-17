@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -201,6 +203,41 @@ fun ChatScreen(screenWidth: Dp) {
             }
         }
 
+        // A failed turn (SPEC S2.3, #39): the error, Retry (when there is a prompt to resend) and Dismiss
+        uiState.error?.let { error ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = Dimen.LAYOUT_PADDING),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = MaterialTheme.shapes.large,
+                    modifier = if (screenWidth >= 800.dp) Modifier.width(700.dp) else Modifier.weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontFamily = SuiteFontFamily,
+                            fontSize = 14.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (uiState.failedPrompt != null) {
+                            TextButton(onClick = { ChatViewModel.retry() }) {
+                                Text(stringResource(Res.string.chat_error_retry), fontFamily = SuiteFontFamily)
+                            }
+                        }
+                        TextButton(onClick = { ChatViewModel.clearError() }) {
+                            Text(stringResource(Res.string.chat_error_dismiss), fontFamily = SuiteFontFamily)
+                        }
+                    }
+                }
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = Dimen.LAYOUT_PADDING),
             horizontalArrangement = Arrangement.Center,
@@ -298,17 +335,17 @@ fun MessageBubble(
                 )
             }
             //Spacer(modifier = Modifier.width(Dimen.LIST_ELEMENT_SPACING))
-            SecondaryFluxButton(
-                onClick = {},
-                modifier = Modifier,
-                elevation = ButtonDefaults.buttonElevation(0.2.dp),
-                clickAnimation = Dimen.SURFACE_CLICK_ANIMATION,
-                hoverAnimation = null,
-                interactionSource = remember { NoRippleInteractionSource() },
+            // A surface, not a button: a press on it starts a text selection (#202)
+            FluxSurface(
+                color = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+                shadowElevation = 0.2.dp,
                 shape = MaterialTheme.shapes.extraLarge,
                 contentPadding = PaddingValues(vertical = 10.dp, horizontal = 14.dp)
             ) {
-                BodyText(content, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.primary)
+                SelectionContainer {  // select and copy (#202)
+                    BodyText(content, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.primary)
+                }
             }
         }
     } else {
@@ -362,6 +399,7 @@ fun MessageBubble(
                 val lineOffset = 8.dp
                 val horizontalPadding = 8.dp
                 //Spacer(modifier = Modifier.height(Dimen.LIST_ELEMENT_SPACING))
+                SelectionContainer {
                 CaptionText(
                     thoughts.first,
                     color = color,
@@ -377,6 +415,7 @@ fun MessageBubble(
                             )
                         }
                 )
+                }
                 Spacer(modifier = Modifier.height(Dimen.LIST_ELEMENT_SPACING))
             }
             for (tool in tools) {
@@ -414,28 +453,23 @@ fun MessageBubble(
                 }
             }
             if (content.isNotBlank()) {
-                BlurredFluxButton(
-                    onClick = {},
-                    modifier = Modifier,
-                    elevation = ButtonDefaults.buttonElevation(0.4.dp),
-                    clickAnimation = Dimen.SURFACE_CLICK_ANIMATION,
-                    hoverAnimation = null,
-                    interactionSource = remember { NoRippleInteractionSource() },
+                // A surface, not a button: a press on it starts a text selection (#202)
+                FluxSurface(
+                    color = Color(0xFFFBFBFB),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shadowElevation = 0.4.dp,
+                    border = BorderStroke(1.4.dp, Color.White.copy(alpha = 0.9f)),
                     shape = MaterialTheme.shapes.medium,
-                    contentPadding = PaddingValues(vertical = 10.dp, horizontal = 14.dp),
-                    colors = ButtonColors(
-                        containerColor = Color(0xFFFBFBFB),
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                        disabledContainerColor = Color(0xFFF9F9F9),
-                        disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
+                    contentPadding = PaddingValues(vertical = 10.dp, horizontal = 14.dp)
                 ) {
                     val useRandomRenderer by remember { mutableStateOf(kotlin.random.Random.nextBoolean()) }
 
-                    if (useRandomRenderer) {
-                        ChatGPTStyleStreaming(content, isStreaming = isStreaming)
-                    } else {
-                        StreamingMarkdownText(content, isStreaming = isStreaming)
+                    SelectionContainer {  // select and copy (#202)
+                        if (useRandomRenderer) {
+                            ChatGPTStyleStreaming(content, isStreaming = isStreaming)
+                        } else {
+                            StreamingMarkdownText(content, isStreaming = isStreaming)
+                        }
                     }
                 }
             }

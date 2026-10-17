@@ -1,0 +1,169 @@
+name: Tests
+
+# Every test that gates a pull request into develop, as one workflow with a job per kind:
+#   pytest      the Python tests (api/tests) on a real model; the model is downloaded once into a
+#               cached HF_HOME, so every run uses the same checkpoint as a local run
+#   quickstart  the README's start command, run literally, must come up without a model
+#   gradle      the Kotlin client's common tests on the JVM, and the web (Wasm) target compiles
+#   web-bundle  rebuilds the web client from app/; on develop it commits api/src/main/webpack when it differs
+# The torchnative run is test-torchnative.yml (different triggers, non-blocking).
+on:
+  # Checked on develop after merging, not on every pull request (user decision,
+  # 2026-10-17). A red develop is fixed forward by its own pull request.
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HF_HOME: ${{ github.workspace }}/.hf-cache
+      GEMSTONE_TEST_MODEL: HuggingFaceTB/SmolLM2-135M
+      GEMSTONE_TEST_ALLOW_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          # The upstream PyTorch baseline stays on 3.13; torchnative runs on 3.15t in
+          # test-torchnative.yml (#177).
+          python-version: "3.13"
+
+      - name: Cache the Hugging Face model
+        uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: hf-${{ env.GEMSTONE_TEST_MODEL }}-v1
+
+      - name: Install (upstream PyTorch, CPU)
+        run: uv sync --locked --extra torch  # exactly uv.lock (#186)
+
+      - name: Test
+        run: uv run --extra torch pytest -v -m "real_model or not real_model"
+
+  quickstart:
+    # The documented start command, run literally, must come up without a model and answer.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install (as in the README)
+        run: uv sync --locked --python 3.13 --extra torch  # the README command, held to uv.lock (#186)
+
+      - name: Start the server and ask for its version
+        run: |
+          uv run --extra torch python -m api run server > server.log 2>&1 &
+          pid=$!
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:23100/api/version; then ok=1; break; fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          kill -INT "$pid" 2>/dev/null || true
+          wait "$pid" || true
+          cat server.log
+          test "$ok" = 1
+
+  gradle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Common tests on the JVM
+        run: ./gradlew :app:desktopTest --console=plain
+
+      - name: Compile the web target
+        run: ./gradlew :app:compileKotlinWasmJs --console=plain
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-test-results
+          path: app/build/test-results/desktopTest/
+          if-no-files-found: ignore
+
+  web-bundle:
+    # The server serves the committed Wasm build in api/src/main/webpack, so a git clone works without a
+    # JDK. A local build never matches this Linux build byte for byte (#196), so this job commits the
+    # bundle itself: on a develop push it commits a differing build to develop (#197); elsewhere it only
+    # reports the difference.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write  # the bundle commit on develop
+      actions: write   # starting release-sync for that commit
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the web client
+        run: ./gradlew :app:wasmJsBrowserDistribution --console=plain
+
+      - name: Copy it over the committed bundle
+        run: tools/sync-web-bundle.sh
+
+      - name: Upload the fresh bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-bundle
+          path: api/src/main/webpack/
+
+      - name: Commit the bundle on develop, report it elsewhere
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add -A api/src/main/webpack
+          if git diff --cached --quiet -- api/src/main/webpack; then
+            echo "The committed web bundle is current." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git diff --cached --stat -- api/src/main/webpack
+          if [ "$GITHUB_REF" != "refs/heads/develop" ]; then
+            echo "::notice::api/src/main/webpack differs from this build. The develop run commits it; do not commit a locally built bundle."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "Chore: Rebuild the web bundle from app/ [skip ci]" \
+            -m "Built by the web-bundle job of run $GITHUB_RUN_ID from $GITHUB_SHA (#197)."
+          if ! git push origin HEAD:refs/heads/develop; then
+            # develop moved while this ran; the newer commit's own run rebuilds from newer source
+            echo "::notice::develop moved on; the bundle is left to the newer commit's run."
+            exit 0
+          fi
+          echo "Committed the rebuilt web bundle to develop: $(git rev-parse --short HEAD)." >> "$GITHUB_STEP_SUMMARY"
+          # A push made with GITHUB_TOKEN starts no workflow, so release-sync is started here
+          gh workflow run release-sync.yml --ref develop \
+            || echo "::warning::Could not start release-sync; release lags until the next develop push."
+

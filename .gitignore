@@ -6,6 +6,8 @@
 .gradle/
 .kotlin/
 build/
+!docs/build/
+!docs/build/**
 **/build/
 !src/**/build/
 kotlin-js-store/
@@ -71,6 +73,8 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+!docs/build/
+!docs/build/**
 develop-eggs/
 dist/
 downloads/
@@ -160,7 +164,8 @@ ipython_config.py
 #   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
-uv.lock
+#   Gemstone tracks it (#186): CI installs with `uv sync --locked`.
+#uv.lock
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
@@ -227,7 +232,7 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 *.*~
 
 # Ruff stuff:
@@ -235,3 +240,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+############################################
+# Agent workspace (see AGENTS.md section 2)
+#
+.worktrees/
+.tmp/

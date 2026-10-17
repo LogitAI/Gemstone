@@ -8,6 +8,8 @@ import gemstone.app.generated.resources.Res
 import gemstone.app.generated.resources.chat_title_placeholder
 import gemstone.framework.network.websocket.ChatEvent
 import gemstone.framework.network.websocket.ChatState
+import gemstone.framework.storage.SavedChat
+import gemstone.framework.storage.chatArchive
 import kotlinx.serialization.Serializable
 import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.*
@@ -97,7 +99,8 @@ data class ChatUiState(
     val isBookmarked: Boolean = false,
     val isResponding: Boolean = true,
     val isConnected: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val failedPrompt: String? = null
 ) {
     val titleOrPlaceholder: String
         @Composable get() = title.ifEmpty { stringResource(Res.string.chat_title_placeholder) }
@@ -112,11 +115,36 @@ object ChatViewModel {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
+    // History size when the turn in flight started: a failed turn drops what it added from here
+    private var turnStart = 0
+    // The saved chat on screen; null until a new chat's first reply completes (SPEC S2.6)
+    private var currentChatId: String? = null
+
+    /** The saved chats for the sidebar, most recently updated first. */
+    var savedChats by mutableStateOf(emptyList<SavedChat>())
+        private set
+    /** The chat search query; null when the search field is closed (SPEC S2.6). */
+    var searchQuery by mutableStateOf<String?>(null)
+
+    /** Opens the search field, or closes it and clears the query. */
+    fun toggleSearch() {
+        searchQuery = if (searchQuery == null) "" else null
+    }
+
+    /** A deletion waiting for confirmation: one chat's id, or [DELETE_ALL]. */
+    var pendingDeletion by mutableStateOf<String?>(null)
+        private set
+    const val DELETE_ALL = "*"
+    private var observing = false
+
     fun runBlocking(block: suspend CoroutineScope.() -> Unit) {
         coroutineScope.launch { block() }
     }
 
     fun initialize() {
+        // Called again while no session exists (server down): collecting twice would double every event
+        if (observing) return
+        observing = true
         observeClientEvents()
         observeClientState()
     }
@@ -128,9 +156,55 @@ object ChatViewModel {
         }
     }
 
+    /** Starts a new, empty chat. */
     fun reset() {
         _uiState.value = ChatUiState()
         chatHistory.clear()
+        currentChatId = null
+    }
+
+    /** Loads the saved chats for the sidebar. */
+    fun loadSavedChats() {
+        savedChats = chatArchive.chats
+    }
+
+    /** Shows a saved chat and continues it: the next prompt carries its saved history. */
+    fun openChat(id: String) {
+        val chat = chatArchive.chats.firstOrNull { it.id == id } ?: return
+        reset()
+        chatHistory.addAll(chat.history)
+        currentChatId = chat.id
+        _uiState.value = ChatUiState(title = chat.title, messages = chat.turns, isResponding = false)
+    }
+
+    /** Asks for confirmation before deleting one chat, or every chat with [DELETE_ALL]. */
+    fun requestDeletion(id: String) {
+        pendingDeletion = id
+    }
+
+    fun cancelDeletion() {
+        pendingDeletion = null
+    }
+
+    fun confirmDeletion() {
+        val id = pendingDeletion ?: return
+        pendingDeletion = null
+        if (id == DELETE_ALL) chatArchive.deleteAll() else chatArchive.delete(id)
+        if (id == DELETE_ALL || id == currentChatId) reset()
+        savedChats = chatArchive.chats
+    }
+
+    /** Saves the chat on screen after a completed reply (SPEC S2.6). */
+    private fun saveCurrentChat() {
+        val saved = try {
+            chatArchive.save(currentChatId, _uiState.value.messages, chatHistory.toList())
+        } catch (e: Exception) {
+            println("ERROR: Could not save the chat: ${e.message}")
+            null
+        } ?: return
+        currentChatId = saved.id
+        _uiState.update { it.copy(title = saved.title) }
+        savedChats = chatArchive.chats
     }
 
     private fun observeClientEvents() {
@@ -221,11 +295,12 @@ object ChatViewModel {
                     is ChatEvent.MessageComplete -> {
                         // Add assistant message to history and UI
                         val data = _uiState.value.currentMessage?.assistant?.trim()
-                        val assistantMessage = if (data.isNullOrEmpty()) {
-                            "[ERROR] The connection was closed unexpectedly, please try again."
-                        } else {
-                            data
+                        if (data.isNullOrEmpty()) {
+                            // An empty reply is an error, not a message (SPEC S2.3)
+                            failTurn("The server sent an empty reply, please try again.")
+                            return@collect
                         }
+                        val assistantMessage = data
                         chatHistory.add(ChatRole.ASSISTANT.value, assistantMessage)
                         val currentMessage = Conversation(
                             user = _uiState.value.currentMessage?.user ?: "",
@@ -241,14 +316,10 @@ object ChatViewModel {
                             currentMessage = null,
                             isResponding = false
                         )
+                        saveCurrentChat()
                     }
 
-                    is ChatEvent.ErrorOccurred -> {
-                        _uiState.value = _uiState.value.copy(
-                            error = event.error,
-                            isResponding = false
-                        )
-                    }
+                    is ChatEvent.ErrorOccurred -> failTurn(event.error)
                 }
             }
         }
@@ -281,12 +352,7 @@ object ChatViewModel {
                         )
                     }
 
-                    is ChatState.Error -> {
-                        _uiState.value = _uiState.value.copy(
-                            error = state.message,
-                            isResponding = false
-                        )
-                    }
+                    is ChatState.Error -> failTurn(state.message)
 
                     else -> { /* Handle other states */ }
                 }
@@ -304,7 +370,7 @@ object ChatViewModel {
         println("INFO: Sending message: $messageInput")
 
         coroutineScope.launch {
-            _uiState.value = _uiState.value.copy(isResponding = true)
+            _uiState.value = _uiState.value.copy(isResponding = true, error = null, failedPrompt = null)
 
             // Add user message to UI
             val userMessage = Conversation(messageInput)
@@ -323,18 +389,33 @@ object ChatViewModel {
                 initialize()
             }
 
+            turnStart = chatHistory.size
             val result = webSocketClient.sendMessage(messageInput, chatHistory)
             if (result.isFailure) {
-                _uiState.value = _uiState.value.copy(
-                    error = "Failed to send message: ${result.exceptionOrNull()?.message}",
-                    isResponding = false
-                )
+                failTurn("Failed to send message: ${result.exceptionOrNull()?.message}")
             }
         }
     }
 
+    /**
+     * Fails the turn in flight (SPEC S2.3, #39): shows [error] and removes the turn and its history
+     * records. An error with no turn in flight only shows the error.
+     */
+    private fun failTurn(error: String) {
+        if (_uiState.value.currentMessage != null) chatHistory.dropFrom(turnStart)
+        _uiState.update { it.failTurn(error) }
+    }
+
+    /** Sends the failed prompt again. */
+    fun retry() {
+        val retry = _uiState.value.retryInput() ?: return
+        _uiState.value = retry
+        sendMessage()
+    }
+
+    /** Hides the error and puts the failed prompt back in the input. */
     fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.update { it.dismissError() }
     }
 
     fun onCleared() {
