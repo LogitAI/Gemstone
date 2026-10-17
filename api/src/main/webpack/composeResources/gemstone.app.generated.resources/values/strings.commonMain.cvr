@@ -1,6 +1,12 @@
 version:0
 string|app_name|R2Vtc3RvbmUgQUk=
 string|app_title|R2Vtc3RvbmU=
+string|chat_delete_all_text|VGhpcyByZW1vdmVzIGV2ZXJ5IHNhdmVkIGNoYXQgZnJvbSB0aGlzIGRldmljZSBhbmQgY2Fubm90IGJlIHVuZG9uZS4=
+string|chat_delete_all_title|RGVsZXRlIGFsbCBjaGF0cz8=
+string|chat_delete_confirm|RGVsZXRl
+string|chat_delete_desc|RGVsZXRlIHRoaXMgY2hhdA==
+string|chat_delete_text|VGhpcyByZW1vdmVzIGl0IGZyb20gdGhpcyBkZXZpY2UgYW5kIGNhbm5vdCBiZSB1bmRvbmUu
+string|chat_delete_title|RGVsZXRlIHRoaXMgY2hhdD8=
 string|chat_error_dismiss|RGlzbWlzcw==
 string|chat_error_retry|UmV0cnk=
 string|chat_message_placeholder|QXNrIG1lIGFueXRoaW5nLi4u
@@ -9,6 +15,7 @@ string|chat_option_icon_desc|Q2hhdHRpbmcgb3B0aW9ucw==
 string|chat_title_placeholder|TmV3IENoYXQ=
 string|settings_api_key|QVBJIGtleQ==
 string|settings_cancel|Q2FuY2Vs
+string|settings_delete_all_chats|RGVsZXRlIGFsbCBjaGF0cw==
 string|settings_key_this_run|S2VwdCBmb3IgdGhpcyBydW4gb25seTogdGhpcyBzeXN0ZW0gaGFzIG5vIHNlY3VyZSBzdG9yYWdl
 string|settings_open_desc|T3BlbiBzZXR0aW5ncw==
 string|settings_save|U2F2ZQ==
