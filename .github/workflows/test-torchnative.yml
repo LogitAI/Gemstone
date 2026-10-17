@@ -13,9 +13,13 @@ on:
         required: false
         default: ""
       wheel_url:
-        description: "URL of a torchnative wheel (manylinux x86_64, cp313-abi3) to install instead of PyPI"
+        description: "URL of a torchnative wheel (manylinux x86_64; cp315t for 3.15t, abi3 for a GIL build) to install instead of PyPI"
         required: false
         default: ""
+      python:
+        description: "Python to run on (3.15t is the standard interpreter for torchnative; 3.13 for a GIL comparison)"
+        required: false
+        default: "3.15t"
   schedule:
     - cron: "0 5 * * 1"  # weekly, Monday 05:00 UTC
   # workflow_dispatch and schedule only fire once this file is on the default branch (main), which
@@ -49,7 +53,9 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.13"
+          # Free-threaded CPython 3.15t is the standard interpreter for torchnative (#177); the
+          # upstream PyTorch comparison (test.yml) stays on 3.13.
+          python-version: ${{ inputs.python || '3.15t' }}
 
       - name: Cache the Hugging Face model
         uses: actions/cache@v4
@@ -58,7 +64,8 @@ jobs:
           key: hf-${{ env.GEMSTONE_TEST_MODEL }}-v1
 
       - name: Install (torchnative)
-        # torchnative's Linux wheel is manylinux_2_17_x86_64, cp313-abi3. It is a pre-release:
+        # torchnative ships cp315t wheels (free-threaded) and abi3 wheels (GIL builds 3.13+) from
+        # 0.1.0b6; an abi3 wheel does not install on 3.15t. It is a pre-release:
         # pyproject sets `prerelease = "if-necessary"`, and a pinned spec with a pre-release
         # version allows it too.
         run: |
@@ -76,7 +83,7 @@ jobs:
           else
             uv sync --extra torchnative --upgrade-package torchnative
           fi
-          uv run --no-sync python -c "import importlib.metadata as m, torch; print('torchnative', m.version('torchnative'), 'torch', torch.__version__)"
+          uv run --no-sync python -c "import importlib.metadata as m, sys, torch; print('torchnative', m.version('torchnative'), 'torch', torch.__version__, 'python', sys.version, 'GIL', getattr(sys, '_is_gil_enabled', lambda: True)())"
 
       - name: Test
         run: uv run --no-sync pytest -v -m "real_model or not real_model" -rs

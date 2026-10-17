@@ -186,7 +186,7 @@ Gemstone is a multiplatform AI chat system made of two programs that live side b
 | Directory | Language | What it is |
 |---|---|---|
 | `app/` | Kotlin, Compose Multiplatform | The chat client. Targets Android, iOS, desktop (JVM) and web (Wasm). |
-| `api/` | Python 3.13 | The model-serving API: FastAPI + WebSocket server, model wrappers, one transformers-based serving engine (on PyTorch or torchnative), tools. |
+| `api/` | Python 3.13+ (3.15t on torchnative) | The model-serving API: FastAPI + WebSocket server, model wrappers, one transformers-based serving engine (on PyTorch or torchnative), tools. |
 
 The client talks to the API over HTTP and a WebSocket. The two are versioned together; a protocol
 change touches both and is specified in `docs/SPEC.md` first (rule 5).
@@ -198,19 +198,21 @@ status, decisions and open questions.
 
 Gradle and Python are independent toolchains. Neither needs the other to build.
 
-**Python API** (requires Python 3.13, `>=3.13,<3.14` until torchnative is measured on 3.14, managed with `uv`):
+**Python API** (`>=3.13`, managed with `uv`). The standard interpreter is free-threaded CPython 3.15t on
+torchnative. The `torch` extra (upstream PyTorch) stays on 3.13, as CI runs it, because torch has no
+3.15 wheels on macOS. Pass `--python` when you sync; uv otherwise picks the newest interpreter it finds:
 
 ```bash
-uv sync --extra torch                     # upstream PyTorch; or --extra torchnative (never both)
-# torchnative comes from PyPI as a pre-release (0.1.0b4 on 2026-10-03); no version floor is pinned yet
+uv sync --python 3.13 --extra torch              # upstream PyTorch
+uv sync --python 3.15t --extra torchnative       # or torchnative (never both): a PyPI pre-release, cp315t wheels from 0.1.0b6
 uv run --extra torch python -m api run server   # serve on 127.0.0.1:23100 (GEMSTONE_HOST=host[:port] overrides)
 uv run --extra torch pytest                     # api/tests without the real-model tests (marker real_model)
 uv run --extra torch pytest -m "real_model or not real_model"   # all, as CI runs them (SmolLM2-135M)
 GEMSTONE_TEST_DEVICE=mps uv run --extra torch pytest -m real_model   # the real-model tests on another device
 ```
 
-Run on torchnative by the non-blocking `.github/workflows/test-torchnative.yml` (manual, with a
-torchnative version input, and weekly; `-rs` lists skips). There a test marked `needs_batching`
+Run on torchnative (free-threaded 3.15t) by the non-blocking `.github/workflows/test-torchnative.yml` (manual,
+with torchnative version and Python inputs, and weekly; `-rs` lists skips). There a test marked `needs_batching`
 (`engine.batching` is False; the reason is `engine.batching_unavailable`) or `needs_quantization`
 (`torchnative.quant` lacks `TorchnativeConfig` / q8_0) skips with a reason naming that capability and
 the torchnative version, and `torchnative_only` tests (q8_0 engine) exist only there. On upstream

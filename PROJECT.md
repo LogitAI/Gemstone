@@ -47,7 +47,7 @@ app/                Kotlin Compose Multiplatform 클라이언트 (모듈 :app)
   src/commonMain    UI · 뷰모델 · 네트워크 프로토콜 (모든 타깃 공유)
   src/cioMain       Android · iOS · 데스크톱 공유 Ktor CIO 엔진
   src/*Main         플랫폼 진입점 (android, ios, desktop, wasmJs)
-api/                Python 3.13 모델 서빙 서버
+api/                Python 3.13+ 모델 서빙 서버 (torchnative 는 3.15t)
   src/main/server.py      FastAPI 엔드포인트
   src/main/settings.py    모델 목록, 세션 관리
   src/main/models/        모델 정의 (qwen3, llama3)
@@ -62,7 +62,7 @@ docs/               INTENT, SPEC, locale/, guide/ (GitHub Pages), serving/ (서�
 ## 4. 빌드와 실행
 
 ```bash
-uv sync --extra torch            # Python 의존성 (Python 3.13). torchnative 는 --extra torchnative
+uv sync --python 3.13 --extra torch   # Python 의존성. torchnative 는 --python 3.15t --extra torchnative
                                  # torchnative 는 PyPI 프리릴리스(2026-10-03 기준 0.1.0b4). 버전 하한은 결정 대기
 uv run --extra torch pytest      # Python 테스트 (api/tests)
 uv run --extra torch python -m api run server   # 127.0.0.1:23100 (GEMSTONE_HOST 로 변경)
@@ -87,7 +87,7 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 - **서빙 구조 (2026-10-02)**: 근거와 위험은 [`docs/serving/engine.md`](docs/serving/engine.md) 에 있다.
   - 의미 없는 다중 백엔드를 걷어내고 **단일 서빙 시스템**으로 간다. GGUF·BIN·GPTQ 런타임과
     `llama-cpp-python`·`bitsandbytes` 의존성을 제거한다.
-  - 서빙 시스템은 **torchnative 에 의존**한다. 그래서 Python 요구 버전이 3.13 으로 오른다(torchnative 가 3.14 에서 측정될 때까지 `<3.14`).
+  - 서빙 시스템은 **torchnative 에 의존**한다. 그래서 Python 요구 버전이 3.13 으로 오른다. 2026-10-17 부터 torchnative 경로의 표준 인터프리터는 free-threaded 3.15t 이고, upstream PyTorch 비교는 3.13 에 남는다(#177, wheel 공백은 #178).
   - Gemstone 은 **Ollama 대체제**가 된다.
   - **연속 배칭(continuous batching)과 페이지드 어텐션(paged attention)을 도입**한다.
   - vLLM 은 의존성으로 쓰지 않는다. 별도의 사용자 결정이 아니라 위 결정(torchnative 기반 단일 서빙)에서

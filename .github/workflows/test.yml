@@ -34,6 +34,8 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
         with:
+          # The upstream PyTorch baseline stays on 3.13; torchnative runs on 3.15t in
+          # test-torchnative.yml (#177).
           python-version: "3.13"
 
       - name: Cache the Hugging Face model
@@ -60,7 +62,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install (as in the README)
-        run: uv sync --extra torch
+        run: uv sync --python 3.13 --extra torch
 
       - name: Start the server and ask for its version
         run: |

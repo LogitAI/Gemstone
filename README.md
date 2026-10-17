@@ -11,7 +11,7 @@ English | [한국어](https://github.com/LogitAI/Gemstone/blob/main/docs/locale/
 [![License: Apache-2.0](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](https://github.com/LogitAI/Gemstone/blob/main/LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.9-4285F4?logo=jetpackcompose&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
-[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/pyproject.toml)
+[![Python](https://img.shields.io/badge/Python-3.13%20%7C%203.15t-3776AB?logo=python&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/pyproject.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Desktop%20%7C%20Web-5b6270)](#-status)
 
 [Guide](https://logitai.github.io/Gemstone/) ·
@@ -46,7 +46,7 @@ chat needs no separate server (planned, [#42](https://github.com/LogitAI/Gemston
 
 ## 🚀 Quick start
 
-You need Git, Python 3.13, [uv](https://docs.astral.sh/uv/) and JDK 21. The default model (Qwen 3
+You need Git, Python 3.13 (free-threaded 3.15t for torchnative), [uv](https://docs.astral.sh/uv/) and JDK 21. The default model (Qwen 3
 0.6B) runs on a CPU.
 
 **1. Clone and install the server**
@@ -54,7 +54,7 @@ You need Git, Python 3.13, [uv](https://docs.astral.sh/uv/) and JDK 21. The defa
 ```bash
 git clone https://github.com/LogitAI/Gemstone.git
 cd Gemstone
-uv sync --extra torch          # or --extra torchnative (the two cannot be installed together)
+uv sync --python 3.13 --extra torch   # or --python 3.15t --extra torchnative (not both)
 ```
 
 **2. Start the model server** (port `23100`; the model downloads on first use)
@@ -128,7 +128,7 @@ flowchart LR
     subgraph Client["app/: Compose Multiplatform"]
         UI["Chat UI<br/>commonMain"] --> VM["ChatViewModel"] --> WS["ChatWebSocketClient<br/>(Ktor)"]
     end
-    subgraph Server["api/: Python 3.13"]
+    subgraph Server["api/: Python 3.13+"]
         EP["FastAPI<br/>/api/chat/streaming"] --> M["Model<br/>Qwen 3"]
         M --> B["Engine<br/>transformers on PyTorch / torchnative"]
         M <--> T["Tools<br/>weather · search · …"]
