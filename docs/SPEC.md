@@ -679,6 +679,11 @@ No code in Gemstone. Tracked in #67.
 | Web (Kotlin/Wasm) | `wasmJsMain` | `implemented` |
 | iOS (static framework `Gemstone` for x64, arm64, simulator arm64) | `iosMain` | `partial` |
 
+The Compose Multiplatform plugin is 1.9.0. The desktop resolves Compose UI 1.10.0, because Jewel
+requires it; the other targets resolve 1.9.0. The desktop UI test library is pinned to the
+version the desktop resolves (`compose-ui-resolved` in `gradle/libs.versions.toml`), because a
+mismatch fails every UI test with a `NoSuchFieldError`.
+
 iOS: the Xcode project builds for the simulator (`xcodebuild -sdk iphonesimulator`, checked on
 2026-10-04, #165). Its build phase runs `./gradlew :app:embedAndSignAppleFrameworkForXcode` from the
 repository root; `cioMain` (the Ktor CIO code shared by Android, desktop and iOS) is a group of the
@@ -740,6 +745,18 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
   up as the next prompt's failed turn.
 - A tool-call record the client cannot parse is skipped with a warning; it does not fail the turn,
   because the reply itself continues.
+- Text input (#41). Typing after moving the cursor with the arrow keys inserts at the new cursor,
+  also when the screen recomposes before the typed text flows back through the view model's state.
+  Test: `app/src/desktopTest/.../ui/ChatInputCursorTest.kt` (desktop, Compose UI test). The Korean
+  IME defects reported in 2025-08, on Compose Multiplatform 1.8.1, are upstream and fixed upstream
+  in 1.9.0-beta02: on the desktop, characters duplicated or inserted at the old cursor when the
+  cursor moved during composition ([CMP-8200](https://youtrack.jetbrains.com/issue/CMP-8200)); on
+  the web, the character before the caret was removed when IME input began
+  ([CMP-8607](https://youtrack.jetbrains.com/issue/CMP-8607); also
+  [CMP-8751](https://youtrack.jetbrains.com/issue/CMP-8751)). Gemstone resolves 1.9.0 on the web
+  and 1.10.0 on the desktop (S2.1). Still open upstream: IME input on Firefox with Wasm
+  ([CMP-8872](https://youtrack.jetbrains.com/issue/CMP-8872)). A test cannot drive an IME
+  composition, so the Korean input itself is checked by hand only.
 
 ### S2.4 Layout and navigation: `implemented` · G1
 
