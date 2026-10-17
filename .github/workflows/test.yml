@@ -5,7 +5,7 @@ name: Tests
 #               cached HF_HOME, so every run uses the same checkpoint as a local run
 #   quickstart  the README's start command, run literally, must come up without a model
 #   gradle      the Kotlin client's common tests on the JVM, and the web (Wasm) target compiles
-#   web-bundle  the committed web client in api/src/main/webpack matches a fresh build of app/
+#   web-bundle  rebuilds the web client from app/; on develop it commits api/src/main/webpack when it differs
 # The torchnative run is test-torchnative.yml (different triggers, non-blocking).
 on:
   # Checked on develop after merging, not on every pull request (user decision,
@@ -107,10 +107,15 @@ jobs:
           if-no-files-found: ignore
 
   web-bundle:
-    # The server serves the committed Wasm build in api/src/main/webpack. Rebuild it from app/ and fail
-    # when the committed copy is out of date; the fresh build is uploaded so it can be committed.
+    # The server serves the committed Wasm build in api/src/main/webpack, so a git clone works without a
+    # JDK. A local build never matches this Linux build byte for byte (#196), so this job commits the
+    # bundle itself: on a develop push it commits a differing build to develop (#197); elsewhere it only
+    # reports the difference.
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write  # the bundle commit on develop
+      actions: write   # starting release-sync for that commit
     steps:
       - uses: actions/checkout@v4
 
@@ -134,11 +139,31 @@ jobs:
           name: web-bundle
           path: api/src/main/webpack/
 
-      - name: Fail if the committed bundle is out of date
+      - name: Commit the bundle on develop, report it elsewhere
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git add -A api/src/main/webpack
-          if ! git diff --cached --quiet -- api/src/main/webpack; then
-            git diff --cached --stat -- api/src/main/webpack
-            echo "::error::api/src/main/webpack is out of date. Run ./gradlew :app:wasmJsBrowserDistribution && tools/sync-web-bundle.sh, or commit the web-bundle artifact of this run."
-            exit 1
+          if git diff --cached --quiet -- api/src/main/webpack; then
+            echo "The committed web bundle is current." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+          git diff --cached --stat -- api/src/main/webpack
+          if [ "$GITHUB_REF" != "refs/heads/develop" ]; then
+            echo "::notice::api/src/main/webpack differs from this build. The develop run commits it; do not commit a locally built bundle."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "Chore: Rebuild the web bundle from app/ [skip ci]" \
+            -m "Built by the web-bundle job of run $GITHUB_RUN_ID from $GITHUB_SHA (#197)."
+          if ! git push origin HEAD:refs/heads/develop; then
+            # develop moved while this ran; the newer commit's own run rebuilds from newer source
+            echo "::notice::develop moved on; the bundle is left to the newer commit's run."
+            exit 0
+          fi
+          echo "Committed the rebuilt web bundle to develop: $(git rev-parse --short HEAD)." >> "$GITHUB_STEP_SUMMARY"
+          # A push made with GITHUB_TOKEN starts no workflow, so release-sync is started here
+          gh workflow run release-sync.yml --ref develop \
+            || echo "::warning::Could not start release-sync; release lags until the next develop push."
+

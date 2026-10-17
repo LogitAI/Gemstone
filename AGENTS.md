@@ -265,7 +265,11 @@ with a real failing test (rule 5).
 ## 13. Generated and large files
 
 - `api/src/main/webpack/` is a **committed build output** of the Wasm client, served by the API at
-  `/`. Do not hand-edit it. Regenerate it from `app/` with Gradle and say so in the report.
+  `/`, so a git clone serves the web client without a JDK. Do not hand-edit it, and do not commit a
+  locally built bundle: a local build never matches CI's Linux build byte for byte (#196). The
+  `web-bundle` job of `test.yml` rebuilds it on every develop push and commits it to develop as
+  `github-actions[bot]` when it differs (#197). That bot commit is the one sanctioned direct commit
+  to develop. Locally, `tools/sync-web-bundle.sh` is for trying a client change in the server.
 - Model weights are downloaded from Hugging Face at first use into the Hugging Face cache
   (`HF_HOME`). Never commit weights or caches, and do not trigger a model download from a test or
   a script without asking.
