@@ -211,20 +211,21 @@ uv run --extra torch pytest -m "real_model or not real_model"   # all, as CI run
 GEMSTONE_TEST_DEVICE=mps uv run --extra torch pytest -m real_model   # the real-model tests on another device
 ```
 
-Run on torchnative (free-threaded 3.15t) by the non-blocking `.github/workflows/test-torchnative.yml` (manual,
-with torchnative version and Python inputs, and weekly; `-rs` lists skips). There a test marked `needs_batching`
+The tests run on torchnative (free-threaded 3.15t) in the non-blocking `.github/workflows/test-torchnative.yml`
+(manual, with torchnative version and Python inputs, and weekly; `-rs` lists skips). There a test marked `needs_batching`
 (`engine.batching` is False; the reason is `engine.batching_unavailable`) or `needs_quantization`
 (`torchnative.quant` lacks `TorchnativeConfig` / q8_0) skips with a reason naming that capability and
 the torchnative version, and `torchnative_only` tests (q8_0 engine) exist only there. On upstream
 PyTorch nothing skips and `torchnative_only` tests are not collected (`api/tests/test_substrate.py`).
-Any other failure on torchnative is a real failure.
+Any other failure on torchnative is a real failure. On torchnative 0.1.0b6 generation fails, because its
+`torch._C` shim lacks `triu_`, `nansum` and `Generator.get_state`; the fix belongs to torchnative (#177).
 
 The tests load a real model. `GEMSTONE_TEST_MODEL` picks it (default `HuggingFaceTB/SmolLM2-135M`);
 it is read from the local Hugging Face cache and never downloaded unless
 `GEMSTONE_TEST_ALLOW_DOWNLOAD=1` (CI sets it). Model inference is heavy: run at most one such job
-at a time on a shared machine, and let CI verify pull requests.
+at a time on a shared machine, and let CI verify the change.
 
-`python -m api` with no arguments crashes (`api/__main__.py` reads `sys.argv[1]` unguarded); always
+`python -m api` without `run server` prints a usage line and exits (`api/__main__.py`), so always
 pass `run server`.
 
 **Kotlin client** (module `:app`):
@@ -245,8 +246,9 @@ Verification follows rule 8: redirect Gradle output to a file and read `$?`; run
 task as its own invocation; delete `app/build/test-results/` before counting.
 
 CI runs the Python tests, the quick-start check, `:app:desktopTest` with `:app:compileKotlinWasmJs`,
-and the web bundle check on every pull request into `develop`, as the jobs `pytest`, `quickstart`,
-`gradle` and `web-bundle` of `.github/workflows/test.yml`. Test workflows are named `test.yml`, or
+and the web bundle check on every push to `develop` and on demand (`workflow_dispatch`), not on pull
+requests (#175). They are the jobs `pytest`, `quickstart`, `gradle` and `web-bundle` of
+`.github/workflows/test.yml`. A red `develop` is fixed forward by its own pull request. Test workflows are named `test.yml`, or
 `test-<target>.yml` only when their triggers or environment differ (`test-torchnative.yml`).
 
 **Current test reality.** Python tests live in `api/tests/`: the engine and continuous batching
@@ -254,9 +256,11 @@ and the web bundle check on every pull request into `develop`, as the jobs `pyte
 Ollama APIs, model residency and lease release, the tool-result cache, and the backend removal.
 Most API tests use a fake engine and need no model; the engine, batching and server tests load
 SmolLM2-135M in float32 (the equality criteria are stated for float32). The served web
-assets live in `api/src/main/static/` and `api/src/main/webpack/`, not in a test directory. The only Kotlin
-test (`app/src/commonTest/kotlin/gemstone/ComposeAppCommonTest.kt`) asserts `1 + 2 == 3`; do not
-report it as coverage. New behaviour starts with a real failing test (rule 5).
+assets live in `api/src/main/static/` and `api/src/main/webpack/`, not in a test directory. The Kotlin
+tests in `app/src/commonTest/kotlin/gemstone/framework/network/` cover the network layer
+(`ServerAddressTest`, `ModelCatalogTest`, `ChatCloseEventTest`); the screens and view models have none.
+`ComposeAppCommonTest.kt` asserts `1 + 2 == 3`; do not report it as coverage. New behaviour starts
+with a real failing test (rule 5).
 
 ## 13. Generated and large files
 
@@ -272,7 +276,8 @@ report it as coverage. New behaviour starts with a real failing test (rule 5).
 - API keys live in `.env` (git-ignored). `.env.example` is the template; today it holds only
   `SERPAPI_KEY`. Never commit `.env`, and never print a key into a log or a report.
 - The client finds the server through `GEMSTONE_SERVER_HOST` / `GEMSTONE_SERVER_PORT` (system
-  property or environment variable; the port value includes its leading colon, e.g. `:23100`).
+  property or environment variable; the port may be written with or without its leading colon,
+  `23100` or `:23100`).
   The web client always uses the host it was served from.
 - The server reads `GEMSTONE_HOST` (`host[:port]`, default `127.0.0.1:23100`; the `run server [host] [port]`
   arguments win), `GEMSTONE_DEV=1` (auto-reload; also `--reload`), `GEMSTONE_ORIGINS` (extra allowed
@@ -287,7 +292,7 @@ report it as coverage. New behaviour starts with a real failing test (rule 5).
   configured under `[tool.uv.sources]` (the engine runs on CPU; CUDA returns in M4 as a `cuda` extra).
 - The engine uses only the public `torch` / `transformers` API. Custom kernels cannot be registered
   from Gemstone (`torch.library` is a no-op on torchnative); they belong in torchnative.
-- Python versions are locked in the tracked `uv.lock` (#186). CI installs with `uv sync --locked`,
+- Python dependency versions are locked in the tracked `uv.lock` (#186). CI installs with `uv sync --locked`,
   so a run never takes an upstream release the lock has not been upgraded to. Change a dependency
   with `uv add` / `uv lock` and commit the lock with it. `.github/workflows/lock-upgrade.yml` opens a
   weekly pull request with `uv lock --upgrade`; upstream breakage shows up there, not on develop.

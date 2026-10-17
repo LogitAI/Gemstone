@@ -10,16 +10,19 @@ proposal, and the findings both rest on. `docs/INTENT.md` G5 and
 
 | # | Decision | Consequence |
 |---|---|---|
-| D1 | **One serving system.** The multiple-backend structure (`CoreRuntime` registry, `BackendType`, GGUF / BIN / GPTQ runtimes) is removed. | `api/src/main/backend/` is replaced by one engine. `llama-cpp-python`, `bitsandbytes` and the per-OS wheel URLs leave `pyproject.toml`. |
-| D2 | **The engine depends on torchnative.** | Python moves from `>=3.12,<3.13` to `>=3.13`, the version torchnative requires. Models load through `transformers` (`from_pretrained`) on the real `torch` API. |
+| D1 | **One serving system.** The multiple-backend structure (`CoreRuntime` registry, `BackendType`, GGUF / BIN / GPTQ runtimes) is removed. | `api/src/main/backend/` is replaced by one engine. `llama-cpp-python`, `bitsandbytes` and the per-OS wheel URLs leave `pyproject.toml`. Done (`SPEC.md` S1.8). |
+| D2 | **The engine depends on torchnative.** | Python moves from `>=3.12,<3.13` to `>=3.13`, the version torchnative requires. Since 2026-10-17 the standard interpreter on torchnative is free-threaded 3.15t (#177). Models load through `transformers` (`from_pretrained`) on the real `torch` API. |
 | D3 | **Gemstone is an Ollama replacement.** | Local, private LLM serving for the user's own machine is the goal, not only a backend for the chat app. See §4 for what that implies. |
-| D4 | **Continuous batching and paged attention will be introduced.** | Concurrent requests are served in one batch, and the KV cache is paged. |
+| D4 | **Continuous batching and paged attention will be introduced.** | Concurrent requests are served in one batch, and the KV cache is paged. Implemented on upstream PyTorch (#63, #64); `partial` in `SPEC.md` S1.12, S1.13. |
 | D5 | **The native desktop build (GraalVM native-image) is managed by `compose-multiplatform-extended`.** | Gemstone keeps its own native-image path only until that Gradle plugin does the same job. See §6. |
 
 ## 2. Proposal, pending confirmation
 
 **Engine = transformers 5.x continuous batching + paged KV cache. Kernels live in torchnative.
 Gemstone owns the serving layer above it.**
+
+Status: implemented on upstream PyTorch (#85, #91), not yet verified on torchnative
+(`SPEC.md` S1.11). The maintainer has not confirmed it as a decision.
 
 | Layer | Owner | Contents |
 |---|---|---|
@@ -52,7 +55,8 @@ OpenAI-compatible endpoint, which the client can point at without vLLM becoming 
 
 ### 3.2 Not written from scratch
 
-transformers 5.15.1, the version torchnative measures against, already ships:
+transformers 5.15.1, the version torchnative measured against on 2026-10-02, already ships
+(Gemstone now requires `transformers>=5.18`, `pyproject.toml`):
 
 - `transformers/generation/continuous_batching/`: `scheduler.py`, `cache_manager.py` (paged KV
   blocks), `offloading_manager.py`, `model_runner.py`, `continuous_api.py` (`ContinuousMixin`, a
@@ -72,8 +76,9 @@ torchnative's Rust core, which needs scheduling with the torchnative maintainers
 
 ## 4. What "Ollama replacement" implies
 
-These follow from D3 and are recorded in SPEC as `planned`. Their exact scope is still to be
-confirmed:
+These follow from D3. Their exact scope is still to be confirmed. Status in SPEC: model
+management, residency and the Ollama API are `partial` (S1.14, S1.15, #66, #75); 4-bit weights
+are `planned` (S1.16, #67).
 
 - **Model management**: pull from Hugging Face, list, show, remove, and list loaded models (`ps`).
 - **Residency**: keep-alive per model, several models loaded at once, eviction under memory
@@ -118,3 +123,7 @@ A spike, not a commitment. Run `generate_batch` with `sdpa_paged` and `eager_pag
 with a small model (SmolLM2-135M or Qwen3-0.6B). Check correctness against upstream and measure
 throughput under concurrent requests. Report the missing operators and the 4-bit requirement to
 torchnative. Confirm §2 or revise it from the result.
+
+First result (2026-10-17, torchnative 0.1.0b6, CI run 39023653125): generation fails, because the
+torchnative `torch._C` shim lacks `triu_` (transformers' continuous batching), `nansum` and
+`Generator.get_state`. The missing operators are reported on #177.

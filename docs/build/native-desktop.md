@@ -3,6 +3,9 @@
 Compiles the desktop target to a standalone native executable: no JVM, no JDK on the target
 machine, no installer.
 
+Status: `planned` (`docs/SPEC.md` S3.4). The build path is on `develop` (#71) for Windows x64 only.
+The native build has not been run on `develop`.
+
 ```powershell
 $env:JAVA_HOME = "<a GraalVM 22 installation>"
 $env:GRAALVM_HOME = $env:JAVA_HOME
@@ -11,7 +14,8 @@ $env:GRAALVM_HOME = $env:JAVA_HOME
 ./app/build/dist/bin/gemstone.exe
 ```
 
-Output is `app/build/dist`, about 109MB: an 84MB executable plus the native libraries it needs.
+Output is `app/build/dist`, about 109MB: an 84MB executable plus the native libraries it needs
+(Windows x64, measured when the build landed in 891a176).
 
 ## Tasks
 
@@ -76,6 +80,8 @@ for the measurements behind that.
 ## Known limitations
 
 - Windows x64 only so far.
+- Clicks are not yet registered in the native build; the cause is under investigation
+  (`docs/SPEC.md` S3.4).
 - Startup prints `java.lang.Error: no ComponentUI class for: javax.swing.JRootPane`. The app
   recovers and renders correctly; the cause is unresolved and tracked upstream as
   [oracle/graal#9284](https://github.com/oracle/graal/issues/9284).
