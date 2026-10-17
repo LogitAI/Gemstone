@@ -29,14 +29,14 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 | 도구 호출과 세션별 결과 캐시 | 구현, 캐시는 테스트 있음 | `utils/` (#87, PR #53 기능 이식) |
 | 4비트 가중치 · GGUF | 계획 (M4) | torchnative TN-M3 에 달림 (#67) |
 | GGUF · BIN · GPTQ 백엔드, Llama 3.1, 옛 `POST /api/chat`·`/api/hello` | **제거됨** | #85, #90 |
-| 세션 API | 부분, 테스트 있음 | `server.py`, `settings.py`. 오류 상태 코드와 모델 이름 검증은 #97 에서, 세션 맵 잠금은 #180 에서 고쳤다 |
+| 세션 API | 구현, 테스트 있음 | `server.py`, `settings.py`. 오류 상태 코드와 모델 이름 검증은 #97 에서, 세션 맵 잠금은 #180 에서 고쳤다. 유휴 만료(`GEMSTONE_SESSION_TTL`)와 세션 id 유일성까지 테스트가 있다 |
 | Android · 데스크톱 · 웹 클라이언트 | 구현 | `app/build.gradle.kts` |
 | iOS | 부분 | Xcode 프로젝트가 시뮬레이터용으로 빌드된다(#165). 시뮬레이터나 기기에서 실행해 본 적은 없다 |
 | 모델 선택, 서버 주소 | 구현, 테스트 있음 | 서버의 `GET /api/models` 를 읽음 (S2.5). 서버 주소 파싱과 API 키 포함 (S2.2). Android 는 주소 설정 화면이 아직 없음 |
 | 대화 기록 | 부분 | 메모리에만 둔다. 저장은 #43 |
 | 설정 화면, 도메인 계층(Clean Architecture) | 계획 | 빈 파일. 설정 화면은 #166 |
-| 온디바이스 추론 · 오프라인 · 동기화 | 계획 | 코드 없음. 온디바이스는 #42, 동기화는 #167 |
-| 네이티브 데스크톱 (GraalVM) | 계획 (SPEC S3.4) | Windows x64 빌드 경로는 develop 에 있으나(#71) 네이티브 빌드는 실행해 본 적이 없다. 장기적으로 compose-multiplatform-extended 가 관리 |
+| 온디바이스 추론 · 오프라인 · 동기화 | 계획 | 코드 없음. 온디바이스는 #42, 오프라인은 #190, 동기화는 #167 |
+| 네이티브 데스크톱 (GraalVM) | 계획 (SPEC S3.4) | Windows x64 빌드 경로는 develop 에 있으나(#71) 네이티브 빌드는 실행해 본 적이 없다. 장기적으로 compose-multiplatform-extended 가 관리 (#191) |
 | Kotlin 테스트 | 부분 | 서버 주소, 모델 목록 파싱, 종료 코드 매핑은 테스트 있음(CI). 화면과 뷰모델은 테스트 없음 |
 | GPU(CUDA) 추론 | 계획 (M4) | 엔진 기본값은 `device="cpu"`. torchnative CUDA 는 실행해 본 적이 없다 (#164) |
 | free-threaded 3.15t (torchnative) | 부분 | 표준 인터프리터로 정했다(#177, #188). torchnative 0.1.0b6 의 import 가 GIL 을 다시 켠다. cp315t wheel 이 없는 의존성은 CI 가 소스에서 빌드한다(#178) |

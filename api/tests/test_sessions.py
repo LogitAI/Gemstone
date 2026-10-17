@@ -2,6 +2,8 @@
 Session API error handling (SPEC S1.3; issue #97). A fake registry and store stand in for the
 model, so nothing is loaded or downloaded.
 """
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -51,6 +53,12 @@ def test_catalogue_model_not_downloaded_is_not_unknown(setup, path):
     assert r.status_code == 200
     assert set(r.json()) == {"model_id", "session_id", "message"}
     assert setup["loads"] == [] and setup["store"].downloads == []  # creating loads and fetches nothing
+
+
+def test_session_ids_name_the_model_and_are_unique_within_one_second(setup):
+    ids = [setup["client"].post("/api/models/qwen3/sessions/").json()["session_id"] for _ in range(20)]
+    assert all(re.fullmatch(r"qwen3_\d{14}_[0-9a-f]{8}", session_id) for session_id in ids), ids
+    assert len(set(ids)) == len(ids)  # 20 creations fall within a second or two: the time alone repeats
 
 
 @pytest.mark.parametrize("method", ["delete", "post"])
