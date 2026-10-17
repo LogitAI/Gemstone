@@ -1,0 +1,103 @@
+name: Lock upgrade
+
+# Weekly `uv lock --upgrade` (#186). uv.lock is tracked and CI installs it with `uv sync --locked`,
+# so upstream releases reach develop only through this pull request. The upgraded lock is tested
+# here first (pull requests into develop run no tests), and the result is in the pull request.
+on:
+  schedule:
+    - cron: "0 4 * * 1"  # weekly, Monday 04:00 UTC (fires once this file is on main)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: lock-upgrade
+  cancel-in-progress: false
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HF_HOME: ${{ github.workspace }}/.hf-cache
+      GEMSTONE_TEST_MODEL: HuggingFaceTB/SmolLM2-135M
+      GEMSTONE_TEST_ALLOW_DOWNLOAD: "1"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Upgrade the lock
+        id: lock
+        run: |
+          uv lock --upgrade
+          if git diff --quiet -- uv.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "uv.lock is already current." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cache the Hugging Face model
+        if: steps.lock.outputs.changed == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: hf-${{ env.GEMSTONE_TEST_MODEL }}-v1
+
+      - name: Test the upgraded lock (upstream PyTorch, CPU)
+        id: test
+        if: steps.lock.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          uv sync --locked --extra torch
+          set +e
+          uv run --extra torch pytest -v -m "real_model or not real_model" > "$RUNNER_TEMP/pytest.log" 2>&1
+          status=$?
+          tail -n 40 "$RUNNER_TEMP/pytest.log"
+          exit $status
+
+      - name: Open the pull request
+        if: steps.lock.outputs.changed == 'true'
+        run: |
+          branch="feat/lock-upgrade-$(date -u +%Y%m%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add uv.lock
+          git commit -m "Chore: Upgrade uv.lock" -m "uv lock --upgrade, run by lock-upgrade.yml (#186)."
+          git push origin "$branch"
+          if [ "${{ steps.test.outcome }}" = "success" ]; then
+            result="The Python tests passed on the upgraded lock (real model included)."
+            title="Chore: Upgrade uv.lock"
+          else
+            result="The Python tests FAILED on the upgraded lock. Fix the code (or hold a package back) in this branch before merging. Log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            title="Chore: Upgrade uv.lock (tests failing)"
+          fi
+          {
+            echo "Weekly \`uv lock --upgrade\` (#186)."
+            echo
+            echo "$result"
+            echo
+            echo "Changed packages:"
+            echo
+            git show HEAD~1:uv.lock > "$RUNNER_TEMP/old.lock"
+            uv run --no-project python - "$RUNNER_TEMP/old.lock" uv.lock <<'PY'
+          import sys, tomllib
+          def versions(path):
+              with open(path, "rb") as f:
+                  return {(p["name"], p.get("source", {}).get("registry", "")): p["version"] for p in tomllib.load(f)["package"]}
+          old, new = versions(sys.argv[1]), versions(sys.argv[2])
+          for key in sorted(old.keys() | new.keys()):
+              if old.get(key) != new.get(key):
+                  print(f"- {key[0]}: {old.get(key, '(new)')} -> {new.get(key, '(removed)')}")
+          PY
+          } > "$RUNNER_TEMP/body.md"
+          gh pr create --base develop --head "$branch" --title "$title" --body-file "$RUNNER_TEMP/body.md"
