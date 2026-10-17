@@ -165,7 +165,7 @@ Gemstone 은 초기 단계의, 동작하는 프로토타입입니다. 각 행에
 | 서버에서 읽는 모델 목록 | ✅ 구현 |
 | 앱의 서버 주소와 API 키 | ✅ 구현: Android, iOS, 데스크톱의 설정 대화상자. 키는 플랫폼의 보안 저장소에 ([#166](https://github.com/LogitAI/Gemstone/issues/166)) |
 | iOS 클라이언트 | 🟡 부분: 시뮬레이터용으로 빌드됨, 시뮬레이터나 기기에서 실행해 보지는 않음 |
-| 대화 기록 | 🟡 부분: 메모리에만 보관 ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
+| 대화 기록 | ✅ 구현: 기기에 평문 JSON 으로 저장(암호화하지 않음), 하나씩 또는 전부 삭제 가능 ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
 | UI 테스트 | ⏳ 계획 |
 | 네이티브 데스크톱 실행 파일 (GraalVM, JVM 없음) | ⏳ 계획: Windows x64 빌드 경로는 있으나 아직 실행해 보지 않음 |
 | GPU(CUDA) 추론 | ⏳ 계획 ([#164](https://github.com/LogitAI/Gemstone/issues/164)) |

@@ -89,7 +89,4 @@ object AIModelViewModel {
             failureCallback()
         }
     }
-
-    var chatRoomList by mutableStateOf(mapOf<Int, Pair<Boolean, String>>())
-    var selectedChatRoom by mutableStateOf(-1)
 }

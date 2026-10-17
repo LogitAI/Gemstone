@@ -8,6 +8,8 @@ import gemstone.app.generated.resources.Res
 import gemstone.app.generated.resources.chat_title_placeholder
 import gemstone.framework.network.websocket.ChatEvent
 import gemstone.framework.network.websocket.ChatState
+import gemstone.framework.storage.SavedChat
+import gemstone.framework.storage.chatArchive
 import kotlinx.serialization.Serializable
 import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.*
@@ -115,6 +117,16 @@ object ChatViewModel {
 
     // History size when the turn in flight started: a failed turn drops what it added from here
     private var turnStart = 0
+    // The saved chat on screen; null until a new chat's first reply completes (SPEC S2.6)
+    private var currentChatId: String? = null
+
+    /** The saved chats for the sidebar, most recently updated first. */
+    var savedChats by mutableStateOf(emptyList<SavedChat>())
+        private set
+    /** A deletion waiting for confirmation: one chat's id, or [DELETE_ALL]. */
+    var pendingDeletion by mutableStateOf<String?>(null)
+        private set
+    const val DELETE_ALL = "*"
     private var observing = false
 
     fun runBlocking(block: suspend CoroutineScope.() -> Unit) {
@@ -136,9 +148,55 @@ object ChatViewModel {
         }
     }
 
+    /** Starts a new, empty chat. */
     fun reset() {
         _uiState.value = ChatUiState()
         chatHistory.clear()
+        currentChatId = null
+    }
+
+    /** Loads the saved chats for the sidebar. */
+    fun loadSavedChats() {
+        savedChats = chatArchive.chats
+    }
+
+    /** Shows a saved chat and continues it: the next prompt carries its saved history. */
+    fun openChat(id: String) {
+        val chat = chatArchive.chats.firstOrNull { it.id == id } ?: return
+        reset()
+        chatHistory.addAll(chat.history)
+        currentChatId = chat.id
+        _uiState.value = ChatUiState(title = chat.title, messages = chat.turns, isResponding = false)
+    }
+
+    /** Asks for confirmation before deleting one chat, or every chat with [DELETE_ALL]. */
+    fun requestDeletion(id: String) {
+        pendingDeletion = id
+    }
+
+    fun cancelDeletion() {
+        pendingDeletion = null
+    }
+
+    fun confirmDeletion() {
+        val id = pendingDeletion ?: return
+        pendingDeletion = null
+        if (id == DELETE_ALL) chatArchive.deleteAll() else chatArchive.delete(id)
+        if (id == DELETE_ALL || id == currentChatId) reset()
+        savedChats = chatArchive.chats
+    }
+
+    /** Saves the chat on screen after a completed reply (SPEC S2.6). */
+    private fun saveCurrentChat() {
+        val saved = try {
+            chatArchive.save(currentChatId, _uiState.value.messages, chatHistory.toList())
+        } catch (e: Exception) {
+            println("ERROR: Could not save the chat: ${e.message}")
+            null
+        } ?: return
+        currentChatId = saved.id
+        _uiState.update { it.copy(title = saved.title) }
+        savedChats = chatArchive.chats
     }
 
     private fun observeClientEvents() {
@@ -250,6 +308,7 @@ object ChatViewModel {
                             currentMessage = null,
                             isResponding = false
                         )
+                        saveCurrentChat()
                     }
 
                     is ChatEvent.ErrorOccurred -> failTurn(event.error)

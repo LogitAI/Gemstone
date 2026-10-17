@@ -19,6 +19,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import gemstone.framework.ui.compose.navigation.SwipeBackNavHost
+import gemstone.framework.ui.compose.screen.settings.DeleteChatsDialog
 import gemstone.framework.ui.compose.screen.settings.SettingsDialog
 import gemstone.framework.ui.compose.theme.Dimen
 import gemstone.framework.ui.compose.theme.appColorSet
@@ -107,7 +108,7 @@ fun MainScreen() {
                         Column(
                             modifier = backgroundModifier.fillMaxSize().systemBarsPadding().padding(2.dp)
                         ) {
-                            SideScreen(sideBarMode = false) { chatId ->
+                            SideScreen(sideBarMode = false) {
                                 navController.navigate(Chat) {
                                     launchSingleTop = true
                                     restoreState = true
@@ -142,5 +143,6 @@ fun MainScreen() {
         }
 
         SettingsDialog()  // opened from the sidebar's user button, in either layout (S2.7)
+        DeleteChatsDialog()  // confirms deleting one chat or all of them (S2.6)
     }
 }
