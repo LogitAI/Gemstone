@@ -149,6 +149,16 @@ def test_same_seed_sample_is_identical_batched_or_alone(engine):
     assert "".join(chunks[2]) == generate(engine, PROMPTS[2])
 
 
+def test_same_seed_sample_is_identical_batched_or_exclusive(engine, monkeypatch):
+    # FT7 (#182): both paths draw with the per-request sampler, so a seed gives the same tokens
+    # whichever path the request takes.
+    batched = generate(engine, PROMPTS[0], seed=7, **SAMPLED)
+    monkeypatch.setattr(engine, "_batcher", None)  # the same request on the exclusive path
+    exclusive = generate(engine, PROMPTS[0], seed=7, **SAMPLED)
+
+    assert batched.strip() and exclusive == batched
+
+
 def test_cancel_and_close_remove_only_their_own_request(engine):
     long = dict(max_new_tokens=64)
     full = list(engine(PROMPTS[0], **{**GREEDY, **long}))
