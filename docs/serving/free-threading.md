@@ -1,8 +1,8 @@
 # Free-threading checklist (CPython 3.15t)
 
-Concurrency review of the Python API for issue #177: free-threaded CPython 3.15t (no GIL) becomes
-the standard interpreter for the torchnative path; the upstream PyTorch comparison stays on 3.13.
-Native wheels are tracked in #178. This file lists every place in `api/src/main/` where state is
+Concurrency review of the Python API for issue #177. Free-threaded CPython 3.15t (no GIL) is the
+standard interpreter for the torchnative path since 2026-10-17 (#188); the upstream PyTorch
+comparison stays on 3.13. Native wheels are tracked in #178. This file lists every place in `api/src/main/` where state is
 shared between threads or where code leans on the GIL, with a verdict for each. Line numbers are
 from `develop` at b55520e (2026-10-17). Third-party code was read in transformers 5.18.0.
 
@@ -62,13 +62,17 @@ tokenizers, hf-xet, psutil, pyyaml, safetensors, torchnative, and the other comp
 current environment: torch, numpy, regex, pydantic-core, markupsafe, charset-normalizer, websockets
 (plus httptools and uvloop if `uvicorn[standard]` is installed).
 
+Measured on torchnative 0.1.0b6 (CI run 39023653125, #177): `import torch` prints "The global
+interpreter lock (GIL) has been enabled to load module 'torch._C'", so the 3.15t run holds the GIL.
+torchnative's extension does not declare `Py_mod_gil`; the fix belongs to torchnative.
+
 At runtime: `sys._is_gil_enabled()` tells whether the GIL is on after the imports;
 `PYTHON_GIL=0` or `python -X gil=0` forces it off even for undeclared modules (then the code above
 must be safe on its own).
 
 ## How to verify
 
-Prerequisite: `pyproject.toml` allows 3.15 (#177). Run each under `PYTHON_GIL=0`, one at a time.
+`pyproject.toml` allows 3.15 since #188. Run each under `PYTHON_GIL=0`, one at a time.
 
 1. Smoke: import `api.src.main.server` and the engine stack, then assert `not sys._is_gil_enabled()`
    without `PYTHON_GIL=0` set: any `RuntimeWarning` names the module to fix. Add the same assert to a

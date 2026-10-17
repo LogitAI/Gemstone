@@ -6,8 +6,8 @@ This document states why Gemstone exists and what it is for. It is the boundary 
 Sources, in order of authority:
 
 1. The maintainer's own words in the project README (as of commit `2be0e37`) and `pyproject.toml`.
-2. The maintainer's design note on the native desktop build (an untracked working document,
-   proposed location `docs/build/native-desktop.md`).
+2. The maintainer's design note on the native desktop build
+   ([`build/native-desktop.md`](build/native-desktop.md)).
 3. What the code in `app/` and `api/` does.
 
 Anything that comes from (3) alone, or from reading between the lines, is marked:
@@ -36,7 +36,8 @@ all of them.
 
 *"Privacy-first local AI processing with Python Multiplatform."* The README marks this as
 *scheduled*: the client is to adopt [Python Multiplatform](https://github.com/thisisthepy/python-multiplatform)
-so that the Python model code can run inside the app instead of on a separate server.
+so that the Python model code can run inside the app instead of on a separate server. Status:
+`planned` (`SPEC.md` S3.1, #42).
 
 ### G3: Works offline
 
@@ -57,16 +58,18 @@ Decided by the maintainer on 2026-10-02:
 
 - **Gemstone is an Ollama replacement**: local, private LLM serving for the user's own machine,
   not only a backend for the chat app.
-- **One serving system.** The multiple backends in the code today (llama.cpp GGUF, transformers +
-  bitsandbytes, GPTQ) are being removed (transition).
+- **One serving system.** The former backends (llama.cpp GGUF, transformers + bitsandbytes, GPTQ)
+  are removed (`SPEC.md` S1.8).
 - **The serving system depends on [torchnative](https://github.com/thisisthepy/torchnative)**, so the
   same Python model code can later run on the device (G2).
-- **Continuous batching and paged attention will be introduced.**
+- **Continuous batching and paged attention are introduced.** Status: `partial` (`SPEC.md` S1.12,
+  S1.13).
 - vLLM is not a dependency. This follows from the decisions above rather than being a separate
   decision: vLLM assumes the CUDA PyTorch runtime and cannot run on torchnative. If the direction
   changes, revisit it.
 
-The README says the API is *planned to become OpenAI-like*. The rationale, the engine proposal and
+The README says the API is *planned to become OpenAI-like*; it is now `partial` (`SPEC.md` S1.10).
+The rationale, the engine proposal and
 the risks are recorded in [`serving/engine.md`](serving/engine.md).
 
 ### G6: Tool-using assistant
@@ -79,7 +82,7 @@ and answers from its result. Tool calls are part of the chat protocol, not an ad
 *"Seamless experience across all devices."* (README: *Cross-Platform Sync*.)
 
 > Inferred: confirm with the maintainer: what is synchronised (chat history? settings? model
-> choice?) and through what (a server, a file, peer-to-peer) is not stated anywhere.
+> choice?) and through what (a server, a file, peer-to-peer) is not stated anywhere. Tracked in #167.
 
 ### G8: A native desktop app without a JVM
 
@@ -136,7 +139,8 @@ with `domain/`, `adapter/` and `framework/` layers.
 4. What exactly is the torchnative serving engine? Current proposal, pending confirmation:
    transformers 5.x continuous batching with a paged KV cache as the engine, kernels in torchnative
    ([`serving/engine.md`](serving/engine.md) § 2). The choice of torchnative over llama.cpp is
-   decided. This engine detail is not.
+   decided. This engine detail is not. The proposal is implemented on upstream PyTorch (#85, #91)
+   and not yet verified on torchnative (`SPEC.md` S1.11).
 5. How far does *Ollama replacement* reach? Model pull/list/remove, keep-alive, several resident
    models and an Ollama-compatible API follow from it ([`serving/engine.md`](serving/engine.md) § 4),
    but their exact scope has not been confirmed.

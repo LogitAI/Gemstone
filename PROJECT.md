@@ -3,8 +3,8 @@
 저장소: `github.com/LogitAI/Gemstone` · 라이선스: Apache-2.0 · 기준 커밋: `2be0e37` (2026-10-02)
 
 의도는 [`docs/INTENT.md`](docs/INTENT.md), 동작 계약은 [`docs/SPEC.md`](docs/SPEC.md), 에이전트 규정은
-[`AGENTS.md`](AGENTS.md) 에 있습니다. 이 문서는 그 셋을 한국어로 빠르게 훑기 위한 요약이며, 어긋나면
-INTENT → SPEC 순으로 그쪽이 이깁니다.
+[`AGENTS.md`](AGENTS.md) 에 있다. 이 문서는 그 셋을 한국어로 빠르게 훑기 위한 요약이다. 둘이 어긋나면
+INTENT, SPEC 순으로 그쪽이 이긴다.
 
 ---
 
@@ -13,32 +13,33 @@ INTENT → SPEC 순으로 그쪽이 이깁니다.
 모든 플랫폼에서 같은 클라이언트로 쓰는 오픈소스 AI 채팅 시스템. 지금은 Python 서버가 모델을 돌리고,
 목표는 Python Multiplatform 으로 모델을 **앱 안에서** 돌리는 것이다.
 
-## 2. 현재 상태 (2026-10-03, develop 기준)
+## 2. 현재 상태 (2026-10-17, develop 기준)
 
 `api/tests/` 의 Python 테스트는 CI(GitHub Actions)에서 실제 모델(SmolLM2-135M, float32)로 돈다. 표에서
 "테스트 있음"은 그 검증을 뜻하고, 나머지는 코드를 읽고 판정했다.
 
 | 영역 | 상태 | 근거 |
 |---|---|---|
-| 단일 서빙 엔진 (transformers) | 구현, 테스트 있음 | `engine.py` (#85). torchnative 위 검증은 TN-M1(10-24) 이후 (#84) |
+| 단일 서빙 엔진 (transformers) | 구현, 테스트 있음 | `engine.py` (#85). torchnative 위 검증은 TN-M1(10-24) 이후 (#84). torchnative 0.1.0b6 에서는 생성이 실패한다(§6.4, #177) |
 | 연속 배칭 · 페이지드 KV 캐시 | 구현, 테스트 있음 | `engine.py` (#91). 동일성 기준은 float32. 처리량 측정과 torchnative 검증은 남음 |
 | 모델 상주 (앱 · OpenAI · Ollama 공유, keep_alive, 여러 모델과 LRU 축출) | 구현, 테스트 있음 | `registry.py`, `leases.py` (#92, #94, #75) |
 | OpenAI 호환 API (`/v1`, tool call pass-through) | 부분, 테스트 있음 | `openai_api.py` (#88). n>1, logprobs, embeddings 없음 |
 | Ollama 호환 API (핵심 8개 + copy/create/embed, 여러 상주 모델) | 부분, 테스트 있음 | `ollama_api.py` (#90, #75). push 는 501, Modelfile·template·blobs·format 없음 |
 | WebSocket 스트리밍 채팅 (`/api/chat/streaming`) | 구현, 테스트 있음 | `server.py`. 연결이 끊기면 생성 중단 |
 | 도구 호출과 세션별 결과 캐시 | 구현, 캐시는 테스트 있음 | `utils/` (#87, PR #53 기능 이식) |
-| 4비트 가중치 · GGUF | 예정 (M4) | torchnative TN-M3 에 달림 (#67) |
+| 4비트 가중치 · GGUF | 계획 (M4) | torchnative TN-M3 에 달림 (#67) |
 | GGUF · BIN · GPTQ 백엔드, Llama 3.1, 옛 `POST /api/chat`·`/api/hello` | **제거됨** | #85, #90 |
-| 세션 API | 부분 (결함) | 오류를 `raise` 대신 `return`, 404 대신 500, 생성 시 모델 이름 미검증 |
+| 세션 API | 부분, 테스트 있음 | `server.py`, `settings.py`. 오류 상태 코드와 모델 이름 검증은 #97 에서, 세션 맵 잠금은 #180 에서 고쳤다 |
 | Android · 데스크톱 · 웹 클라이언트 | 구현 | `app/build.gradle.kts` |
-| iOS | 부분 | Xcode 스크립트가 없는 `:composeApp` 모듈을 호출 |
+| iOS | 부분 | Xcode 프로젝트가 시뮬레이터용으로 빌드된다(#165). 시뮬레이터나 기기에서 실행해 본 적은 없다 |
 | 모델 선택, 서버 주소 | 구현, 테스트 있음 | 서버의 `GET /api/models` 를 읽음 (S2.5). 서버 주소 파싱과 API 키 포함 (S2.2). Android 는 주소 설정 화면이 아직 없음 |
-| 대화 기록 | 부분 | 메모리에만 |
-| 설정 화면, 도메인 계층(Clean Architecture) | 예정 | 빈 파일 |
-| 온디바이스 추론 · 오프라인 · 동기화 | 예정 | 코드 없음 |
-| 네이티브 데스크톱 (GraalVM) | 예정 (SPEC S3.4) | Windows x64 빌드 경로는 develop 에 있으나(#71) 네이티브 빌드는 실행해 본 적이 없다. 장기적으로 compose-multiplatform-extended 가 관리 |
+| 대화 기록 | 부분 | 메모리에만 둔다. 저장은 #43 |
+| 설정 화면, 도메인 계층(Clean Architecture) | 계획 | 빈 파일. 설정 화면은 #166 |
+| 온디바이스 추론 · 오프라인 · 동기화 | 계획 | 코드 없음. 온디바이스는 #42, 동기화는 #167 |
+| 네이티브 데스크톱 (GraalVM) | 계획 (SPEC S3.4) | Windows x64 빌드 경로는 develop 에 있으나(#71) 네이티브 빌드는 실행해 본 적이 없다. 장기적으로 compose-multiplatform-extended 가 관리 |
 | Kotlin 테스트 | 부분 | 서버 주소, 모델 목록 파싱, 종료 코드 매핑은 테스트 있음(CI). 화면과 뷰모델은 테스트 없음 |
-| GPU(CUDA) 추론 | 예정 (M4) | 엔진 기본값은 `device="cpu"`. torchnative CUDA 는 실행해 본 적이 없다 |
+| GPU(CUDA) 추론 | 계획 (M4) | 엔진 기본값은 `device="cpu"`. torchnative CUDA 는 실행해 본 적이 없다 (#164) |
+| free-threaded 3.15t (torchnative) | 부분 | 표준 인터프리터로 정했다(#177, #188). torchnative 0.1.0b6 의 import 가 GIL 을 다시 켠다. cp315t wheel 이 없는 의존성은 CI 가 소스에서 빌드한다(#178) |
 
 ## 3. 구조
 
@@ -49,8 +50,9 @@ app/                Kotlin Compose Multiplatform 클라이언트 (모듈 :app)
   src/*Main         플랫폼 진입점 (android, ios, desktop, wasmJs)
 api/                Python 3.13+ 모델 서빙 서버 (torchnative 는 3.15t)
   src/main/server.py      FastAPI 엔드포인트
-  src/main/settings.py    모델 목록, 세션 관리
-  src/main/models/        모델 정의 (qwen3, llama3)
+  src/main/settings.py    세션 관리, 로깅
+  src/main/registry.py    모델 이름, 상주, 카탈로그
+  src/main/models/        모델 정의 (qwen3)
   src/main/engine.py      서빙 엔진 (transformers, PyTorch 또는 torchnative 위)
   tests/                  pytest (실제 모델 SmolLM2-135M 사용)
   src/main/utils/         도구 구현과 도구 호출 루프
@@ -63,7 +65,7 @@ docs/               INTENT, SPEC, locale/, guide/ (GitHub Pages), serving/ (서�
 
 ```bash
 uv sync --python 3.13 --extra torch   # Python 의존성. torchnative 는 --python 3.15t --extra torchnative
-                                 # torchnative 는 PyPI 프리릴리스(2026-10-03 기준 0.1.0b4). 버전 하한은 결정 대기
+                                 # torchnative 는 PyPI 프리릴리스, 하한 >=0.1.0b6 (#188)
 uv run --extra torch pytest      # Python 테스트 (api/tests)
 uv run --extra torch python -m api run server   # 127.0.0.1:23100 (GEMSTONE_HOST 로 변경)
 ./gradlew :app:run               # 데스크톱
@@ -83,7 +85,8 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
   README 는 develop 전용 파일(AGENTS, PROJECT, INTENT, SPEC)에 링크하지 않는다.
 - **`CLAUDE.md` 는 두지 않는다**(2026-10-03). Claude Code 가 `AGENTS.md` 를 직접 읽는다.
 - **브랜치**: 작업 브랜치는 `feat/<topic>`. `main`·`develop`·`release`(와 보존용 `release-*`)만 상시 브랜치로 두고, 머지된 브랜치는 머지 때 `--delete-branch` 로, 그 밖에는 주기적으로 지운다.
-- **토치 버전**: `pyproject.toml` 에서 torch 계열에 버전을 고정하지 않는다 (Windows 는 cu128 인덱스).
+- **토치 버전**: `pyproject.toml` 에서 torch 계열에 버전을 고정하지 않는다. Windows 와 Linux 는 PyTorch CPU 인덱스를 쓴다(#138). 엔진이 CPU 에서 돌기 때문이다. CUDA 는 #164.
+- **의존성 잠금**: `uv.lock` 을 추적하고 CI 는 `uv sync --locked` 로 설치한다(#186, #187). upstream 릴리스가 develop 을 깨지 않게 하기 위해서다.
 - **서빙 구조 (2026-10-02)**: 근거와 위험은 [`docs/serving/engine.md`](docs/serving/engine.md) 에 있다.
   - 의미 없는 다중 백엔드를 걷어내고 **단일 서빙 시스템**으로 간다. GGUF·BIN·GPTQ 런타임과
     `llama-cpp-python`·`bitsandbytes` 의존성을 제거한다.
@@ -114,6 +117,10 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
    - 같은 버전, 이 맥의 mps: `generate` 가 transformers 의 `isin` 에서 멈춘다(torchnative #29).
    - 배칭을 막던 torchnative 결함(#30, cb-path)은 torchnative develop 에 들어갔다. 그 휠을 CI 가 받을
      URL(GitHub pre-release)은 사용자 승인을 기다린다. `test-torchnative.yml` 은 `wheel_url` 입력을 받는다.
+   - torchnative 0.1.0b6, free-threaded 3.15t, Linux CPU(CI 실행 39023653125): 412 통과, 19 실패.
+     실패는 모두 torchnative 의 `torch._C` shim 에 없는 op 다(`triu_`, `nansum`, `Generator.get_state`).
+     `triu_` 가 연속 배칭의 마스크 생성을 막아 모든 생성이 실패한다. `import torch` 는 GIL 을 다시 켠다.
+     수정은 torchnative 몫이다(#177).
    - 처리량 측정(`benchmarks/batching_throughput.py`)은 아직 돌리지 않았다.
 5. **Python 테스트의 위치**: 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산도
    `api/src/test/` 에서 `api/src/main/{static,webpack}/` 로 옮겼다(#83).
@@ -127,8 +134,8 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
    머지되면 일어난다.
 9. **Ollama 대체의 범위**: 핵심 엔드포인트, 여러 모델 상주와 축출, copy/create/embed 는 구현했다(#90, #107).
    남은 것은 4비트 품질과 GGUF 읽기(#67)로, torchnative 작업에 달려 있다.
-10. **torchnative 버전 하한**: PyPI 최신은 `0.1.0b4` 이고 배칭 수정이 없다. 수정이 든 `0.1.0b5` 를
-    언제 올릴지, Gemstone 이 어떤 하한(`>=0.1.0b5` 등)을 걸지 사용자 결정을 기다린다.
+10. **torchnative 버전 하한**: 해결됨(2026-10-17). 하한은 `>=0.1.0b6` 이다. cp315t wheel 이 있는 첫
+    릴리스이기 때문이다(#188).
 11. **`script/` 의 자리**: 해결됨(2026-10-04). `tools/drive-desktop.ps1` 로 옮겼다. `.idea/` 도 추적을 끊었다.
 
 ## 7. 마일스톤 (2026-10-03 재조정: 11월 말 실사용)
@@ -154,10 +161,10 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 |---|---|---|
 | 빠른 paged attention 커널 | 완전히 새로 만들어야 하는 torchnative 커널이다(TN-M2). 11월에는 순수 torch op 경로로 정확성만 맞춘다 | #74 |
 | 4비트(Q4) 가중치, GGUF 가져오기 | torchnative Q4_0 의 생성 품질이 떨어진다(logit RMS 29.5%). GGUF 리더도 없다(TN-M3). 11월에는 q8_0 만 낸다 | #67 |
-| ~~여러 모델 동시 상주와 축출, 나머지 Ollama 명령(create/copy/push, Modelfile, embeddings)~~ | **구현함**(develop 반영 대기). 상주 모델 수 3개(`GEMSTONE_MAX_LOADED_MODELS`)와 메모리 한도, 사용 중이 아닌 모델의 LRU 축출, copy·create(system·parameters)·embed. push 는 501, Modelfile·template 은 지원하지 않는다 | #75 |
+| ~~여러 모델 동시 상주와 축출, 나머지 Ollama 명령(create/copy/push, Modelfile, embeddings)~~ | **구현함**(develop 반영, 010e78f). 상주 모델 수 3개(`GEMSTONE_MAX_LOADED_MODELS`)와 메모리 한도, 사용 중이 아닌 모델의 LRU 축출, copy·create(system·parameters)·embed. push 는 501, Modelfile·template 은 지원하지 않는다 | #75 |
 | 세션 프리픽스 캐시 | 체감 속도는 좋아지지만 정확성 기능은 아니다 | #37 |
 | Qwen3 4B 이상과 8B 이상 모델 | Qwen3 은 0.6B 부터 검증한다(torchnative #23). 4비트가 없으면 큰 모델은 메모리 부담이 크다 | - |
-| CUDA 서버 경로 | torchnative CUDA 는 연결만 돼 있고 실행해 본 적이 없다 | - |
+| CUDA 서버 경로 | torchnative CUDA 는 연결만 돼 있고 실행해 본 적이 없다 | #164 |
 
 **위험**
 

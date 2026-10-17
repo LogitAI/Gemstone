@@ -44,7 +44,8 @@ with every change since. S1.11–S1.16 and S3.4 also record the maintainer's dec
   start-up warning is logged; the server is never blocked (Ollama compatibility).
 - Code: `api/__main__.py`, `api/src/main/security.py`, `api/src/main/server.py`.
   Test: `api/tests/test_main_args.py`, `api/tests/test_security.py`.
-- Note: `python -m api` with fewer than two arguments raises `IndexError`.
+- Note: `python -m api` without `run server` prints a usage line and exits (`api/__main__.py`,
+  since #116). No test covers that path.
 
 ### S1.2 Model catalogue: `implemented` · G5
 
@@ -257,7 +258,7 @@ Implemented (#65), `api/src/main/openai_api.py`:
 
 Not yet: `n` > 1, `logprobs`, `response_format`, `/v1/completions`, `/v1/embeddings`.
 `usage` counts tokens by re-tokenising with the engine's tokenizer. Concurrent requests from
-several clients wait for one another until continuous batching (S1.12) lands.
+several clients share the model's engine, which batches them (S1.12).
 
 Test: `api/tests/test_openai_api.py` (a scripted fake engine, plus one SmolLM2-135M test that
 streams a greedy completion and compares it with the engine's own output).
@@ -276,7 +277,8 @@ Decided (2026-10-02):
   free-threaded CPython 3.15t on torchnative (decided 2026-10-17, #177); torchnative ships cp315t
   wheels from 0.1.0b6, and `--extra torchnative` installs its pre-release from PyPI. The upstream
   PyTorch comparison stays on 3.13, because torch has no 3.15 wheels on macOS. Native dependencies
-  without cp315t wheels are tracked in #178 and are not built from source in CI.
+  without cp315t wheels are tracked in #178. Only `test-torchnative.yml` builds them from source,
+  and it caches the built wheels.
 - vLLM is not a dependency: a consequence of the torchnative decision, because vLLM assumes the
   CUDA PyTorch runtime and cannot run on torchnative.
 
@@ -334,7 +336,11 @@ skips when `torchnative.quant` has no `TorchnativeConfig` or q8_0 (`test_quantiz
 Tests: `api/tests/test_queue_budget.py` (fake tokenizer and batcher: the budget rule, the queue
 timeout and its 503 / 1013 mapping), `api/tests/test_engine.py`, `api/tests/test_server.py`, on upstream PyTorch with
 SmolLM2-135M. Still open for M1: the same tests on torchnative (cpu, mps) once torchnative TN-M1
-lands (2026-10-24).
+lands (2026-10-24). On torchnative 0.1.0b6 (free-threaded 3.15t, Linux CPU, CI run 39023653125)
+412 tests pass and 19 fail. Every failure is an op the torchnative `torch._C` shim lacks: `triu_`
+(used by transformers' continuous batching, so every generation fails), `nansum` (`typical_p`) and
+`Generator.get_state`. Importing torchnative also re-enables the GIL. The fix belongs to
+torchnative (#177).
 
 The 2026-10-02 proposal, now implemented (#85, #91) and awaiting verification on torchnative: the engine is transformers 5.x continuous batching with a paged KV
 cache, kernels live in torchnative, and the engine uses only the public `torch` / `transformers`
@@ -420,7 +426,7 @@ tokens (default 256; longer prompts are prefilled in chunks) and `max_batch_requ
 (default 16). On CPU transformers sizes the cache with `psutil`, which is therefore a dependency.
 
 Tests: `api/tests/test_batching.py` runs on `sdpa_paged`. `eager_paged` has no test on the real
-model. A torchnative paged-attention kernel for speed is still to come.
+model. A torchnative paged-attention kernel for speed is `planned` (#74).
 
 ### S1.14 Model management: `partial` · G5
 
@@ -531,7 +537,7 @@ Implemented (M3 scope, #66; several resident models and derived models, #75),
   plus the other local models, for `GET /api/models` and `GET /v1/models` (S1.2).
 
 Not yet: memory accounting beyond weights and KV cache (activations, allocator overhead), GPU
-placement (`size_vram` is 0), pull progress per byte (it is per file; the Hub reports file
+placement (`size_vram` is 0; CUDA is #164), pull progress per byte (it is per file; the Hub reports file
 sizes), GGUF.
 
 Tests: `api/tests/test_multi_resident.py` (fake engine and store: two models resident and
@@ -640,8 +646,8 @@ Implemented (M3 scope, #66; the rest of the commands, #75):
   removes the record only.
 
 Status `partial` stays. Not yet: `format` (JSON / schema output), blobs (`/api/blobs`), Modelfile
-text and templates, adapters, quantizing, `logprobs`, image input, and concurrent generation (requests on
-one model take turns until S1.12).
+text and templates, adapters, quantizing, `logprobs` and image input. Concurrent requests on one
+model share its engine, which batches them (S1.12).
 
 Tests: `api/tests/test_ollama_api.py`: on a fake engine (streaming and non-streaming chat and
 generate, tool-call pass-through, option forwarding, stop, think, tags / show / ps, keep_alive,
@@ -655,7 +661,7 @@ Ollama and OpenAI APIs, show, embed and the legacy embeddings, push 501, per-fil
 An Ollama replacement has to run models at roughly 4-bit quality. Today torchnative offers
 `TorchnativeConfig("q8_0")` through transformers' `HfQuantizer` slot. Its Q4_0 shows 29.5% logit
 RMS error and degrades generation, and it has no GGUF reader. This item depends on torchnative.
-No code in Gemstone.
+No code in Gemstone. Tracked in #67.
 
 ## 2. Client (`app/`)
 
@@ -696,7 +702,7 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
 - Android has no address setting yet: a server on the same machine is reached with
   `adb reverse tcp:23100 tcp:23100`; serving a LAN means `GEMSTONE_HOST=0.0.0.0` plus
   `GEMSTONE_API_KEY` on the server, which desktop clients reach with `--server`. Pointing an Android
-  device at a LAN address needs a settings screen (S2.7).
+  device at a LAN address needs a settings screen (S2.7, #166).
 - Code: `app/src/commonMain/.../network/ServerAddress.kt`, `app/src/cioMain/.../HttpClientFactory.cio.kt`,
   `app/src/wasmJsMain/.../HttpClientFactory.js.kt`, `app/src/desktopMain/kotlin/gemstone/Main.desktop.kt`.
   Test: `app/src/commonTest/.../network/ServerAddressTest.kt`.
@@ -740,12 +746,12 @@ Test: `ModelCatalogTest` (commonTest).
 ### S2.6 Chat list and history: `partial` · G4
 
 The sidebar has a "Recent Chats" section; conversations live in memory only and are lost when the
-app closes. No persistence layer exists. Test: none.
+app closes. No persistence layer exists (#43). Test: none.
 
 ### S2.7 Settings: `planned` · G1 (assumed)
 
-`SettingsScreen.kt` is an empty file; the user name shown in the sidebar is hard-coded in
-`SettingsViewModel.kt`.
+`SettingsScreen.kt` is an empty file. The user name shown in the sidebar is hard-coded in
+`SettingsViewModel.kt`. Tracked in #166.
 
 ### S2.8 Clean Architecture layers: `planned` · G9
 
@@ -764,7 +770,7 @@ line is hard-coded in Korean (`"…초 동안"`, `ChatScreen.kt`).
 
 The client embeds the Python model code via Python Multiplatform and runs without the server.
 The engine is the torchnative-based system of S1.11.
-No code on `develop`.
+No code on `develop`. Tracked in #42.
 
 ### S3.2 Offline operation: `planned` · G3
 
@@ -772,7 +778,7 @@ Depends on S3.1. Today every chat goes through the server.
 
 ### S3.3 Cross-platform sync: `planned` · G7
 
-No code. The meaning of sync is an open question in `INTENT.md` § 5.
+No code. The meaning of sync is an open question in `INTENT.md` § 5. Tracked in #167.
 
 ### S3.4 Native desktop executable (GraalVM native-image): `planned` · G8
 
