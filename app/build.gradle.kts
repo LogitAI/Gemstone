@@ -10,6 +10,7 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.kotlin.native.desktop)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.compose.hotreload)
     kotlin("plugin.serialization").version(libs.versions.kotlin.get())
@@ -82,9 +83,27 @@ kotlin {
             api(compose.runtime)
             api(compose.foundation)
             api(compose.material3)
-            api(compose.materialIconsExtended)
+            // `material-icons-extended` stays at 1.7.3 under `org.jetbrains.compose.material` (not published
+            // by compose-multiplatform-core-extended), so exclude its transitive `org.jetbrains.compose.*`
+            // dependencies to avoid pulling a second Compose copy onto the classpath.
+            api(compose.materialIconsExtended) {
+                exclude(group = "org.jetbrains.compose.annotation-internal")
+                exclude(group = "org.jetbrains.compose.collection-internal")
+                exclude(group = "org.jetbrains.compose.foundation")
+                exclude(group = "org.jetbrains.compose.material")
+                exclude(group = "org.jetbrains.compose.runtime")
+                exclude(group = "org.jetbrains.compose.ui")
+            }
             api(compose.ui)
-            api(compose.components.resources)
+            // `components-resources` stays at 1.11.1 under `org.jetbrains.compose.components`; exclude its
+            // transitive `org.jetbrains.compose.*` dependencies so they resolve from `org.thisisthepy.compose.*`.
+            api(compose.components.resources) {
+                exclude(group = "org.jetbrains.compose.annotation-internal")
+                exclude(group = "org.jetbrains.compose.collection-internal")
+                exclude(group = "org.jetbrains.compose.foundation")
+                exclude(group = "org.jetbrains.compose.runtime")
+                exclude(group = "org.jetbrains.compose.ui")
+            }
             api(compose.components.uiToolingPreview)
             api(libs.androidx.lifecycle.viewmodel)
             api(libs.androidx.lifecycle.runtimeCompose)
@@ -114,12 +133,42 @@ kotlin {
         desktopMain.dependencies {
             api(compose.desktop.currentOs) {
                 exclude(group = "org.jetbrains.compose.material3")
+                exclude(group = "org.thisisthepy.compose.material3")
             }
             api(libs.kotlinx.coroutines.swing)
 
-            implementation(libs.jewel.standalone)
-            implementation(libs.jewel.decorated.window)
-            implementation(libs.jewel.foundation)
+            // Jewel is built against upstream `org.jetbrains.compose.*`; exclude those transitives so
+            // the desktop classpath resolves a single Compose copy from `org.thisisthepy.compose.*`.
+            implementation(libs.jewel.standalone.get().toString()) {
+                exclude(group = "org.jetbrains.compose.annotation-internal")
+                exclude(group = "org.jetbrains.compose.collection-internal")
+                exclude(group = "org.jetbrains.compose.animation")
+                exclude(group = "org.jetbrains.compose.desktop")
+                exclude(group = "org.jetbrains.compose.foundation")
+                exclude(group = "org.jetbrains.compose.material")
+                exclude(group = "org.jetbrains.compose.runtime")
+                exclude(group = "org.jetbrains.compose.ui")
+            }
+            implementation(libs.jewel.decorated.window.get().toString()) {
+                exclude(group = "org.jetbrains.compose.annotation-internal")
+                exclude(group = "org.jetbrains.compose.collection-internal")
+                exclude(group = "org.jetbrains.compose.animation")
+                exclude(group = "org.jetbrains.compose.desktop")
+                exclude(group = "org.jetbrains.compose.foundation")
+                exclude(group = "org.jetbrains.compose.material")
+                exclude(group = "org.jetbrains.compose.runtime")
+                exclude(group = "org.jetbrains.compose.ui")
+            }
+            implementation(libs.jewel.foundation.get().toString()) {
+                exclude(group = "org.jetbrains.compose.annotation-internal")
+                exclude(group = "org.jetbrains.compose.collection-internal")
+                exclude(group = "org.jetbrains.compose.animation")
+                exclude(group = "org.jetbrains.compose.desktop")
+                exclude(group = "org.jetbrains.compose.foundation")
+                exclude(group = "org.jetbrains.compose.material")
+                exclude(group = "org.jetbrains.compose.runtime")
+                exclude(group = "org.jetbrains.compose.ui")
+            }
 
             // Jewel's standalone cursor handling loads JNA at class-init, but Jewel does not
             // declare it -- inside the IDE the platform supplies it. Without these the desktop
