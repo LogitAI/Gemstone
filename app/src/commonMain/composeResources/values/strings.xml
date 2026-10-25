@@ -9,10 +9,36 @@
     <string name="sidebar_models_section_desc">Model Settings</string>
     <string name="sidebar_recent_chats_section">Recent Chats</string>
     <string name="sidebar_recent_chats_section_desc">Search Recent Chats</string>
+    <string name="sidebar_search_placeholder">Search chats</string>
 
     <!-- Chatting -->
     <string name="chat_title_placeholder">New Chat</string>
     <string name="chat_new_chat_icon_desc">Start new chat</string>
     <string name="chat_option_icon_desc">Chatting options</string>
     <string name="chat_message_placeholder">Ask me anything...</string>
+    <string name="chat_error_retry">Retry</string>
+    <string name="chat_error_dismiss">Dismiss</string>
+
+    <!-- Settings -->
+    <string name="settings_open_desc">Open settings</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_server_address">Server address</string>
+    <string name="settings_api_key">API key</string>
+    <string name="settings_set_at_launch">Set at launch</string>
+    <string name="settings_key_this_run">Kept for this run only: this system has no secure storage</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="settings_delete_all_chats">Delete all chats</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+
+    <!-- Saved chats -->
+    <string name="chat_delete_desc">Delete this chat</string>
+    <string name="chat_delete_title">Delete this chat?</string>
+    <string name="chat_delete_all_title">Delete all chats?</string>
+    <string name="chat_delete_text">This removes it from this device and cannot be undone.</string>
+    <string name="chat_delete_all_text">This removes every saved chat from this device and cannot be undone.</string>
+    <string name="chat_delete_confirm">Delete</string>
 </resources>

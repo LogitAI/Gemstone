@@ -1,6 +1,59 @@
+import ast
 import math
+import operator
 import re
 from typing import Union
+
+
+MAX_BITS = 100_000  # largest integer a calculation may produce (about 30 000 digits)
+MAX_EXPRESSION_LENGTH = 1_000
+
+
+class _TooLarge(Exception):
+    pass
+
+
+def _check(value):
+    if isinstance(value, int) and value.bit_length() > MAX_BITS:
+        raise _TooLarge()
+    return value
+
+
+def _pow(base, exponent):
+    # Bound the work before doing it: `9**9**9**9` would otherwise never return.
+    if isinstance(base, int) and isinstance(exponent, int) and exponent > 0 and abs(base) > 1:
+        if exponent * base.bit_length() > MAX_BITS + base.bit_length():
+            raise _TooLarge()
+    return _check(pow(base, exponent))
+
+
+_FUNCTIONS = {
+    "abs": abs, "round": round, "pow": _pow, "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos,
+    "tan": math.tan, "log": math.log, "log10": math.log10, "exp": math.exp,
+}
+_CONSTANTS = {"pi": math.pi, "e": math.e}
+_BINARY = {
+    ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv, ast.Pow: _pow,
+}
+_UNARY = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+
+
+def _evaluate(node):
+    if isinstance(node, ast.Expression):
+        return _evaluate(node.body)
+    if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+        return _check(node.value)
+    if isinstance(node, ast.Name) and node.id in _CONSTANTS:
+        return _CONSTANTS[node.id]
+    if isinstance(node, ast.BinOp) and type(node.op) in _BINARY:
+        return _check(_BINARY[type(node.op)](_evaluate(node.left), _evaluate(node.right)))
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY:
+        return _UNARY[type(node.op)](_evaluate(node.operand))
+    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _FUNCTIONS
+            and not node.keywords):
+        return _check(_FUNCTIONS[node.func.id](*[_evaluate(arg) for arg in node.args]))
+    raise ValueError("unsupported syntax")
 
 
 def calculate(expression: str) -> str:
@@ -17,24 +70,9 @@ def calculate(expression: str) -> str:
     try:
         # Clean the expression
         expression = expression.replace(' ', '')
-        
-        # Define safe operations
-        safe_dict = {
-            "__builtins__": {},
-            "abs": abs,
-            "round": round,
-            "pow": pow,
-            "sqrt": math.sqrt,
-            "sin": math.sin,
-            "cos": math.cos,
-            "tan": math.tan,
-            "log": math.log,
-            "log10": math.log10,
-            "exp": math.exp,
-            "pi": math.pi,
-            "e": math.e,
-        }
-        
+        if len(expression) > MAX_EXPRESSION_LENGTH:
+            return "Error: Expression is too long"
+
         # Check for dangerous patterns
         dangerous_patterns = [
             r'__.*__',  # dunder methods
@@ -44,19 +82,20 @@ def calculate(expression: str) -> str:
             r'open',    # file operations
             r'input',   # input function
         ]
-        
+
         for pattern in dangerous_patterns:
             if re.search(pattern, expression, re.IGNORECASE):
                 return "Error: Invalid expression contains forbidden operations"
-        
+
         # Validate that expression only contains allowed characters
-        allowed_chars = set('0123456789+-*/().abcdeghilmnopqrstu_')  # includes function names
+        allowed_chars = set('0123456789+-*/().,abcdeghilmnopqrstuwx_')  # includes function names
         if not all(c in allowed_chars for c in expression.lower()):
             return "Error: Expression contains invalid characters"
-        
-        # Evaluate the expression
-        result = eval(expression, safe_dict, {})
-        
+
+        # Evaluate the parsed tree: only numbers, + - * / // **, parentheses, constants and the
+        # listed functions are understood, and integer results are bounded in size.
+        result = _evaluate(ast.parse(expression, mode="eval"))
+
         # Handle different result types
         if isinstance(result, float):
             # Round to avoid floating point precision issues
@@ -66,7 +105,9 @@ def calculate(expression: str) -> str:
                 return f"{result:.10g}"  # Remove trailing zeros
         else:
             return str(result)
-            
+
+    except _TooLarge:
+        return "Error: Result too large"
     except ZeroDivisionError:
         return "Error: Division by zero"
     except ValueError as e:

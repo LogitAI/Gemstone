@@ -1,11 +1,14 @@
-import traceback
+import logging
+import re
 from re import finditer, DOTALL
 from dataclasses import dataclass
-from typing import Generator, Tuple, Optional, List, Dict, Union
+from typing import Generator, Optional, List, Dict, Union
 
 from .config import ChatHistory
-from ..backend import BackendType
+from ..engine import Engine, ModelBusy
 from ..utils import FunctionCalling, FunctionCallResult
+
+log = logging.getLogger("gemstone.model")
 
 
 @dataclass
@@ -21,43 +24,21 @@ class Tags:
 
 class BaseModel:
     """
-    Base model class that can be extended by other models. (Singleton pattern)
+    Base model class that can be extended by other models: the system prompt, sampling defaults and
+    server-side tools around one engine. The registry (`registry.py`, SPEC S1.14) creates one per
+    loaded engine and owns its lifetime; a model class is not a singleton.
     """
-    __instance = None
-    _initialized = False
-
     model_id = ""
     context_length = 0
-    supported_backends: Tuple[BackendType] = tuple([BackendType.DEFAULT])
+    engine_options: dict = {}  # extra keyword arguments for Engine (dtype, device, quantization, ...)
     supported_tools: FunctionCalling = FunctionCalling.DEFAULT
     special_tags = Tags()
 
-    def __new__(cls, *args, **kwargs):
-        """ Ensure only one instance of the model is created """
-        if cls.__instance is None:
-            cls.__instance = super(BaseModel, cls).__new__(cls)
-        return cls.__instance
+    def __init__(self, engine: Engine | None = None):
+        self.runtime = engine if engine is not None else self._create_engine()
 
-    def __init__(self, backend: BackendType | None = None):
-        if not self._initialized:
-            self._initialized = True
-            self.runtime = self._get_runtime(backend)
-            print("INFO:     Model", self.model_id, "is LOADED")
-
-    def _get_runtime(self, backend: BackendType | None = None):
-        if backend not in self.supported_backends:
-            raise ValueError(f"Unsupported backend: {backend}. Supported backends are: {self.supported_backends}")
-
-    def __del__(self):
-        """ Clean up resources when the model is deleted """
-        if hasattr(self, 'runtime'):
-            del self.runtime
-        self._initialized = False
-        print("INFO:     Model", self.model_id, "is UNLOADED")
-
-    def clean_up(self):
-        """ Clean up resources for the model """
-        self.__class__.__instance = None
+    def _create_engine(self) -> Engine:
+        return Engine(self.model_id, context_length=self.context_length or None, **self.engine_options)
 
     def parse_tool_calling(
         self,
@@ -65,7 +46,8 @@ class BaseModel:
         chat_history: ChatHistory,
         tools: List[Dict[str, str]],
         stream: bool = True,
-        print_output: bool = False
+        print_output: bool = False,
+        tool_call_caches: Optional[dict] = None
     ) -> Union[Generator[str, None, None], str]:
         """ Parse tool calling from the model's output """
         result_obj = FunctionCallResult()
@@ -78,12 +60,13 @@ class BaseModel:
                 if self.special_tags.TOOLCALL in word:  # Start of a tool call
                     started = True
                     if buffer:
-                        buffer = 0
+                        buffer = ""
                 elif self.special_tags.TOOLCALL_END in word:  # End of a tool call
                     if buffer:
                         result_obj.stage(
                             buffer,
-                            (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END)
+                            (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END),
+                            tool_call_caches
                         )
                         state = result_obj.state
                         if state is not None:
@@ -107,27 +90,26 @@ class BaseModel:
                 outputs.replace(json_string, "")  # Remove the tool call from the output
                 result_obj.stage(
                     json_string,
-                    (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END)
+                    (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END),
+                    tool_call_caches
                 )
 
         # Finalize the tool calls
-        print("\n")
-        spinner = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
-        stat = 0
+        waiting = False
         while True:
             queued = len(result_obj.job_list)
             final_result = result_obj.finalize(
                 chat_history,
-                (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END),
-                print_output=print_output
+                (self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END)
             )
-            if queued > 0 and stat % 2 == 0:
-                print(f"\r{spinner[(stat//2) % len(spinner)]} Waiting for tool calls to finish...", end="", flush=True)
+            if queued > 0 and final_result is False and not waiting:
+                waiting = True
+                log.debug("Waiting for %d tool call(s) to finish", queued)
             if final_result is False:
-                stat += 1
+                result_obj.wait(0.1)  # sleeps until a tool finishes
                 continue
             if queued > 0:
-                print("\r[✔] Tool calls are finalized successfully.", flush=True)
+                log.debug("Tool calls are finalized")
 
             if stream:
                 yield final_result
@@ -150,6 +132,7 @@ class BaseModel:
         max_new_tokens: int = 1024,
         repeat_penalty: float = 1.0,
         print_output: bool = False,
+        tool_call_caches: Optional[dict] = None,
         **kwargs
     ) -> Union[Generator[str, None, None], str]:
         """ Process a chat request
@@ -167,7 +150,9 @@ class BaseModel:
             stream (bool, optional): Stream. Defaults to True.
             max_new_tokens (int, optional): Max new tokens. Defaults to 1024.
             repeat_penalty (float, optional): Repeat penalty. Defaults to 1.0.
-            print_output (bool, optional): Print output. Defaults to False.
+            print_output (bool, optional): Ignored, kept for callers. Prompts and answers are logged at DEBUG
+                (GEMSTONE_LOG_LEVEL=DEBUG), never printed.
+            tool_call_caches (dict, optional): The session's tool-result cache (call id -> result).
             **kwargs: Additional arguments
         """
         def adaptive_special_tag_buffering(outs, wait_tokens_for=6):
@@ -188,6 +173,21 @@ class BaseModel:
                 else:
                     yield wd
 
+        tag_pattern = re.compile("(" + "|".join(re.escape(t) for t in (
+            self.special_tags.REASONING, self.special_tags.REASONING_END,
+            self.special_tags.TOOLCALL, self.special_tags.TOOLCALL_END,
+        )) + ")")
+
+        def split_special_tags(outs):
+            """
+            Give every special tag a frame of its own. The app matches `<think>`/`</think>` exactly, and a
+            streamer that emits at word boundaries glues tags to whitespace or text (`'<think>\\n'`).
+            """
+            for wd in outs:
+                for piece in tag_pattern.split(wd):
+                    if piece:
+                        yield piece
+
         initial_operation = True
         function_called = True
         while function_called:
@@ -200,11 +200,8 @@ class BaseModel:
                 prompt = prompt[:-1]  # Remove the last user prompt if it's None
             user_prompt = None  # Reset user prompt to None after appending
 
-            if print_output and initial_operation:
-                print("PROMPT:")
-                for line in prompt:
-                    print(line)
-                print("\nANSWER:")
+            if initial_operation and log.isEnabledFor(logging.DEBUG):
+                log.debug("PROMPT:\n%s", "\n".join(str(line) for line in prompt))
             if initial_operation:
                 initial_operation = False
                 # TODO: Add kv cache control for tool-calling here
@@ -225,32 +222,41 @@ class BaseModel:
             )
             generation_kwargs.update(kwargs)
             outputs = self.parse_tool_calling(
-                adaptive_special_tag_buffering(self.runtime(**generation_kwargs)),
+                split_special_tags(adaptive_special_tag_buffering(self.runtime(**generation_kwargs))),
                 chat_history=chat_history,
                 tools=tools,
                 stream=stream,
-                print_output=print_output
+                tool_call_caches=tool_call_caches
             )
 
             if stream:
+                answer = []
                 try:
                     for word in outputs:
                         if word:
                             if self.special_tags.TOOLCALL in word and self.special_tags.TOOLCALL_END in word:
                                 function_called = True  # flag on
-                            if print_output: print(word, end="", flush=True)
+                            answer.append(word)
                             yield word
                 except ValueError as e:  # Over token limit error
-                    traceback.print_exc()
+                    log.exception("Chat failed")
                     if "token" in str(e) and "limit" in str(e):
                         message = "\n\nERROR: Chat is unexpectedly terminated due to token limit. Please shorten your prompt or chat history."
                     else:
                         message = f"\n\nERROR: {type(e)} - Something went wrong while processing the chat. Please try again later.\n{e}"
-                    if print_output: print(message, end="", flush=True)
+                    answer.append(message)
+                    yield message
+                except ModelBusy:
+                    raise  # the server maps it to 503 / WebSocket close 1013, so it must not become text
+                except Exception as e:  # never let a failure kill the stream without a message
+                    log.exception("Chat failed")
+                    message = f"\n\nERROR: {type(e).__name__} - Something went wrong while processing the chat.\n{e}"
+                    answer.append(message)
                     yield message
                 finally:
-                    print()
+                    if log.isEnabledFor(logging.DEBUG):
+                        log.debug("ANSWER:\n%s", "".join(answer))
             else:
                 if self.special_tags.TOOLCALL in outputs and self.special_tags.TOOLCALL_END in outputs:
                     function_called = True  # flag on
-                print(outputs, flush=True)
+                log.debug("ANSWER:\n%s", outputs)

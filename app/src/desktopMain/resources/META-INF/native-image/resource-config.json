@@ -1,0 +1,70 @@
+{
+  "resources":{
+  "includes":[{
+    "pattern":"\\QMETA-INF/services/java.awt.im.spi.InputMethodDescriptor\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.lang.System$LoggerFinder\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/javax.xml.parsers.DocumentBuilderFactory\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/kotlinx.coroutines.internal.MainDispatcherFactory\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.slf4j.spi.SLF4JServiceProvider\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/arrow_up.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/arrow_up_right.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/bell.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/book_fill.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/bus_front_fill.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/fork_knife.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/paperclip.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/pencil_fill.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/search.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/simple_white.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/drawable/sliders.xml\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/font/SUITE-Variable.ttf\\E"
+  }, {
+    "pattern":"\\QcomposeResources/gemstone.app.generated.resources/values/strings.commonMain.cvr\\E"
+  }, {
+    "pattern":"\\Qfonts/inter/Inter-Regular.ttf\\E"
+  }, {
+    "pattern":"\\Qorg/slf4j/impl/StaticLoggerBinder.class\\E"
+  }, {
+    "pattern":"\\Qskiko-windows-x64.dll.sha256\\E"
+  }, {
+    "pattern":"java.desktop:\\Qcom/sun/java/swing/plaf/windows/resources/windows_ko.properties\\E"
+  }, {
+    "pattern":"java.desktop:\\Qcom/sun/java/swing/plaf/windows/resources/windows_ko_KR.properties\\E"
+  }, {
+    "pattern":"java.desktop:\\Qcom/sun/swing/internal/plaf/basic/resources/basic_ko.properties\\E"
+  }, {
+    "pattern":"java.desktop:\\Qcom/sun/swing/internal/plaf/basic/resources/basic_ko_KR.properties\\E"
+  }, {
+    "pattern":"java.desktop:\\Qsun/awt/resources/awt_ko.properties\\E"
+  }, {
+    "pattern":"java.desktop:\\Qsun/awt/resources/awt_ko_KR.properties\\E"
+  }, {
+    "pattern":"java.xml:\\Qjdk/xml/internal/jdkcatalog/JDKCatalog.xml\\E"
+  }]},
+  "bundles":[{
+    "name":"com.sun.java.swing.plaf.windows.resources.windows",
+    "locales":["ko-KR"]
+  }, {
+    "name":"com.sun.swing.internal.plaf.basic.resources.basic",
+    "locales":["ko-KR"]
+  }, {
+    "name":"sun.awt.resources.awt",
+    "locales":["ko-KR"]
+  }]
+}

@@ -1,7 +1,9 @@
 package gemstone.framework.network.websocket
 
 import gemstone.framework.network.http.HttpClientFactory
-import gemstone.framework.network.http.defaultServerHost
+import gemstone.framework.network.ServerAddress
+import gemstone.framework.network.authorize
+import gemstone.framework.network.http.serverSettings
 import gemstone.framework.ui.viewmodel.ChatHistory
 import gemstone.framework.ui.viewmodel.ChatRole
 import io.ktor.client.plugins.websocket.*
@@ -10,7 +12,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.flow.*
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -36,6 +38,22 @@ sealed class ChatEvent {
 }
 
 
+/** Close codes after which the reply is complete: 1000 (normal) and 1005 (no status code sent). */
+private val NORMAL_CLOSE_CODES = setOf(1000, 1005)
+
+/**
+ * What a server close frame means for the chat (SPEC S1.4). A normal close ends the reply; any
+ * other code (1008 unknown model, 1011 offline or failed download, 1013 busy) is an error that
+ * carries the server's reason, so the app shows it instead of treating the close as a finished
+ * reply. Pure, so it is tested without a socket.
+ */
+fun closeEventFor(code: Int?, reason: String?): ChatEvent {
+    if (code == null || code in NORMAL_CLOSE_CODES) return ChatEvent.MessageComplete
+    val text = reason?.trim().orEmpty()
+    return ChatEvent.ErrorOccurred(text.ifEmpty { "The server closed the connection (code $code)." })
+}
+
+
 @Serializable
 data class SessionResponse(
     val model_id: String,
@@ -45,13 +63,11 @@ data class SessionResponse(
 
 
 class ChatWebSocketClient(
-    private val serverUrl: String = defaultServerHost
+    // Read on every request, so a change saved in the settings applies at once (SPEC S2.7)
+    private val address: () -> ServerAddress = { serverSettings.address },
+    private val apiKey: () -> String? = { serverSettings.apiKey }
 ) {
     private val httpClient = HttpClientFactory.create()
-
-    init {
-        println("INFO: ChatWebSocketClient initialized using server URL - $serverUrl")
-    }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -80,7 +96,7 @@ class ChatWebSocketClient(
 
     suspend fun createSession(modelId: String): Result<String> {
         return try {
-            val response = httpClient.post("http://$serverUrl/api/models/$modelId/sessions/")
+            val response = httpClient.post(address().httpUrl("/api/models/$modelId/sessions/")) { authorize(apiKey()) }
             if (response.status == HttpStatusCode.OK) {
                 val sessionResponse = json.decodeFromString<SessionResponse>(response.bodyAsText())
                 sessionId = sessionResponse.session_id
@@ -96,12 +112,7 @@ class ChatWebSocketClient(
     private suspend fun connect(): Result<Unit> {
         return try {
             _state.value = ChatState.Connecting
-            webSocketSession = httpClient.webSocketSession(
-                method = HttpMethod.Get,
-                host = serverUrl.split(":")[0],
-                port = serverUrl.split(":")[1].toInt(),
-                path = "/api/chat/streaming"
-            )
+            webSocketSession = httpClient.webSocketSession(address().wsUrl("/api/chat/streaming")) { authorize(apiKey()) }
             _state.value = ChatState.Connected
             Result.success(Unit)
         } catch (e: Exception) {
@@ -162,8 +173,14 @@ class ChatWebSocketClient(
                         handleMessage(message)
                     }
                     is Frame.Close -> {
-                        _state.value = ChatState.Disconnected
-                        _events.emit(ChatEvent.MessageComplete)
+                        val closeReason = frame.readReason()
+                        val event = closeEventFor(closeReason?.code?.toInt(), closeReason?.message)
+                        _state.value = if (event is ChatEvent.ErrorOccurred) {
+                            ChatState.Error(event.error)
+                        } else {
+                            ChatState.Disconnected
+                        }
+                        _events.emit(event)
                         break
                     }
                     else -> { /* Handle other frame types if needed */ }
@@ -224,7 +241,8 @@ class ChatWebSocketClient(
             val toolCall = json.decodeFromString<JsonElement>(message.trim())
             _events.emit(ChatEvent.ToolCallReceived(toolCall))
         } catch (e: Exception) {
-            _events.emit(ChatEvent.ErrorOccurred("Failed to parse tool call: ${e.message}"))
+            // Skipped, not an error: the reply continues, and an error would fail the turn (SPEC S2.3)
+            println("WARNING: Skipping a tool call that cannot be parsed: ${e.message}")
         }
     }
 
@@ -241,11 +259,16 @@ class ChatWebSocketClient(
     suspend fun deleteSession() {
         val currentSessionId = sessionId ?: return
         try {
-            httpClient.delete("http://$serverUrl/api/sessions/$currentSessionId")
+            httpClient.delete(address().httpUrl("/api/sessions/$currentSessionId")) { authorize(apiKey()) }
             sessionId = null
         } catch (e: Exception) {
             println("Failed to delete session: ${e.message}")
         }
+    }
+
+    /** Forgets the session without telling the server: it belongs to a server no longer in use (S2.7). */
+    fun forgetSession() {
+        sessionId = null
     }
 
     fun close() {
