@@ -17,6 +17,7 @@ import androidx.compose.ui.test.withKeyDown
 import gemstone.framework.ui.compose.screen.chat.MessageBubble
 import gemstone.framework.ui.compose.theme.GemstoneTheme
 import gemstone.framework.ui.viewmodel.ChatRole
+import androidx.compose.ui.text.AnnotatedString
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
 import kotlin.test.Test
@@ -35,7 +36,13 @@ class MessageSelectionTest {
             entry = clipEntry
         }
         override val nativeClipboard: Any get() = this
-        val text: String? get() = (entry?.nativeClipEntry as? Transferable)?.getTransferData(DataFlavor.stringFlavor) as? String
+        val text: String?
+            get() = when (val native = entry?.nativeClipEntry) {
+                is AnnotatedString -> native.text
+                is String -> native
+                is Transferable -> native.getTransferData(DataFlavor.stringFlavor) as? String
+                else -> null
+            }
     }
 
     private val copyModifier = if ("mac" in System.getProperty("os.name").lowercase()) Key.MetaLeft else Key.CtrlLeft

@@ -678,12 +678,18 @@ No code in Gemstone. Tracked in #67.
 | Android (min SDK 24) | `androidMain` | `implemented` |
 | Desktop JVM (Jewel decorated window; Dmg, Msi, Deb installers) | `desktopMain` | `implemented` |
 | Web (Kotlin/Wasm) | `wasmJsMain` | `implemented` |
-| iOS (static framework `Gemstone` for x64, arm64, simulator arm64) | `iosMain` | `partial` |
+| iOS (static framework `Gemstone` for arm64 and simulator arm64) | `iosMain` | `partial` |
 
-The Compose Multiplatform plugin is 1.9.0. The desktop resolves Compose UI 1.10.0, because Jewel
-requires it; the other targets resolve 1.9.0. The desktop UI test library is pinned to the
-version the desktop resolves (`compose-ui-resolved` in `gradle/libs.versions.toml`), because a
-mismatch fails every UI test with a `NoSuchFieldError`.
+The Compose Multiplatform plugin is `org.thisisthepy.compose:1.11.1-ext.1` (together with
+`org.thisisthepy.kotlin.native.desktop:1.11.1-ext.1`), and the Compose and JetBrains AndroidX
+libraries resolve from `org.thisisthepy.compose.*:1.11.1-ext.2` (#215). Modules not published by
+the fork on Maven Central stay on their upstream coordinates (`org.jetbrains.compose.material:material-icons-extended:1.7.3`,
+`org.jetbrains.compose.components:components-resources:1.11.1` and
+`org.jetbrains.compose.components:components-ui-tooling-preview:1.11.1`), with their transitive
+`org.jetbrains.compose.*` dependencies excluded so only one Compose copy enters the classpath. The
+desktop UI test library (`org.thisisthepy.compose.ui:ui-test-junit4`) is pinned to the version the
+desktop resolves (`compose-ui-resolved` in `gradle/libs.versions.toml`), because a mismatch fails
+every UI test with a `NoSuchFieldError`.
 
 iOS: the Xcode project builds for the simulator (`xcodebuild -sdk iphonesimulator`, checked on
 2026-10-04, #165). Its build phase runs `./gradlew :app:embedAndSignAppleFrameworkForXcode` from the

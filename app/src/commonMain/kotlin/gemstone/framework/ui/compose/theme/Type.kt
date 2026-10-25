@@ -202,18 +202,28 @@ fun AutoSizeTextWithResizer(
     resizer: MutableState<Float> = remember { mutableStateOf(1f) }
 ) {
     Text(
-        text, modifier, color,
+        text = text,
+        modifier = modifier,
+        color = color,
         fontSize = fontSize * resizer.value,
-        fontStyle, fontWeight, fontFamily, letterSpacing,
-        textDecoration, textAlign, lineHeight, overflow, softWrap,
-        maxLines, minLines,
+        fontStyle = fontStyle,
+        fontWeight = fontWeight,
+        fontFamily = fontFamily,
+        letterSpacing = letterSpacing,
+        textDecoration = textDecoration,
+        textAlign = textAlign,
+        lineHeight = lineHeight,
+        overflow = overflow,
+        softWrap = softWrap,
+        maxLines = maxLines,
+        minLines = minLines,
         onTextLayout = {
             if (it.hasVisualOverflow) {
                 resizer.value *= 0.99f
             }
             onTextLayout(it)
         },
-        style
+        style = style
     )
 }
 
@@ -303,11 +313,21 @@ fun AutoSizeText(
     val resizer = remember { mutableStateOf(1f) }
     val stableFlag = mutableStateOf(false)
     Text(
-        text, modifier, color,
+        text = text,
+        modifier = modifier,
+        color = color,
         fontSize = fontSize * resizer.value,
-        fontStyle, fontWeight, fontFamily, letterSpacing,
-        textDecoration, textAlign, lineHeight, overflow, softWrap,
-        maxLines, minLines,
+        fontStyle = fontStyle,
+        fontWeight = fontWeight,
+        fontFamily = fontFamily,
+        letterSpacing = letterSpacing,
+        textDecoration = textDecoration,
+        textAlign = textAlign,
+        lineHeight = lineHeight,
+        overflow = overflow,
+        softWrap = softWrap,
+        maxLines = maxLines,
+        minLines = minLines,
         onTextLayout = {
             if (stableFlag.value) {
                 resizer.value = 1f
@@ -320,7 +340,7 @@ fun AutoSizeText(
             }
             onTextLayout(it)
         },
-        style
+        style = style
     )
 }
 

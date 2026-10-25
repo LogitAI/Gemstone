@@ -10,7 +10,7 @@
 
 [![License: Apache-2.0](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](https://github.com/LogitAI/Gemstone/blob/main/LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
-[![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.9-4285F4?logo=jetpackcompose&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
+[![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.11.1--ext.2-4285F4?logo=jetpackcompose&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
 [![Python](https://img.shields.io/badge/Python-3.13%20%7C%203.15t-3776AB?logo=python&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/pyproject.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Desktop%20%7C%20Web-5b6270)](#-현황)
 

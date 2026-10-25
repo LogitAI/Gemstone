@@ -24,8 +24,8 @@ kotlin {
         }
     }
 
+    // No iosX64: Compose Multiplatform 1.11 publishes no iosX64 artifacts (Intel simulators are gone).
     listOf(
-        iosX64(),
         iosArm64(),
         iosSimulatorArm64()
     ).forEach { iosTarget ->
@@ -75,36 +75,43 @@ kotlin {
         }
 
         androidMain.dependencies {
-            api(compose.material3)
-            api(compose.preview)
+            api(libs.compose.material3)
+            api(libs.compose.ui.tooling.preview)
             api(libs.androidx.activity.compose)
         }
         commonMain.dependencies {
-            api(compose.runtime)
-            api(compose.foundation)
-            api(compose.material3)
-            // `material-icons-extended` stays at 1.7.3 under `org.jetbrains.compose.material` (not published
-            // by compose-multiplatform-core-extended), so exclude its transitive `org.jetbrains.compose.*`
-            // dependencies to avoid pulling a second Compose copy onto the classpath.
-            api(compose.materialIconsExtended) {
+            api(libs.compose.runtime)
+            api(libs.compose.foundation)
+            api(libs.compose.material3)
+            // `material-icons-extended` and `material-icons-core` stay at 1.7.3 under `org.jetbrains.compose.material`
+            // (not published by compose-multiplatform-core-extended), so exclude their transitive `org.jetbrains.compose.*`
+            // dependencies other than `material-icons-core` to avoid pulling a second Compose copy onto the classpath.
+            api(libs.compose.material.icons.extended.get().toString()) {
                 exclude(group = "org.jetbrains.compose.annotation-internal")
                 exclude(group = "org.jetbrains.compose.collection-internal")
                 exclude(group = "org.jetbrains.compose.foundation")
-                exclude(group = "org.jetbrains.compose.material")
+                exclude(group = "org.jetbrains.compose.material", module = "material")
+                exclude(group = "org.jetbrains.compose.material", module = "material-ripple")
                 exclude(group = "org.jetbrains.compose.runtime")
                 exclude(group = "org.jetbrains.compose.ui")
             }
-            api(compose.ui)
-            // `components-resources` stays at 1.11.1 under `org.jetbrains.compose.components`; exclude its
-            // transitive `org.jetbrains.compose.*` dependencies so they resolve from `org.thisisthepy.compose.*`.
-            api(compose.components.resources) {
+            api(libs.compose.ui)
+            // `components-resources` and `components-ui-tooling-preview` stay at 1.11.1 under `org.jetbrains.compose.components`;
+            // exclude their transitive `org.jetbrains.compose.*` dependencies so they resolve from `org.thisisthepy.compose.*`.
+            api(libs.compose.components.resources.get().toString()) {
                 exclude(group = "org.jetbrains.compose.annotation-internal")
                 exclude(group = "org.jetbrains.compose.collection-internal")
                 exclude(group = "org.jetbrains.compose.foundation")
                 exclude(group = "org.jetbrains.compose.runtime")
                 exclude(group = "org.jetbrains.compose.ui")
             }
-            api(compose.components.uiToolingPreview)
+            api(libs.compose.components.ui.tooling.preview.get().toString()) {
+                exclude(group = "org.jetbrains.compose.annotation-internal")
+                exclude(group = "org.jetbrains.compose.collection-internal")
+                exclude(group = "org.jetbrains.compose.foundation")
+                exclude(group = "org.jetbrains.compose.runtime")
+                exclude(group = "org.jetbrains.compose.ui")
+            }
             api(libs.androidx.lifecycle.viewmodel)
             api(libs.androidx.lifecycle.runtimeCompose)
             api(libs.navigation.compose)
@@ -131,7 +138,11 @@ kotlin {
             }
         }
         desktopMain.dependencies {
-            api(compose.desktop.currentOs) {
+            val composeDesktopCurrentOs = compose.desktop.currentOs.replace(
+                ":${libs.versions.compose.plugin.get()}",
+                ":${libs.versions.compose.multiplatform.get()}"
+            )
+            api(composeDesktopCurrentOs) {
                 exclude(group = "org.jetbrains.compose.material3")
                 exclude(group = "org.thisisthepy.compose.material3")
             }
@@ -209,7 +220,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.runtime.android)
-    debugImplementation(compose.uiTooling)
+    debugImplementation(libs.compose.ui.tooling)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -618,6 +629,14 @@ val metadataCopy by tasks.registering(Copy::class) {
     description = "Copies tracing agent output into src/desktopMain/resources/META-INF/native-image"
     from(agentOutputDir)
     into(nativeMetadataDir)
+}
+
+compose {
+    dependencyCompatibility {
+        // The Compose libraries resolve at 1.11.1-ext.2 while the plugin stays at 1.11.1-ext.1
+        // until 1.11.1-ext.2 of the plugin is published (#215).
+        exclude("org.thisisthepy.compose")
+    }
 }
 
 compose.desktop {
