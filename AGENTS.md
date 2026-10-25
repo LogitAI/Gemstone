@@ -20,7 +20,7 @@ files) lives **inside this repository's root directory.**
 | What | Where |
 |---|---|
 | Worktrees | `.worktrees/<name>` (git-ignored) |
-| Temporary files | `.tmp/` (git-ignored); delete when done |
+| Temporary files | the session scratchpad directory, or `.cache/` (git-ignored); delete when done |
 | Benchmarks | `benchmarks/` |
 | Developer tooling | `tools/` |
 
@@ -36,7 +36,7 @@ Writing to *another* repository is not an exception either. Do it only when told
 **Never add a new directory or file at the repository root on your own.** The root layout is the
 maintainer's. Work belongs inside an existing module or directory: Python under `api/`, the client
 under `app/`, documents under `docs/<topic>/`, CI under `.github/`, developer scripts under `tools/`,
-temporary files under the git-ignored `.tmp/`. If a new top-level entry seems necessary, propose it
+temporary files under the git-ignored `.cache/`. If a new top-level entry seems necessary, propose it
 (what, why, and which existing directories you ruled out) and wait for approval; then add it to the
 list below in the same change.
 
@@ -54,7 +54,7 @@ Approved tracked root entries (`api/tests/test_repo_layout.py` fails on anything
 | `README.md`, `AGENTS.md`, `PROJECT.md`, `LICENSE.md` | Root documents |
 | `.gitignore`, `.gitattributes`, `.env.example` | Git and environment templates |
 
-Local, git-ignored entries that tools create are fine: `.tmp/`, `.worktrees/`, `.venv/`, `.gradle/`,
+Local, git-ignored entries that tools create are fine: `.cache/`, `.worktrees/`, `.venv/`, `.gradle/`,
 `.kotlin/`, `.idea/`, `.env`, `local.properties`, `.claude/`, `.DS_Store`.
 
 ## 3. Worktrees link large artefacts instead of copying them
