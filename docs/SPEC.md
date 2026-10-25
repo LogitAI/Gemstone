@@ -680,8 +680,8 @@ No code in Gemstone. Tracked in #67.
 | Web (Kotlin/Wasm) | `wasmJsMain` | `implemented` |
 | iOS (static framework `Gemstone` for arm64 and simulator arm64) | `iosMain` | `partial` |
 
-The Compose Multiplatform plugin is `org.thisisthepy.compose:1.11.1-ext.2` (together with
-`org.thisisthepy.kotlin.native.desktop:1.11.1-ext.2`), and the Compose and JetBrains AndroidX
+The Compose Multiplatform plugin is `org.thisisthepy.compose:1.11.1-ext.3` (together with
+`org.thisisthepy.kotlin.native.desktop:1.11.1-ext.3`), and the Compose and JetBrains AndroidX
 libraries resolve from `org.thisisthepy.compose.*:1.11.1-ext.2` (#215). Modules not published by
 the fork on Maven Central stay on their upstream coordinates (`org.jetbrains.compose.material:material-icons-extended:1.7.3`,
 `org.jetbrains.compose.components:components-resources:1.11.1` and
