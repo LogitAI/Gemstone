@@ -138,11 +138,7 @@ kotlin {
             }
         }
         desktopMain.dependencies {
-            val composeDesktopCurrentOs = compose.desktop.currentOs.replace(
-                ":${libs.versions.compose.plugin.get()}",
-                ":${libs.versions.compose.multiplatform.get()}"
-            )
-            api(composeDesktopCurrentOs) {
+            api(compose.desktop.currentOs) {
                 exclude(group = "org.jetbrains.compose.material3")
                 exclude(group = "org.thisisthepy.compose.material3")
             }
@@ -631,13 +627,24 @@ val metadataCopy by tasks.registering(Copy::class) {
     into(nativeMetadataDir)
 }
 
-compose {
-    dependencyCompatibility {
-        // The Compose libraries resolve at 1.11.1-ext.2 while the plugin stays at 1.11.1-ext.1
-        // until 1.11.1-ext.2 of the plugin is published (#215).
-        exclude("org.thisisthepy.compose")
-    }
+// Temporary workaround (#215): `org.thisisthepy.compose` 1.11.1-ext.2 looks up the Skiko 0.153+
+// `skiko-runtime` Gradle variant in `unpackSkikoRuntimeForWasmJs`, which `org.jetbrains.skiko:skiko:0.144.6`
+// does not have, leaving `skiko.mjs` and `skiko.wasm` unpacked during webpack. Unpack
+// `org.jetbrains.skiko:skiko-js-wasm-runtime:0.144.6` and feed it into the Wasm compile sync tasks
+// until `thisisthepy/compose-multiplatform-extended#69` ships in `1.11.1-ext.3`, then remove this block.
+val skikoWebRuntime by configurations.creating { isTransitive = false }
+dependencies { skikoWebRuntime("org.jetbrains.skiko:skiko-js-wasm-runtime:0.144.6") }
+val unpackSkikoWebRuntime by tasks.registering(Copy::class) {
+    from(skikoWebRuntime.map { zipTree(it) })
+    into(layout.buildDirectory.dir("skiko-web-runtime"))
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
+tasks.matching { it.name == "wasmJsProductionExecutableCompileSync" || it.name == "wasmJsDevelopmentExecutableCompileSync" }
+    .configureEach {
+        dependsOn(unpackSkikoWebRuntime)
+        (this as org.jetbrains.kotlin.gradle.targets.js.ir.DefaultIncrementalSyncTask)
+            .from.from(unpackSkikoWebRuntime.map { it.destinationDir })
+    }
 
 compose.desktop {
     application {
