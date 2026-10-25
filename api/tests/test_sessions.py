@@ -170,3 +170,56 @@ def test_two_concurrent_closes_of_one_session_close_it_once(sessions):
     errors = run_threads(lambda: Session.close(session.session_id), lambda: Session.close(session.session_id))
     assert sessions == {}
     assert [type(e) for e in errors] == [ValueError]  # the 404 of an unknown session, not a KeyError
+
+
+# Per-session KV cache lifecycle (#211, SPEC S1.3, S1.4, S1.14): freed on session close/expiry,
+# model unload/eviction, and when total session KV memory exceeds GEMSTONE_MAX_SESSION_KV_MEMORY.
+
+class _FakeLayer:
+    def __init__(self, nbytes: int):
+        import torch
+        self.keys = torch.zeros(nbytes // 2, dtype=torch.uint8)
+        self.values = torch.zeros(nbytes - nbytes // 2, dtype=torch.uint8)
+
+
+class _FakeDynamicCache:
+    def __init__(self, nbytes: int, seq_len: int = 8):
+        self.layers = [_FakeLayer(nbytes)]
+        self._seq_len = seq_len
+
+    def get_seq_length(self):
+        return self._seq_len
+
+    def crop(self, tokens_to_remove: int):
+        assert tokens_to_remove <= 0
+        self._seq_len += tokens_to_remove
+
+
+def test_session_kv_cache_freed_on_close_expiry_and_model_unload(sessions, monkeypatch):
+    s1 = Session("qwen3")
+    s1.kv_cache.store("Qwen/Qwen3-0.6B", [1, 2, 3, 4], _FakeDynamicCache(1024, seq_len=4))
+    assert s1.kv_cache.memory_bytes == 1024
+
+    Session.close(s1.session_id)
+    assert s1.kv_cache.past_key_values is None and s1.kv_cache.memory_bytes == 0
+
+    s2 = Session("qwen3")
+    s2.kv_cache.store("Qwen/Qwen3-0.6B", [1, 2, 3, 4], _FakeDynamicCache(1024, seq_len=4))
+    Session.clear_model_caches("Qwen/Qwen3-0.6B")
+    assert s2.kv_cache.past_key_values is None and s2.kv_cache.memory_bytes == 0
+
+
+def test_session_kv_cache_evicts_oldest_session_over_memory_budget(sessions, monkeypatch):
+    monkeypatch.setenv("GEMSTONE_MAX_SESSION_KV_MEMORY", "2000")
+    now = [100.0]
+    monkeypatch.setattr(settings, "clock", lambda: now[0])
+
+    s1 = Session("qwen3")
+    s1.kv_cache.store("Qwen/Qwen3-0.6B", [1, 2, 3], _FakeDynamicCache(1200, seq_len=3))
+    now[0] += 10.0
+    s2 = Session("qwen3")
+    s2.kv_cache.store("Qwen/Qwen3-0.6B", [4, 5, 6], _FakeDynamicCache(1200, seq_len=3))
+    Session.enforce_kv_budget()
+
+    assert s1.kv_cache.past_key_values is None  # older session's KV was evicted
+    assert s2.kv_cache.past_key_values is not None and s2.kv_cache.memory_bytes == 1200

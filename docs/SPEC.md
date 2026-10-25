@@ -65,9 +65,9 @@ with every change since. S1.11–S1.16 and S3.4 also record the maintainer's dec
   session and return `{model_id, session_id, message}`. The session id is
   `<model_id>_<YYYYmmddHHMMSS>_<8 hex>`, unique even within one second.
 - `DELETE /api/sessions/{session_id}` (also accepted as `POST`) closes a session and drops its
-  tool-result cache. It does not unload the model: the registry's keep_alive does (S1.14).
+  tool-result cache and its KV cache (S1.4). It does not unload the model: the registry's keep_alive does (S1.14).
 - A session idle longer than `GEMSTONE_SESSION_TTL` seconds (default 86400, one day; `0` never
-  expires) is dropped with its tool-result cache. The sweep runs whenever a session is created or
+  expires) is dropped with its tool-result cache and its KV cache. The sweep runs whenever a session is created or
   looked up, so an expired id is an unknown session (`404`, WebSocket `1008`).
 - A session holds a model name, never an engine (#89). Creating one loads nothing; the first
   WebSocket chat (S1.4) loads the model through the registry, so sessions on one model, the
@@ -113,6 +113,20 @@ The model comes from the registry (S1.14): the chat holds a lease on it for the 
 system prompt, sampling defaults and server-side tools wrap the engine. A catalogue model missing
 from the local cache is downloaded on first use; any other model must be pulled first
 (`POST /api/pull`), otherwise the socket closes with code `1008`.
+
+Per-session prefix KV reuse (#211): a WebSocket chat (which carries a `session_id`) keeps the
+`past_key_values` (`DynamicCache`) and the token sequence returned by `generate` on the session
+(`Session.kv_cache`). On the next turn (and across tool-call rounds within a turn), the newly
+rendered prompt tokens are compared with the cached token sequence up to their longest common
+prefix (at most `len(input_ids) - 1`, so at least one token is always prefilled), `cache.crop()`
+removes the trailing tokens beyond that prefix, and `generate` prefills only the remaining suffix.
+When a chat template renders an earlier turn differently (for example, Qwen3 dropping earlier
+`<think>` blocks), the common prefix is shorter and accuracy is preserved. The system-prompt
+timestamp prefix is fixed when the session is created so that the leading tokens stay identical
+across turns of the same session. A session's KV cache is freed when the session closes or expires
+(S1.3), when its model is unloaded or evicted (S1.14), and from the least recently used session
+first when the total bytes of all sessions' KV caches exceed `GEMSTONE_MAX_SESSION_KV_MEMORY`
+(default `512MB`; `0` disables the cap).
 
 A model that must be fetched but cannot be (the machine is offline, or the download fails) closes
 the socket with code `1011` and a reason of at most 123 bytes that names the model, says whether
@@ -411,9 +425,11 @@ Unverified:
   equality criteria are therefore stated for float32; upstream PyTorch is not self-consistent in
   bfloat16 either.
 - torchnative: transformers' continuous-batching modules import there but have not run.
-- Prefix sharing (reusing the KV blocks of an identical prompt prefix) is off, so that a reply does
-  not depend on earlier requests. Turning it on is a later, measured decision (#211; the trade-off
-  and the measurement plan are in [`serving/prefix-reuse.md`](serving/prefix-reuse.md)).
+- Prefix sharing in continuous batching (`allow_block_sharing`) stays off, so that stateless
+  server requests (OpenAI S1.10, Ollama S1.15) never depend on earlier requests and keep the
+  reproducibility guarantees of S1.11 and S1.12. The chat app's stateful WebSocket sessions reuse
+  their own prefix KV through a per-session `DynamicCache` on the exclusive `generate` path instead
+  (S1.4, #211; [`serving/prefix-reuse.md`](serving/prefix-reuse.md)).
 
 ### S1.13 Paged attention (paged KV cache): `partial` · G5
 

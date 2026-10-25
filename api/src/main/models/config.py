@@ -15,10 +15,18 @@ def clean_text(problematic_text: str) -> str:
         return problematic_text
 
 
+def time_prefix() -> str:
+    return (
+        f"The user's local time is {datetime.now()} {date.today().strftime('%a').upper()} ({time.tzname[0]}). "
+        f"For reference, the corresponding UTC time is {datetime.now(timezone.utc)}. "
+    )
+
+
 class ChatHistory(list):
     """ Chat history class """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, time_prefix: str | None = None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.time_prefix = time_prefix
 
     def append(self, role: str | Iterable[str], content: str | Iterable[str]):
         if isinstance(content, str):
@@ -48,10 +56,11 @@ class ChatHistory(list):
                     raise ValueError("Each item must be a dictionary with 'role' and 'content' keys or a Message object. But got: " + str(item))
 
     def create_prompt(self, system_prompt: str, user_prompt: str = ""):
+        prefix = self.time_prefix if self.time_prefix is not None else time_prefix()
         return [
             {
                 'role': "system",
-                'content': f"The user's local time is {datetime.now()} {date.today().strftime('%a').upper()} ({time.tzname[0]}). For reference, the corresponding UTC time is {datetime.now(timezone.utc)}. " + system_prompt
+                'content': prefix + system_prompt
             },
             *self,
             {

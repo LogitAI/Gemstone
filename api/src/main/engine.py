@@ -13,7 +13,7 @@ seeded sample does not depend on which other requests share the batch.
 Requests the batch cannot serve take the exclusive path, which is the M1 engine unchanged: one
 `model.generate` at a time, with no batched request running. See `Engine.__call__`.
 """
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from typing import Any, Dict, Generator, List, Optional, Union
 import itertools
 import logging
@@ -200,6 +200,7 @@ class Engine:
         seed: Optional[int] = None,
         cancel: Optional[threading.Event] = None,
         chat_template_kwargs: Optional[Dict[str, Any]] = None,
+        session_kv: Optional[Any] = None,
         **kwargs
     ) -> Generator[str, None, None]:
         """
@@ -232,7 +233,7 @@ class Engine:
         input_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
         prompt_length = len(input_ids)
         batcher = self._batcher
-        batchable = batcher is not None and typical_p == 1.0 and repeat_penalty == 1.0 and not kwargs
+        batchable = batcher is not None and session_kv is None and typical_p == 1.0 and repeat_penalty == 1.0 and not kwargs
         if max_new_tokens <= 0:
             if self.context_length is None:
                 raise ValueError("max_new_tokens must be positive when the context length is unknown.")
@@ -262,12 +263,12 @@ class Engine:
 
         yield from self._generate_exclusive(
             input_ids, max_new_tokens, temperature, top_p, top_k, min_p, typical_p, repeat_penalty, seed, cancel,
-            kwargs,
+            kwargs, session_kv=session_kv,
         )
 
     def _generate_exclusive(
         self, input_ids, max_new_tokens, temperature, top_p, top_k, min_p, typical_p, repeat_penalty, seed, cancel,
-        kwargs,
+        kwargs, session_kv=None,
     ) -> Generator[str, None, None]:
         """ One `model.generate`, with no other generation running (the M1 engine). """
         import torch
@@ -279,7 +280,8 @@ class Engine:
             def __call__(self, input_ids, scores, **_):
                 return stop.is_set() or (cancel is not None and cancel.is_set())
 
-        with self._gate.exclusive(self._wait()):
+        kv_lock = getattr(session_kv, "lock", None) or nullcontext()
+        with kv_lock, self._gate.exclusive(self._wait()):
             inputs = torch.tensor([input_ids], dtype=torch.long, device=self.model.device)
             streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
             # `generate` runs greedily and Gemstone's own sampler, the one the batch uses (S1.12),
@@ -294,6 +296,12 @@ class Engine:
                 stopping_criteria=StoppingCriteriaList([_Stop()]),
                 pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             )
+            if session_kv is not None:
+                past_kv = session_kv.prepare(self.model_id, input_ids)
+                generation_kwargs["return_dict_in_generate"] = True
+                generation_kwargs["use_cache"] = True
+                if past_kv is not None:
+                    generation_kwargs["past_key_values"] = past_kv
             if temperature > 0:
                 generation_kwargs.update(logits_processor=LogitsProcessorList([_ExclusiveSampler(
                     temperature=float(temperature),
@@ -311,8 +319,17 @@ class Engine:
             def run():
                 try:
                     with torch.no_grad():
-                        self.model.generate(**generation_kwargs)
+                        result = self.model.generate(**generation_kwargs)
+                    if session_kv is not None:
+                        sequences = getattr(result, "sequences", None)
+                        past = getattr(result, "past_key_values", None)
+                        if sequences is not None and past is not None:
+                            session_kv.store(self.model_id, sequences[0].tolist(), past)
+                            from .settings import Session
+                            Session.enforce_kv_budget()
                 except BaseException as e:  # re-raised in the consumer
+                    if session_kv is not None:
+                        session_kv.clear()
                     failure.append(e)
                     streamer.end()
 
