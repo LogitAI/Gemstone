@@ -931,7 +931,9 @@ class Registry:
         """ Free detached models: close their engines, then collect and empty accelerator caches. """
         if not residents:
             return
+        from .settings import Session
         for r in residents:
+            Session.clear_model_caches(r.hf_id)
             engine, r.engine, r.model = r.engine, None, None
             if engine is not None:
                 self.close(engine)

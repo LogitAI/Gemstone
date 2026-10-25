@@ -73,7 +73,8 @@ def test_disconnect_mid_stream_stops_generation_and_frees_the_model(client, engi
 
     def recording_generate(*args, **kwargs):
         output = original(*args, **kwargs)
-        produced.append(output.shape[1] - kwargs["input_ids"].shape[1])
+        sequences = getattr(output, "sequences", output)
+        produced.append(sequences.shape[1] - kwargs["input_ids"].shape[1])
         return output
 
     monkeypatch.setattr(engine.model, "generate", recording_generate)
@@ -97,3 +98,61 @@ def test_disconnect_mid_stream_stops_generation_and_frees_the_model(client, engi
 
     assert done.wait(timeout=300)
     assert produced[0] < 200  # the abandoned generation stopped well before its 400 tokens
+
+
+def test_websocket_reuses_session_kv_prefix_across_turns(client, engine, monkeypatch):
+    # SPEC S1.4 (#211): a WebSocket chat with a session_id keeps `past_key_values` (DynamicCache)
+    # on the session, crops it to the longest common prefix with the next turn's prompt tokens, and
+    # prefills only the suffix while producing the same greedy reply as a fresh generation.
+    from api.src.main import settings
+
+    prefilled = []
+    original_prefill = engine.model._prefill
+
+    def recording_prefill(input_ids, generation_config, model_kwargs, *args, **kwargs):
+        cache = model_kwargs.get("past_key_values")
+        past_len = cache.get_seq_length() if cache is not None else 0
+        prefilled.append((past_len, input_ids.shape[1] - past_len))
+        return original_prefill(input_ids, generation_config, model_kwargs, *args, **kwargs)
+
+    monkeypatch.setattr(engine.model, "_prefill", recording_prefill)
+
+    session_id = client.post("/api/sessions/").json()["session_id"]
+
+    def turn(sid, history, prompt):
+        with client.websocket_connect("/api/chat/streaming") as ws:
+            ws.send_text(json.dumps({"session_id": sid}))
+            ws.send_text(json.dumps(history))
+            ws.send_text(prompt)
+            frames = []
+            while (frame := ws.receive_text()) != "<EOS>":
+                frames.append(frame)
+        return "".join(frames)
+
+    reply1 = turn(session_id, [], "The capital of France is")
+    session = settings.Session(session_id=session_id)
+    assert session.kv_cache.past_key_values is not None
+    assert session.kv_cache.seq_length() > 0
+
+    history2 = [{"role": "user", "content": "The capital of France is"}, {"role": "assistant", "content": reply1}]
+    reply2 = turn(session_id, history2, "The capital of Germany is")
+
+    # Compare turn 2 with a fresh session (cold cache) given the exact same history and time prefix.
+    fresh_id = client.post("/api/sessions/").json()["session_id"]
+    settings.Session(session_id=fresh_id).created_prefix = session.created_prefix
+    reply2_fresh = turn(fresh_id, history2, "The capital of Germany is")
+
+    assert prefilled[0][0] == 0 and prefilled[0][1] > 0  # turn 1: cold cache, prefills all prompt tokens
+    assert prefilled[1][0] > 0  # turn 2: reused the common prefix from the session's DynamicCache
+    assert prefilled[1][1] < prefilled[2][1]  # turn 2 prefilled strictly fewer tokens than a cold turn 2
+    assert reply2 == reply2_fresh
+
+    # When an earlier turn is rendered differently on the next turn (e.g. a template dropping <think>),
+    # the cache is cropped back to the shorter common prefix and still succeeds.
+    altered_history = [
+        {"role": "user", "content": "The capital of France is"},
+        {"role": "assistant", "content": "Paris."},
+    ]
+    reply3 = turn(session_id, altered_history, "The capital of Italy is")
+    assert reply3.strip() and "ERROR:" not in reply3
+    assert 0 < prefilled[3][0] < session.kv_cache.seq_length()

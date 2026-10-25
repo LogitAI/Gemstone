@@ -1,8 +1,6 @@
 # Reusing the prefix KV across turns
 
-Design note for #211, which replaces #37. Status: `planned`. Nothing here is built; this note
-states the question, what the engine already offers, the trade-off, the measurements, and the
-options.
+Design note for #211, which replaces #37. Status: `implemented` (per-session `DynamicCache` reuse on S1.4 WebSocket chats; continuous-batching `allow_block_sharing` kept off on S1.12).
 
 ## The problem
 
@@ -136,3 +134,24 @@ Recommendation for the decision: option 3 if the reproducibility promises stay, 
 change rather than two caches; otherwise option 2 with the SPEC and tests restated. Option 1 keeps
 every turn's prefill proportional to the whole history (measured above). The choice belongs to the
 maintainer.
+
+## Decision (2026-10-26)
+
+Instead of turning `allow_block_sharing` on in `ContinuousBatchingManager` (which mixes state
+across stateless server requests and altered Qwen3's greedy reply at turn 2), prefix KV reuse is
+implemented per session on the stateful WebSocket chat path (SPEC S1.4, where each turn carries a
+`session_id`):
+
+- `Session` holds a `SessionKVCache` storing the `DynamicCache` (`past_key_values`) and token ids
+  returned by `model.generate(return_dict_in_generate=True, use_cache=True)`, together with the
+  session's fixed timestamp prefix so the system prompt does not change every second.
+- On the next turn, the newly rendered prompt tokens are matched against the stored token sequence
+  up to their longest common prefix (leaving at least one token to prefill), `cache.crop()` removes
+  the trailing tokens beyond that prefix, and `generate` prefills only the suffix. When a chat
+  template renders earlier turns differently (such as Qwen3 dropping earlier `<think>` blocks), the
+  common prefix is shorter and accuracy is preserved.
+- Session KV caches are freed on session close or TTL expiry (S1.3), on model unload or eviction
+  (S1.14), and from the least recently used session first when total session KV memory exceeds
+  `GEMSTONE_MAX_SESSION_KV_MEMORY` (default `512MB`).
+- The OpenAI- and Ollama-compatible server APIs (S1.10, S1.15) and continuous batching (S1.12)
+  keep `allow_block_sharing=False` unchanged.

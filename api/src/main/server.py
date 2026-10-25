@@ -126,7 +126,7 @@ async def chat_with_streaming(websocket: WebSocket):
         await websocket.close(code=1008, reason="Invalid session ID or model not found.")
         return
 
-    chat_history = ChatHistory()
+    chat_history = ChatHistory(time_prefix=session.created_prefix)
     chat_history.extend(json.loads(await websocket.receive_text()))
     user_prompt = await websocket.receive_text()
 
@@ -155,7 +155,8 @@ async def chat_with_streaming(websocket: WebSocket):
     done = object()
     try:
         tokens = lease.model.chat(  # a generator: nothing runs until the first `next`
-            chat_history, user_prompt, cancel=cancel, tool_call_caches=session.tool_call_caches
+            chat_history, user_prompt, cancel=cancel,
+            tool_call_caches=session.tool_call_caches, session_kv=session.kv_cache,
         )
         while (token := await run_in_threadpool(next, tokens, done)) is not done:
             await websocket.send_text(token)
