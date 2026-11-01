@@ -743,7 +743,11 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
 ### S2.3 Chat screen: `implemented` · G4, G6
 
 - Sends the prompt over the WebSocket protocol of S1.4 and renders the reply as it streams, with
-  incremental Markdown.
+  incremental Markdown (#204): headings (`#`–`######`), unordered (`-`, `*`, `+`) and ordered (`1.`)
+  lists, links (`[label](url)` with a clickable `LinkAnnotation.Url`), inline styles (`**bold**`,
+  `*italic*`, `` `code` ``), fenced code blocks (`` ``` ``) and pipe tables (`| col |`). A streamed
+  reply that ends mid-construct (an unclosed inline marker, link, code fence or table row) renders
+  its text without errors. Test: `app/src/commonTest/.../ui/compose/screen/chat/MarkdownParserTest.kt`.
 - Shows the model's reasoning as a collapsible block with elapsed seconds.
 - The text of a prompt, a reply and the reasoning can be selected and copied (#202): with the mouse
   on desktop and web, with a long press on Android and iOS. Styled Markdown copies as its text,
