@@ -263,7 +263,7 @@ class Engine:
 
         yield from self._generate_exclusive(
             input_ids, max_new_tokens, temperature, top_p, top_k, min_p, typical_p, repeat_penalty, seed, cancel,
-            kwargs, session_kv=session_kv,
+            kwargs, session_kv,
         )
 
     def _generate_exclusive(
