@@ -33,6 +33,10 @@
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
+    <string name="settings_color_set">Color</string>
+    <string name="settings_color_black">Black</string>
+    <string name="settings_color_blue">Blue</string>
+    <string name="settings_color_orange">Orange</string>
 
     <!-- Saved chats -->
     <string name="chat_delete_desc">Delete this chat</string>
