@@ -13,8 +13,16 @@ string|chat_message_placeholder|QXNrIG1lIGFueXRoaW5nLi4u
 string|chat_new_chat_icon_desc|U3RhcnQgbmV3IGNoYXQ=
 string|chat_option_icon_desc|Q2hhdHRpbmcgb3B0aW9ucw==
 string|chat_title_placeholder|TmV3IENoYXQ=
+string|notifications_clear|Q2xlYXIgYWxs
+string|notifications_close|Q2xvc2U=
+string|notifications_empty|Tm8gbm90aWZpY2F0aW9ucyB5ZXQu
+string|notifications_title|Tm90aWZpY2F0aW9ucw==
 string|settings_api_key|QVBJIGtleQ==
 string|settings_cancel|Q2FuY2Vs
+string|settings_color_black|QmxhY2s=
+string|settings_color_blue|Qmx1ZQ==
+string|settings_color_orange|T3Jhbmdl
+string|settings_color_set|Q29sb3I=
 string|settings_delete_all_chats|RGVsZXRlIGFsbCBjaGF0cw==
 string|settings_key_this_run|S2VwdCBmb3IgdGhpcyBydW4gb25seTogdGhpcyBzeXN0ZW0gaGFzIG5vIHNlY3VyZSBzdG9yYWdl
 string|settings_open_desc|T3BlbiBzZXR0aW5ncw==
