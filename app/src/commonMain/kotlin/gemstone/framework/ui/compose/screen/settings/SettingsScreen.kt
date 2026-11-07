@@ -18,8 +18,10 @@ import androidx.compose.ui.unit.dp
 import gemstone.app.generated.resources.*
 import gemstone.framework.network.ServerAddress
 import gemstone.framework.network.http.serverSettings
+import gemstone.framework.ui.compose.theme.AppColorSet.Companion.ColorSet
 import gemstone.framework.ui.compose.theme.ThemeMode
 import gemstone.framework.ui.viewmodel.ChatViewModel
+import gemstone.framework.ui.viewmodel.NotificationViewModel
 import gemstone.framework.ui.viewmodel.SettingsViewModel
 import org.jetbrains.compose.resources.stringResource
 
@@ -63,7 +65,7 @@ fun SettingsDialog() {
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                     )
                 }
-                // Light, dark or the system's; the Blue and Orange sets are offered once they have palettes
+                // Theme mode (System, Light, Dark) and color set (Black, Blue, Orange), applied at once
                 Text(stringResource(Res.string.settings_theme))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     for ((mode, label) in listOf(
@@ -73,7 +75,21 @@ fun SettingsDialog() {
                     )) {
                         RadioButton(
                             selected = SettingsViewModel.themeInput == mode,
-                            onClick = { SettingsViewModel.themeInput = mode }
+                            onClick = { SettingsViewModel.selectThemeMode(mode) }
+                        )
+                        Text(stringResource(label))
+                    }
+                }
+                Text(stringResource(Res.string.settings_color_set))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    for ((colorSet, label) in listOf(
+                        ColorSet.Black to Res.string.settings_color_black,
+                        ColorSet.Blue to Res.string.settings_color_blue,
+                        ColorSet.Orange to Res.string.settings_color_orange
+                    )) {
+                        RadioButton(
+                            selected = SettingsViewModel.colorSetInput == colorSet,
+                            onClick = { SettingsViewModel.selectColorSet(colorSet) }
                         )
                         Text(stringResource(label))
                     }
@@ -111,5 +127,41 @@ fun DeleteChatsDialog() {
         dismissButton = {
             TextButton(onClick = { ChatViewModel.cancelDeletion() }) { Text(stringResource(Res.string.settings_cancel)) }
         }
+    )
+}
+
+
+/** Shows recent in-app notifications (SPEC S2.10, #206). */
+@Composable
+fun NotificationsDialog() {
+    if (!NotificationViewModel.dialogOpen) return
+    val items = NotificationViewModel.items
+    AlertDialog(
+        onDismissRequest = { NotificationViewModel.close() },
+        title = { Text(stringResource(Res.string.notifications_title)) },
+        text = {
+            if (items.isEmpty()) {
+                Text(stringResource(Res.string.notifications_empty))
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    for (item in items) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(item.title, style = MaterialTheme.typography.titleSmall)
+                            Text(item.message, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { NotificationViewModel.close() }) {
+                Text(stringResource(Res.string.notifications_close))
+            }
+        },
+        dismissButton = if (items.isNotEmpty()) ({
+            TextButton(onClick = { NotificationViewModel.clear() }) {
+                Text(stringResource(Res.string.notifications_clear))
+            }
+        }) else null
     )
 }

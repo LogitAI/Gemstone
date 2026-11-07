@@ -20,6 +20,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import gemstone.framework.ui.compose.navigation.SwipeBackNavHost
 import gemstone.framework.ui.compose.screen.settings.DeleteChatsDialog
+import gemstone.framework.ui.compose.screen.settings.NotificationsDialog
 import gemstone.framework.ui.compose.screen.settings.SettingsDialog
 import gemstone.framework.ui.compose.theme.Dimen
 import gemstone.framework.ui.compose.theme.appColorSet
@@ -144,5 +145,6 @@ fun MainScreen() {
 
         SettingsDialog()  // opened from the sidebar's user button, in either layout (S2.7)
         DeleteChatsDialog()  // confirms deleting one chat or all of them (S2.6)
+        NotificationsDialog()  // opened from the sidebar's bell button (S2.10)
     }
 }

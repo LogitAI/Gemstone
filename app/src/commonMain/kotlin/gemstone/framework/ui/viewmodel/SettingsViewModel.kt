@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import gemstone.framework.network.http.serverSettings
+import gemstone.framework.ui.compose.theme.AppColorSet.Companion.ColorSet
 import gemstone.framework.ui.compose.theme.ThemeMode
 import gemstone.framework.ui.compose.theme.themeSettings
 
@@ -18,6 +19,7 @@ object SettingsViewModel {
     var addressInput by mutableStateOf("")
     var apiKeyInput by mutableStateOf("")
     var themeInput by mutableStateOf(ThemeMode.System)
+    var colorSetInput by mutableStateOf(ColorSet.Black)
     var error by mutableStateOf<String?>(null)
         private set
 
@@ -25,8 +27,21 @@ object SettingsViewModel {
         addressInput = serverSettings.addressText
         apiKeyInput = if (serverSettings.keySetAtLaunch) "" else serverSettings.apiKey.orEmpty()
         themeInput = themeSettings.mode
+        colorSetInput = themeSettings.colorSet
         error = null
         dialogOpen = true
+    }
+
+    /** Applies and persists a theme mode choice immediately (SPEC S2.7). */
+    fun selectThemeMode(mode: ThemeMode) {
+        themeInput = mode
+        themeSettings.save(mode, colorSetInput)
+    }
+
+    /** Applies and persists a color set choice immediately (SPEC S2.7). */
+    fun selectColorSet(colorSet: ColorSet) {
+        colorSetInput = colorSet
+        themeSettings.save(themeInput, colorSet)
     }
 
     fun cancel() {
@@ -38,7 +53,7 @@ object SettingsViewModel {
         val before = serverSettings.address to serverSettings.apiKey
         error = serverSettings.save(addressInput, apiKeyInput)
         if (error != null) return
-        themeSettings.save(themeInput)
+        themeSettings.save(themeInput, colorSetInput)
         dialogOpen = false
         if (before != serverSettings.address to serverSettings.apiKey) {
             // The session belongs to the old server; the model list comes from the new one
