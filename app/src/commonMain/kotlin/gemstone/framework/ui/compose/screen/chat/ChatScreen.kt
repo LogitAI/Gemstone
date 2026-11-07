@@ -172,10 +172,10 @@ fun ChatScreen(screenWidth: Dp) {
                                 contentPadding = PaddingValues(Dimen.BIG_BUTTON_PADDING),
                                 elevation = ButtonDefaults.buttonElevation(1.dp),
                                 colors = ButtonColors(
-                                    containerColor = Color(0xFFFBFBFB),
-                                    contentColor = MaterialTheme.colorScheme.onSurface,
-                                    disabledContainerColor = Color(0xFFF9F9F9),
-                                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    containerColor = MaterialTheme.colorScheme.secondary,
+                                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                                    disabledContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+                                    disabledContentColor = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.5f)
                                 )
                             ) {
                                 Spacer(modifier = Modifier.height(14.dp))
@@ -455,10 +455,10 @@ fun MessageBubble(
             if (content.isNotBlank()) {
                 // A surface, not a button: a press on it starts a text selection (#202)
                 FluxSurface(
-                    color = Color(0xFFFBFBFB),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
                     shadowElevation = 0.4.dp,
-                    border = BorderStroke(1.4.dp, Color.White.copy(alpha = 0.9f)),
+                    border = BorderStroke(1.4.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)),
                     shape = MaterialTheme.shapes.medium,
                     contentPadding = PaddingValues(vertical = 10.dp, horizontal = 14.dp)
                 ) {

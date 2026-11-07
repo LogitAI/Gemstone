@@ -880,12 +880,12 @@ The server address and the API key can be set in the app (#166).
   `SharedPreferences`, iOS `NSUserDefaults`, desktop `java.util.prefs`).
 - Web: the address is the page's origin (S2.2) and is shown read-only. There is no key field,
   because the web client sends no key (S2.2).
-- Theme (#205): System (the default, following the platform's light or dark setting), Light or
-  Dark, applied on Save and kept in the platform's preferences (on the web, `localStorage` key
-  `gemstone.theme_mode`). An unknown stored value means System. Only the Black color set has a
-  palette today, and its dark palette still has the light colors (`theme/Color.kt`), so Dark looks
-  like Light until a dark palette is designed. The Blue and Orange sets are not offered until they
-  have palettes. Test: `app/src/commonTest/.../ui/compose/theme/ThemeSettingsTest.kt`.
+- Theme (#205): mode (System by default, following the platform's light or dark setting; Light;
+  Dark) and color set (`Black` by default, `Blue`, `Orange`), applied at once and kept in the
+  platform's preferences (`theme_mode` and `theme_color_set`; on the web, `localStorage` keys
+  `gemstone.theme_mode` and `gemstone.theme_color_set`). An unknown stored mode means System; an
+  unknown stored color set means `Black`. Every `(ColorSet, isDark)` pair has its own light or dark
+  palette (`theme/Color.kt`). Test: `app/src/commonTest/.../ui/compose/theme/ThemeSettingsTest.kt`.
 - Code: `app/src/commonMain/.../network/ServerSettings.kt` and the platform stores
   (`.../network/settings/`), `.../ui/compose/screen/settings/SettingsScreen.kt`,
   `.../ui/viewmodel/SettingsViewModel.kt`.
