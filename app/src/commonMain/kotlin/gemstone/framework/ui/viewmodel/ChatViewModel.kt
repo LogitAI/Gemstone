@@ -15,6 +15,8 @@ import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 
 @Serializable
@@ -117,6 +119,7 @@ object ChatViewModel {
 
     // History size when the turn in flight started: a failed turn drops what it added from here
     private var turnStart = 0
+    private var turnStartMark: TimeMark? = null
     // The saved chat on screen; null until a new chat's first reply completes (SPEC S2.6)
     private var currentChatId: String? = null
 
@@ -317,6 +320,15 @@ object ChatViewModel {
                             isResponding = false
                         )
                         saveCurrentChat()
+                        val elapsed = maxOf(
+                            currentMessage.thoughtElapsed,
+                            turnStartMark?.elapsedNow()?.inWholeMilliseconds?.div(1000f) ?: 0f
+                        )
+                        turnStartMark = null
+                        NotificationViewModel.notifyReplyCompleted(
+                            _uiState.value.title.ifEmpty { currentMessage.user },
+                            elapsed
+                        )
                     }
 
                     is ChatEvent.ErrorOccurred -> failTurn(event.error)
@@ -390,6 +402,7 @@ object ChatViewModel {
             }
 
             turnStart = chatHistory.size
+            turnStartMark = TimeSource.Monotonic.markNow()
             val result = webSocketClient.sendMessage(messageInput, chatHistory)
             if (result.isFailure) {
                 failTurn("Failed to send message: ${result.exceptionOrNull()?.message}")

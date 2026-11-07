@@ -28,6 +28,7 @@ import gemstone.framework.network.ModelInfo
 import gemstone.framework.storage.searchChats
 import gemstone.framework.ui.viewmodel.AIModelViewModel
 import gemstone.framework.ui.viewmodel.ChatViewModel
+import gemstone.framework.ui.viewmodel.NotificationViewModel
 import gemstone.framework.ui.viewmodel.SettingsViewModel
 import org.jetbrains.compose.resources.stringResource
 
@@ -60,7 +61,7 @@ fun SideScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 BlurredFluxIconButton(
-                    onClick = {},
+                    onClick = { NotificationViewModel.open() },
                     iconResource = IconResource.Drawable(Res.drawable.bell),
                     iconDescription = stringResource(Res.string.sidebar_notification_section),
                     modifier = Modifier.size(Dimen.BIG_BUTTON_SIZE),

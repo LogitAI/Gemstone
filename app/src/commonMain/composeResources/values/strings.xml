@@ -45,4 +45,10 @@
     <string name="chat_delete_text">This removes it from this device and cannot be undone.</string>
     <string name="chat_delete_all_text">This removes every saved chat from this device and cannot be undone.</string>
     <string name="chat_delete_confirm">Delete</string>
+
+    <!-- Notifications -->
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_empty">No notifications yet.</string>
+    <string name="notifications_clear">Clear all</string>
+    <string name="notifications_close">Close</string>
 </resources>
