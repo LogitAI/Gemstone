@@ -38,6 +38,25 @@ object AIModelViewModel {
         }
     }
 
+    /** Pulls [modelName] on the server (`POST /api/pull`), notifies on completion or failure, and refreshes the list. */
+    fun pullModel(modelName: String) {
+        val trimmed = modelName.trim()
+        if (trimmed.isEmpty()) return
+        ChatViewModel.runBlocking {
+            val result = modelsApi.pull(trimmed)
+            if (result.isSuccess) {
+                NotificationViewModel.notifyModelDownload(trimmed, success = true)
+                applyCatalog(modelsApi.fetch())
+            } else {
+                NotificationViewModel.notifyModelDownload(
+                    trimmed,
+                    success = false,
+                    detail = result.exceptionOrNull()?.message
+                )
+            }
+        }
+    }
+
     private fun applyCatalog(result: Result<ModelCatalog>) {
         val catalog = result.getOrNull()
         if (catalog == null) {

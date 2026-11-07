@@ -47,7 +47,8 @@ the device, chatting must not depend on a network.
 ### G4: Real-time, streaming conversation
 
 *"WebSocket-based real-time messaging."* Tokens are shown as they are generated, including the
-model's reasoning and its tool calls.
+model's reasoning and its tool calls. In-app notifications report finished long replies and model
+download completion or failure (#206).
 
 ### G5: A model-serving API in Python
 

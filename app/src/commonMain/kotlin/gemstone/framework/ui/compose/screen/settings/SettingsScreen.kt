@@ -21,6 +21,7 @@ import gemstone.framework.network.http.serverSettings
 import gemstone.framework.ui.compose.theme.AppColorSet.Companion.ColorSet
 import gemstone.framework.ui.compose.theme.ThemeMode
 import gemstone.framework.ui.viewmodel.ChatViewModel
+import gemstone.framework.ui.viewmodel.NotificationViewModel
 import gemstone.framework.ui.viewmodel.SettingsViewModel
 import org.jetbrains.compose.resources.stringResource
 
@@ -126,5 +127,41 @@ fun DeleteChatsDialog() {
         dismissButton = {
             TextButton(onClick = { ChatViewModel.cancelDeletion() }) { Text(stringResource(Res.string.settings_cancel)) }
         }
+    )
+}
+
+
+/** Shows recent in-app notifications (SPEC S2.10, #206). */
+@Composable
+fun NotificationsDialog() {
+    if (!NotificationViewModel.dialogOpen) return
+    val items = NotificationViewModel.items
+    AlertDialog(
+        onDismissRequest = { NotificationViewModel.close() },
+        title = { Text(stringResource(Res.string.notifications_title)) },
+        text = {
+            if (items.isEmpty()) {
+                Text(stringResource(Res.string.notifications_empty))
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    for (item in items) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(item.title, style = MaterialTheme.typography.titleSmall)
+                            Text(item.message, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { NotificationViewModel.close() }) {
+                Text(stringResource(Res.string.notifications_close))
+            }
+        },
+        dismissButton = if (items.isNotEmpty()) ({
+            TextButton(onClick = { NotificationViewModel.clear() }) {
+                Text(stringResource(Res.string.notifications_clear))
+            }
+        }) else null
     )
 }

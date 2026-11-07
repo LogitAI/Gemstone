@@ -906,6 +906,20 @@ the target, not the current code.
 Android declares `en` and `ko` locales, but only English strings exist, and the reasoning status
 line is hard-coded in Korean (`"…초 동안"`, `ChatScreen.kt`).
 
+### S2.10 Notifications: `implemented` · G4, G5
+
+The bell button in the sidebar opens the in-app notifications dialog (#206). It lists recent events
+from this run, newest first:
+
+- A completed chat reply whose generation or reasoning took at least 10 seconds (`longReplyThresholdSeconds`).
+- A model download (`POST /api/pull`) that completed or failed.
+
+Opening the dialog marks all entries read; **Clear all** empties the list.
+Code: `app/src/commonMain/.../ui/viewmodel/NotificationViewModel.kt`,
+`.../ui/compose/screen/settings/SettingsScreen.kt`, `.../ui/compose/screen/chat/SideScreen.kt`,
+`.../ui/compose/screen/chat/MainScreen.kt`.
+Test: `app/src/commonTest/.../ui/viewmodel/NotificationViewModelTest.kt`.
+
 ## 3. Planned capabilities
 
 ### S3.1 On-device inference through Python Multiplatform: `planned` · G2, G3
