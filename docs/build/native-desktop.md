@@ -7,8 +7,10 @@ Status: `planned` (`docs/SPEC.md` S3.4). The build path is on `develop` (#71) fo
 CI builds it on every push to `develop`: job `native-desktop` of `.github/workflows/test.yml`
 (windows-latest, Temurin 21 for the Gradle daemon, GraalVM for JDK 22 for `nativeCompile`). The job
 starts the executable and fails unless the "Gemstone AI" window opens and the process is still alive
-15 s later; it uploads stdout, stderr and a screenshot as the `native-desktop-smoke` artifact. Clicks
-and a chat reply are not checked yet (#191).
+15 s later, and unless a click on the chat input field focuses it (text typed before the click must
+change nothing; text typed after it must appear in the input row and nowhere else). It uploads
+stdout, stderr and screenshots as the `native-desktop-smoke` artifact. A chat reply is not checked
+yet (#191).
 
 ```powershell
 $env:JAVA_HOME = "<a GraalVM 22 installation>"
@@ -84,8 +86,6 @@ for the measurements behind that.
 ## Known limitations
 
 - Windows x64 only so far.
-- Clicks are not yet registered in the native build; the cause is under investigation
-  (`docs/SPEC.md` S3.4).
 - Startup prints `java.lang.Error: no ComponentUI class for: javax.swing.JRootPane`. The app
   recovers and renders correctly; the cause is unresolved and tracked upstream as
   [oracle/graal#9284](https://github.com/oracle/graal/issues/9284).

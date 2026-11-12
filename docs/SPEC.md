@@ -941,12 +941,13 @@ No code. The meaning of sync is an open question in `INTENT.md` § 5. Tracked in
 Managed long-term by `compose-multiplatform-extended` (decided 2026-10-02). That plugin has no code
 yet, so Gemstone keeps its own path in the meantime (on `develop` since #71): Gradle tasks `generateNativeResourceConfig`,
 `nativeCompile`, `nativeDist` and `metadataCopy`, plus `NativeRuntime.kt`, the reachability
-metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 only so far. Clicks
-are not yet registered in the native build (under investigation), and sending a chat message there
-is unverified. CI builds it on every develop push (job `native-desktop` of `test.yml`, windows-latest,
+metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 only so far. Sending a
+chat message there is unverified. CI builds it on every develop push (job `native-desktop` of `test.yml`, windows-latest,
 GraalVM for JDK 22; added 2026-11-13 with the owner's approval): `:app:nativeDist` succeeds, and the
 job requires `app/build/dist/bin/gemstone.exe` to open its "Gemstone AI" window and still run 15 s
-later (first green run 43302411294: 108.3 MB executable). When the plugin takes over, the Gradle
+later (first green run 43302411294: 108.3 MB executable), and that a click on the chat input field
+focuses it: text typed before the click must change nothing, text typed after it must appear in the
+input row and nowhere else (clicks and keys register: run 43309886148). When the plugin takes over, the Gradle
 tasks become plugin configuration and only Gemstone-specific metadata stays here. Tracked in #191.
 
 ---

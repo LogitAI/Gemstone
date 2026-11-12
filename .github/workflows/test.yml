@@ -171,11 +171,68 @@ jobs:
           $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
           [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
           $bmp.Save("native-smoke/screen.png")
+          # Input (#191): text typed before the click must not appear (the field has no focus yet); after a
+          # click on the chat input field, typed text must appear in that row and nothing else may change.
+          $inputOk = $false
+          if ($alive) {
+            Add-Type @"
+          using System; using System.Runtime.InteropServices;
+          public class Win {
+              [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L,T,R,B; }
+              [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+              [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+              [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+              [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+              [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, IntPtr e);
+          }
+          "@
+            [Win]::SetProcessDPIAware() | Out-Null
+            [Win]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+            Start-Sleep -Seconds 1
+            $r = New-Object Win+RECT
+            [Win]::GetWindowRect($p.MainWindowHandle, [ref]$r) | Out-Null
+            Write-Output "window rect: $($r.L),$($r.T) - $($r.R),$($r.B)"
+            function Shot($path) {
+              $w = $r.R - $r.L; $h = $r.B - $r.T
+              $bm = New-Object System.Drawing.Bitmap $w, $h
+              [System.Drawing.Graphics]::FromImage($bm).CopyFromScreen($r.L, $r.T, 0, 0, $bm.Size)
+              $bm.Save($path); return $bm
+            }
+            $before = Shot "native-smoke/before-input.png"
+            function Changed($a, $b) {
+              $inRow = 0; $other = 0
+              for ($yy = 0; $yy -lt $a.Height; $yy += 2) { for ($xx = 0; $xx -lt $a.Width; $xx += 2) {
+                if ($a.GetPixel($xx, $yy).ToArgb() -ne $b.GetPixel($xx, $yy).ToArgb()) {
+                  if ($yy -ge $a.Height - 90) { $inRow++ } else { $other++ }
+                }
+              } }
+              return @($inRow, $other)
+            }
+            [System.Windows.Forms.SendKeys]::SendWait("unfocused")
+            Start-Sleep -Seconds 2
+            $unfocused = Shot "native-smoke/typed-before-click.png"
+            $c0 = Changed $before $unfocused
+            Write-Output "typed before any click: changed pixels (sampled 1 in 4): input row $($c0[0]), rest $($c0[1])"
+            # The input field spans the bottom of the chat pane, about 40 px above the window's bottom edge.
+            $x = $r.L + [int](($r.R - $r.L) * 0.6); $y = $r.B - 45
+            foreach ($fx in @(0.3, 0.5, 0.7)) { [Win]::SetCursorPos($r.L + [int](($r.R - $r.L) * $fx), $r.T + [int](($r.B - $r.T) / 2)) | Out-Null; Start-Sleep -Milliseconds 200 }
+            [Win]::SetCursorPos($x, $y) | Out-Null; Start-Sleep -Milliseconds 300
+            [Win]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 90
+            [Win]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Seconds 1
+            [System.Windows.Forms.SendKeys]::SendWait("native input check")
+            Start-Sleep -Seconds 2
+            $after = Shot "native-smoke/after-input.png"
+            $c1 = Changed $unfocused $after
+            Write-Output "clicked ($x,$y), typed 'native input check': changed pixels (sampled 1 in 4): input row $($c1[0]), rest $($c1[1])"
+            # Run 43309886148 measured 172 in the input row and 0 elsewhere for this text.
+            $inputOk = ($c0[0] -eq 0) -and ($c1[0] -ge 50) -and ($c1[1] -eq 0)
+          }
           if ($alive) { $p.CloseMainWindow() | Out-Null; if (-not $p.WaitForExit(30000)) { $p.Kill() } }
           Write-Output "window title: '$title'  alive after 15 s: $alive  exit code: $(if ($p.HasExited) { $p.ExitCode })"
           Write-Output "--- stdout"; Get-Content native-smoke/stdout.log -Tail 40
           Write-Output "--- stderr"; Get-Content native-smoke/stderr.log -Tail 40
           if (-not $title -or -not $alive) { exit 1 }
+          if (-not $inputOk) { Write-Output "input check failed: typing before the click must change nothing, and after the click it must show in the input row only"; exit 1 }
 
       - name: Upload the start-up logs and screenshot
         if: always()
