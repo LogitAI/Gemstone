@@ -171,6 +171,51 @@ jobs:
           $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
           [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
           $bmp.Save("native-smoke/screen.png")
+          # Input (#191): click the chat input field and type; text appearing in the field means the
+          # click focused it and key events reach the app. Report-only until it is known to work.
+          if ($alive) {
+            Add-Type @"
+          using System; using System.Runtime.InteropServices;
+          public class Win {
+              [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L,T,R,B; }
+              [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+              [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+              [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+              [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+              [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, IntPtr e);
+          }
+          "@
+            [Win]::SetProcessDPIAware() | Out-Null
+            [Win]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+            Start-Sleep -Seconds 1
+            $r = New-Object Win+RECT
+            [Win]::GetWindowRect($p.MainWindowHandle, [ref]$r) | Out-Null
+            Write-Output "window rect: $($r.L),$($r.T) - $($r.R),$($r.B)"
+            function Shot($path) {
+              $w = $r.R - $r.L; $h = $r.B - $r.T
+              $bm = New-Object System.Drawing.Bitmap $w, $h
+              [System.Drawing.Graphics]::FromImage($bm).CopyFromScreen($r.L, $r.T, 0, 0, $bm.Size)
+              $bm.Save($path); return $bm
+            }
+            $before = Shot "native-smoke/before-input.png"
+            # The input field spans the bottom of the chat pane, about 40 px above the window's bottom edge.
+            $x = $r.L + [int](($r.R - $r.L) * 0.6); $y = $r.B - 45
+            foreach ($fx in @(0.3, 0.5, 0.7)) { [Win]::SetCursorPos($r.L + [int](($r.R - $r.L) * $fx), $r.T + [int](($r.B - $r.T) / 2)) | Out-Null; Start-Sleep -Milliseconds 200 }
+            [Win]::SetCursorPos($x, $y) | Out-Null; Start-Sleep -Milliseconds 300
+            [Win]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 90
+            [Win]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Seconds 1
+            [System.Windows.Forms.SendKeys]::SendWait("native input check")
+            Start-Sleep -Seconds 2
+            $after = Shot "native-smoke/after-input.png"
+            # Pixels that changed in the bottom 90 px band (the input row) and elsewhere.
+            $changedInput = 0; $changedOther = 0
+            for ($yy = 0; $yy -lt $before.Height; $yy += 2) { for ($xx = 0; $xx -lt $before.Width; $xx += 2) {
+              if ($before.GetPixel($xx, $yy).ToArgb() -ne $after.GetPixel($xx, $yy).ToArgb()) {
+                if ($yy -ge $before.Height - 90) { $changedInput++ } else { $changedOther++ }
+              }
+            } }
+            Write-Output "input check: clicked ($x,$y), typed 'native input check'; changed pixels (sampled 1 in 4): input row $changedInput, rest $changedOther"
+          }
           if ($alive) { $p.CloseMainWindow() | Out-Null; if (-not $p.WaitForExit(30000)) { $p.Kill() } }
           Write-Output "window title: '$title'  alive after 15 s: $alive  exit code: $(if ($p.HasExited) { $p.ExitCode })"
           Write-Output "--- stdout"; Get-Content native-smoke/stdout.log -Tail 40
