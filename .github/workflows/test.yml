@@ -6,6 +6,8 @@ name: Tests
 #   quickstart  the README's start command, run literally, must come up without a model
 #   gradle      the Kotlin client's common tests on the JVM, and the web (Wasm) target compiles
 #   web-bundle  rebuilds the web client from app/; on develop it commits api/src/main/webpack when it differs
+#   native-desktop  builds the GraalVM native executable on Windows x64 (:app:nativeDist) and checks
+#               that it starts and opens its window (SPEC S3.4, #191; owner approval 2026-11-13)
 # The torchnative run is test-torchnative.yml (different triggers, non-blocking).
 on:
   # Checked on develop after merging, not on every pull request (user decision,
@@ -104,6 +106,81 @@ jobs:
         with:
           name: app-test-results
           path: app/build/test-results/desktopTest/
+          if-no-files-found: ignore
+
+  native-desktop:
+    # SPEC S3.4 / #191: the desktop target as a GraalVM native image, Windows x64 only so far
+    # (docs/build/native-desktop.md). Added with the owner's approval of 2026-11-13.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Gradle daemon runs on JDK 21 (gradle/gradle-daemon-jvm.properties); nativeCompile uses
+      # the JDK 22 toolchain (nativeImageJdk in app/build.gradle.kts), which must be a GraalVM:
+      # auto-download is off so no plain JDK 22 is provisioned in its place.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm
+          java-version: "22"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Point Gradle at the installed JDKs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$HOME/.gradle" | Out-Null
+          @(
+            "org.gradle.java.installations.auto-detect=false"
+            "org.gradle.java.installations.auto-download=false"
+            "org.gradle.java.installations.paths=$($env:JAVA_HOME_21_X64 -replace '\\','/'),$($env:GRAALVM_HOME -replace '\\','/')"
+          ) | Add-Content "$HOME/.gradle/gradle.properties"
+          Get-Content "$HOME/.gradle/gradle.properties"
+
+      - name: Build the native executable
+        run: ./gradlew :app:nativeDist --console=plain
+
+      - name: Start it and wait for its window
+        shell: pwsh
+        run: |
+          $exe = "app/build/dist/bin/gemstone.exe"
+          if (-not (Test-Path $exe)) { Write-Output "missing $exe"; exit 1 }
+          "{0:N1} MB  $exe" -f ((Get-Item $exe).Length / 1MB)
+          New-Item -ItemType Directory -Force native-smoke | Out-Null
+          $p = Start-Process -FilePath $exe -PassThru `
+            -RedirectStandardOutput native-smoke/stdout.log -RedirectStandardError native-smoke/stderr.log
+          $deadline = (Get-Date).AddSeconds(120)
+          $title = ""
+          while ((Get-Date) -lt $deadline -and -not $p.HasExited) {
+            $p.Refresh()
+            if ($p.MainWindowTitle -like "*Gemstone AI*") { $title = $p.MainWindowTitle; break }
+            Start-Sleep -Seconds 1
+          }
+          # A window that appears and then dies (missing metadata on first composition) is a failure too.
+          if ($title) { Start-Sleep -Seconds 15 }
+          $alive = -not $p.HasExited
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("native-smoke/screen.png")
+          if ($alive) { $p.CloseMainWindow() | Out-Null; if (-not $p.WaitForExit(30000)) { $p.Kill() } }
+          Write-Output "window title: '$title'  alive after 15 s: $alive  exit code: $(if ($p.HasExited) { $p.ExitCode })"
+          Write-Output "--- stdout"; Get-Content native-smoke/stdout.log -Tail 40
+          Write-Output "--- stderr"; Get-Content native-smoke/stderr.log -Tail 40
+          if (-not $title -or -not $alive) { exit 1 }
+
+      - name: Upload the start-up logs and screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-desktop-smoke
+          path: native-smoke/
           if-no-files-found: ignore
 
   web-bundle:
