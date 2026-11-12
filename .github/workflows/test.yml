@@ -134,13 +134,15 @@ jobs:
       - name: Point Gradle at the installed JDKs
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "$HOME/.gradle" | Out-Null
+          # setup-gradle moves GRADLE_USER_HOME off the home directory; that is where Gradle reads it.
+          $props = Join-Path ($env:GRADLE_USER_HOME ?? "$HOME/.gradle") "gradle.properties"
+          New-Item -ItemType Directory -Force (Split-Path $props) | Out-Null
           @(
             "org.gradle.java.installations.auto-detect=false"
             "org.gradle.java.installations.auto-download=false"
             "org.gradle.java.installations.paths=$($env:JAVA_HOME_21_X64 -replace '\\','/'),$($env:GRAALVM_HOME -replace '\\','/')"
-          ) | Add-Content "$HOME/.gradle/gradle.properties"
-          Get-Content "$HOME/.gradle/gradle.properties"
+          ) | Add-Content $props
+          Get-Content $props
 
       - name: Build the native executable
         run: ./gradlew :app:nativeDist --console=plain
