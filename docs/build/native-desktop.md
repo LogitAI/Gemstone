@@ -4,7 +4,11 @@ Compiles the desktop target to a standalone native executable: no JVM, no JDK on
 machine, no installer.
 
 Status: `planned` (`docs/SPEC.md` S3.4). The build path is on `develop` (#71) for Windows x64 only.
-The native build has not been run on `develop`.
+CI builds it on every push to `develop`: job `native-desktop` of `.github/workflows/test.yml`
+(windows-latest, Temurin 21 for the Gradle daemon, GraalVM for JDK 22 for `nativeCompile`). The job
+starts the executable and fails unless the "Gemstone AI" window opens and the process is still alive
+15 s later; it uploads stdout, stderr and a screenshot as the `native-desktop-smoke` artifact. Clicks
+and a chat reply are not checked yet (#191).
 
 ```powershell
 $env:JAVA_HOME = "<a GraalVM 22 installation>"
