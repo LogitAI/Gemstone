@@ -943,8 +943,10 @@ yet, so Gemstone keeps its own path in the meantime (on `develop` since #71): Gr
 `nativeCompile`, `nativeDist` and `metadataCopy`, plus `NativeRuntime.kt`, the reachability
 metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 only so far. Clicks
 are not yet registered in the native build (under investigation), and sending a chat message there
-is unverified. `./gradlew :app:compileKotlinDesktop` succeeds; the native build itself has not been
-run on `develop`. When the plugin takes over, the Gradle
+is unverified. CI builds it on every develop push (job `native-desktop` of `test.yml`, windows-latest,
+GraalVM for JDK 22; added 2026-11-13 with the owner's approval): `:app:nativeDist` succeeds, and the
+job requires `app/build/dist/bin/gemstone.exe` to open its "Gemstone AI" window and still run 15 s
+later (first green run 43302411294: 108.3 MB executable). When the plugin takes over, the Gradle
 tasks become plugin configuration and only Gemstone-specific metadata stays here. Tracked in #191.
 
 ---

@@ -277,8 +277,9 @@ task as its own invocation; delete `app/build/test-results/` before counting.
 
 CI runs the Python tests, the quick-start check, `:app:desktopTest` with `:app:compileKotlinWasmJs`,
 and the web bundle check on every push to `develop` and on demand (`workflow_dispatch`), not on pull
-requests (#175). They are the jobs `pytest`, `quickstart`, `gradle` and `web-bundle` of
-`.github/workflows/test.yml`. A red `develop` is fixed forward by its own pull request. Test workflows are named `test.yml`, or
+requests (#175). They are the jobs `pytest`, `quickstart`, `gradle`, `web-bundle` and `native-desktop` of
+`.github/workflows/test.yml`. `native-desktop` (windows-latest; owner approval 2026-11-13, #191) builds
+`:app:nativeDist` and checks that the executable opens its window. A red `develop` is fixed forward by its own pull request. Test workflows are named `test.yml`, or
 `test-<target>.yml` only when their triggers or environment differ (`test-torchnative.yml`).
 
 **Current test reality.** Python tests live in `api/tests/`: the engine and continuous batching
