@@ -276,7 +276,8 @@ jobs:
             # The model chips run along the sidebar ("All", "Qwen 3", then the local models); the third
             # chip, HuggingFaceTB/SmolLM2-135M-Instruct, starts about 165 px from the window's left edge.
             Click ($r.L + 240) ($r.T + 183)
-            Start-Sleep -Seconds 2
+            # The row then scrolls the selected chip into view; let that settle before the next baseline.
+            Start-Sleep -Seconds 6
             $selected = Shot "native-smoke/model-selected.png"
             # The input field spans the bottom of the chat pane, about 40 px above the window's bottom edge.
             $x = $r.L + [int](($r.R - $r.L) * 0.6); $y = $r.B - 45
