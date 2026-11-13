@@ -276,8 +276,11 @@ jobs:
             # The model chips run along the sidebar ("All", "Qwen 3", then the local models); the third
             # chip, HuggingFaceTB/SmolLM2-135M-Instruct, starts about 165 px from the window's left edge.
             Click ($r.L + 240) ($r.T + 183)
-            # The row then scrolls the selected chip into view; let that settle before the next baseline.
-            Start-Sleep -Seconds 6
+            # The row then scrolls the selected chip into view, and the chip keeps its hover shadow until
+            # the pointer leaves it: move the pointer to the empty chat area and let both settle before the
+            # next baseline (run 43363256128 counted that shadow as a change outside the input row).
+            [Win]::SetCursorPos($r.L + [int](($r.R - $r.L) * 0.6), $r.T + [int](($r.B - $r.T) * 0.45)) | Out-Null
+            Start-Sleep -Seconds 4
             $selected = Shot "native-smoke/model-selected.png"
             # The input field spans the bottom of the chat pane, about 40 px above the window's bottom edge.
             $x = $r.L + [int](($r.R - $r.L) * 0.6); $y = $r.B - 45
