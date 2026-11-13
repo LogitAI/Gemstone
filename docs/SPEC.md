@@ -806,8 +806,11 @@ default model (the entry with the same `model_name`, else the first), which the 
 If the server is unreachable the list is empty, "All" still works (it sends the `default` alias)
 and a "Server unreachable - retry" button re-fetches the list (`AIModelViewModel.refreshAIModels`).
 Code: `.../network/ModelCatalog.kt` (pure parsing), `.../network/http/ModelsApi.kt`,
-`.../ui/viewmodel/AIModelViewModel.kt`, `.../screen/chat/SideScreen.kt`.
-Test: `ModelCatalogTest` (commonTest).
+`.../ui/viewmodel/AIModelViewModel.kt`, `.../screen/chat/SideScreen.kt`. A chat after a model
+selection gets its reply: the chat view model collects the client's events from its first use, not
+from the first prompt sent without a session (#233).
+Test: `ModelCatalogTest` (commonTest); `ChatReplyListenerTest` (desktopTest: the events are
+collected before any prompt); the `native-desktop` CI job (select a model, send, reply saved).
 
 ### S2.6 Chat list and history: `implemented` · G4
 
