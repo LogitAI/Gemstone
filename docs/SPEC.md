@@ -806,8 +806,11 @@ default model (the entry with the same `model_name`, else the first), which the 
 If the server is unreachable the list is empty, "All" still works (it sends the `default` alias)
 and a "Server unreachable - retry" button re-fetches the list (`AIModelViewModel.refreshAIModels`).
 Code: `.../network/ModelCatalog.kt` (pure parsing), `.../network/http/ModelsApi.kt`,
-`.../ui/viewmodel/AIModelViewModel.kt`, `.../screen/chat/SideScreen.kt`.
-Test: `ModelCatalogTest` (commonTest).
+`.../ui/viewmodel/AIModelViewModel.kt`, `.../screen/chat/SideScreen.kt`. A chat after a model
+selection gets its reply: the chat view model collects the client's events from its first use, not
+from the first prompt sent without a session (#233).
+Test: `ModelCatalogTest` (commonTest); `ChatReplyListenerTest` (desktopTest: the events are
+collected before any prompt); the `native-desktop` CI job (select a model, send, reply saved).
 
 ### S2.6 Chat list and history: `implemented` · G4
 
@@ -941,13 +944,16 @@ No code. The meaning of sync is an open question in `INTENT.md` § 5. Tracked in
 Managed long-term by `compose-multiplatform-extended` (decided 2026-10-02). That plugin has no code
 yet, so Gemstone keeps its own path in the meantime (on `develop` since #71): Gradle tasks `generateNativeResourceConfig`,
 `nativeCompile`, `nativeDist` and `metadataCopy`, plus `NativeRuntime.kt`, the reachability
-metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 only so far. Sending a
-chat message there is unverified. CI builds it on every develop push (job `native-desktop` of `test.yml`, windows-latest,
+metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 only so far. CI builds it on every develop push (job `native-desktop` of `test.yml`, windows-latest,
 GraalVM for JDK 22; added 2026-11-13 with the owner's approval): `:app:nativeDist` succeeds, and the
 job requires `app/build/dist/bin/gemstone.exe` to open its "Gemstone AI" window and still run 15 s
 later (first green run 43302411294: 108.3 MB executable), and that a click on the chat input field
 focuses it: text typed before the click must change nothing, text typed after it must appear in the
-input row and nowhere else (clicks and keys register: run 43309886148). When the plugin takes over, the Gradle
+input row and nowhere else (clicks and keys register: run 43309886148). The executable must also
+chat with the server: the job starts the server on SmolLM2-135M-Instruct (fetched into a cached
+`HF_HOME`, then served with `HF_HUB_OFFLINE=1`), selects that model in the sidebar, sends the typed
+text and requires the reply to be saved in `chats.json` within 300 s (S2.6; model download in CI
+approved by the leader 2026-11-13). When the plugin takes over, the Gradle
 tasks become plugin configuration and only Gemstone-specific metadata stays here. Tracked in #191.
 
 ---

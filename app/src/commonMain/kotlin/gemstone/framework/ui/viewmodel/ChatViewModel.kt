@@ -144,8 +144,14 @@ object ChatViewModel {
         coroutineScope.launch { block() }
     }
 
-    fun initialize() {
-        // Called again while no session exists (server down): collecting twice would double every event
+    // Collect the client's events from the first use on, not from the first prompt: a session opened by
+    // selecting a model (S2.5) must get its reply too, and a SharedFlow drops what nobody collects (#233).
+    init {
+        initialize()
+    }
+
+    private fun initialize() {
+        // Collecting twice would double every event
         if (observing) return
         observing = true
         observeClientEvents()
@@ -398,7 +404,6 @@ object ChatViewModel {
                         AIModelViewModel.selectedAIModelDescription = "Server Not Available"
                     }
                 }
-                initialize()
             }
 
             turnStart = chatHistory.size

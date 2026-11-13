@@ -8,9 +8,12 @@ CI builds it on every push to `develop`: job `native-desktop` of `.github/workfl
 (windows-latest, Temurin 21 for the Gradle daemon, GraalVM for JDK 22 for `nativeCompile`). The job
 starts the executable and fails unless the "Gemstone AI" window opens and the process is still alive
 15 s later, and unless a click on the chat input field focuses it (text typed before the click must
-change nothing; text typed after it must appear in the input row and nowhere else). It uploads
-stdout, stderr and screenshots as the `native-desktop-smoke` artifact. A chat reply is not checked
-yet (#191).
+change nothing; text typed after it must appear in the input row and nowhere else). It then
+starts the server on SmolLM2-135M-Instruct (`smollm2:135m`, about 270 MB, cached between runs and
+served offline so no other model is fetched), selects that model in the sidebar, sends the typed
+text and fails unless the reply is saved in `%APPDATA%\Gemstone\chats.json` within 300 s (#191).
+It uploads stdout, stderr, the server log, `chats.json` and screenshots as the
+`native-desktop-smoke` artifact.
 
 ```powershell
 $env:JAVA_HOME = "<a GraalVM 22 installation>"
@@ -89,8 +92,8 @@ for the measurements behind that.
 - Startup prints `java.lang.Error: no ComponentUI class for: javax.swing.JRootPane`. The app
   recovers and renders correctly; the cause is unresolved and tracked upstream as
   [oracle/graal#9284](https://github.com/oracle/graal/issues/9284).
-- The agent run did not exercise networking, so Ktor and serialization paths may still be
-  missing metadata. Sending an actual chat message in the native build is unverified.
+- Networking is exercised by CI only along the chat path (model list, session, WebSocket reply);
+  other Ktor and serialization paths (settings, OpenAI-style errors) may still lack metadata.
 - Jewel needs JNA at runtime but does not declare it: inside the IDE the platform supplies it.
   It is added as an explicit `runtimeOnly` dependency; without it the desktop app fails on first
   composition with `NoClassDefFoundError: com/sun/jna/Library`, on the JVM as well as natively.
