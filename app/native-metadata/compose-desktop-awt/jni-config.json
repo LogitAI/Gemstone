@@ -12,6 +12,7 @@
   {"name":"java.awt.Cursor", "fields":[{"name":"pData"}, {"name":"type"}], "methods":[{"name":"setPData", "parameterTypes":["long"]}]},
   {"name":"java.awt.Dialog", "fields":[{"name":"title"}, {"name":"undecorated"}]},
   {"name":"java.awt.Dimension", "fields":[{"name":"height"}, {"name":"width"}], "methods":[{"name":"<init>", "parameterTypes":["int", "int"]}]},
+  {"name":"java.awt.Event", "fields":[{"name":"consumed"}, {"name":"data"}, {"name":"id"}, {"name":"target"}, {"name":"x"}, {"name":"y"}]},
   {"name":"java.awt.Font", "fields":[{"name":"name"}, {"name":"pData"}, {"name":"size"}, {"name":"style"}], "methods":[{"name":"getFont", "parameterTypes":["java.lang.String"]}, {"name":"getFontPeer", "parameterTypes":[]}]},
   {"name":"java.awt.FontMetrics", "fields":[{"name":"font"}], "methods":[{"name":"getHeight", "parameterTypes":[]}]},
   {"name":"java.awt.Frame", "fields":[{"name":"undecorated"}]},

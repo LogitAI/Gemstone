@@ -12,6 +12,8 @@ change nothing; text typed after it must appear in the input row and nowhere els
 starts the server on SmolLM2-135M-Instruct (`smollm2:135m`, about 270 MB, cached between runs and
 served offline so no other model is fetched), selects that model in the sidebar, sends the typed
 text and fails unless the reply is saved in `%APPDATA%\Gemstone\chats.json` within 300 s (#191).
+It also fails when stderr shows a missing-metadata error (`NoSuchFieldError`,
+`NoSuchMethodError`, `NoClassDefFoundError`, `Missing...RegistrationError`; #235).
 It uploads stdout, stderr, the server log, `chats.json` and screenshots as the
 `native-desktop-smoke` artifact.
 

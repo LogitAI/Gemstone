@@ -953,7 +953,9 @@ input row and nowhere else (clicks and keys register: run 43309886148). The exec
 chat with the server: the job starts the server on SmolLM2-135M-Instruct (fetched into a cached
 `HF_HOME`, then served with `HF_HUB_OFFLINE=1`), selects that model in the sidebar, sends the typed
 text and requires the reply to be saved in `chats.json` within 300 s (S2.6; model download in CI
-approved by the leader 2026-11-13). When the plugin takes over, the Gradle
+approved by the leader 2026-11-13). Its stderr may not show a missing-metadata error
+(`NoSuchFieldError`, `NoSuchMethodError`, `NoClassDefFoundError`, `Missing...RegistrationError`); the JNI
+entry for `java.awt.Event` was missing until #235. When the plugin takes over, the Gradle
 tasks become plugin configuration and only Gemstone-specific metadata stays here. Tracked in #191.
 
 ---
