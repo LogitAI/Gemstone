@@ -320,6 +320,10 @@ jobs:
           if (-not $title -or -not $alive) { exit 1 }
           if (-not $inputOk) { Write-Output "input check failed: typing before the click must change nothing, and after the click it must show in the input row only"; exit 1 }
           if (-not $reply) { Write-Output "chat check failed: no reply to 'native input check' was saved within 300 s"; exit 1 }
+          # Missing reachability metadata shows up as these errors on stderr even when the app keeps working
+          # (#235); the known JRootPane ComponentUI notice (oracle/graal#9284) is a java.lang.Error and not matched.
+          $missing = Select-String -Path native-smoke/stderr.log -Pattern 'NoSuchFieldError|NoSuchMethodError|NoClassDefFoundError|Missing\w*RegistrationError'
+          if ($missing) { Write-Output "missing native metadata:"; $missing | ForEach-Object { $_.Line }; exit 1 }
 
       - name: Upload the start-up logs and screenshot
         if: always()
