@@ -88,6 +88,10 @@ class ChatWebSocketClient(
     private val _events = MutableSharedFlow<ChatEvent>()
     val events: SharedFlow<ChatEvent> = _events.asSharedFlow()
 
+    /** True while something collects [events]; an event emitted with no collector is lost. */
+    internal val hasEventListener: Boolean
+        get() = _events.subscriptionCount.value > 0
+
     private val _state = MutableStateFlow<ChatState>(ChatState.Disconnected)
     val state: StateFlow<ChatState> = _state.asStateFlow()
 

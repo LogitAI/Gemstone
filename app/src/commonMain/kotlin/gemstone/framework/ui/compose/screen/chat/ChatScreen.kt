@@ -172,10 +172,10 @@ fun ChatScreen(screenWidth: Dp) {
                                 contentPadding = PaddingValues(Dimen.BIG_BUTTON_PADDING),
                                 elevation = ButtonDefaults.buttonElevation(1.dp),
                                 colors = ButtonColors(
-                                    containerColor = Color(0xFFFBFBFB),
-                                    contentColor = MaterialTheme.colorScheme.onSurface,
-                                    disabledContainerColor = Color(0xFFF9F9F9),
-                                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    containerColor = MaterialTheme.colorScheme.secondary,
+                                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                                    disabledContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+                                    disabledContentColor = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.5f)
                                 )
                             ) {
                                 Spacer(modifier = Modifier.height(14.dp))
@@ -455,10 +455,10 @@ fun MessageBubble(
             if (content.isNotBlank()) {
                 // A surface, not a button: a press on it starts a text selection (#202)
                 FluxSurface(
-                    color = Color(0xFFFBFBFB),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
                     shadowElevation = 0.4.dp,
-                    border = BorderStroke(1.4.dp, Color.White.copy(alpha = 0.9f)),
+                    border = BorderStroke(1.4.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)),
                     shape = MaterialTheme.shapes.medium,
                     contentPadding = PaddingValues(vertical = 10.dp, horizontal = 14.dp)
                 ) {
@@ -483,58 +483,16 @@ fun ChatGPTStyleStreaming(
     message: String,
     isStreaming: Boolean = false
 ) {
-    var cursorAlpha by remember { mutableStateOf(1f) }
-
-    val animatedAlpha by animateFloatAsState(
-        targetValue = if (isStreaming && cursorAlpha > 0.5f) 1f else 0.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "cursor_fade"
-    )
-
-    LaunchedEffect(isStreaming) {
-        while (isStreaming) {
-            delay(100)
-            cursorAlpha = if (cursorAlpha > 0.5f) 0.3f else 1f
-        }
-    }
-
-    val styledText = buildAnnotatedString {
-        parseAdvancedMarkdown(this, message)
-
-        if (isStreaming) {
-            pushStyle(SpanStyle(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = animatedAlpha),
-                fontSize = 16.sp
-            ))
-            append("█")
-            pop()
-        }
-    }
-
-    Text(
-        text = styledText,
-        fontFamily = SuiteFontFamily,
-        fontWeight = FontWeight.Light,
-        fontSize = 15.sp,
-        color = MaterialTheme.colorScheme.primary
+    val blocks = remember(message) { parseMarkdownBlocks(message) }
+    MarkdownBlocksView(
+        blocks = blocks,
+        textColor = MaterialTheme.colorScheme.primary,
+        trailingCursor = if (isStreaming) "█" else null
     )
 }
 
 fun parseAdvancedMarkdown(builder: AnnotatedString.Builder, text: String) {
-    val boldRegex = """\*\*(.*?)\*\*""".toRegex()
-    var lastIndex = 0
-
-    boldRegex.findAll(text).forEach { match ->
-        builder.append(text.substring(lastIndex, match.range.first))
-        builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-        builder.append(match.groupValues[1])
-        builder.pop()
-        lastIndex = match.range.last + 1
-    }
-    builder.append(text.substring(lastIndex))
+    parseInlineMarkdownInto(builder, text)
 }
 
 @Composable
@@ -543,8 +501,6 @@ fun StreamingMarkdownText(
     isStreaming: Boolean = false
 ) {
     var cursorVisible by remember { mutableStateOf(true) }
-    val fontFamily = SuiteFontFamily
-    val textColor = MaterialTheme.colorScheme.primary
 
     LaunchedEffect(isStreaming) {
         if (isStreaming) {
@@ -557,86 +513,23 @@ fun StreamingMarkdownText(
         }
     }
 
-    val annotatedString = remember(text, isStreaming, cursorVisible) {
-        buildAnnotatedString {
-            if (isStreaming) {
-                parseSimpleMarkdownInto(this, text)
-            } else {
-                parseAdvancedMarkdownInto(this, text)
-            }
-
-            if (isStreaming && cursorVisible) {
-                pushStyle(SpanStyle(
-                    fontFamily = fontFamily,
-                    fontWeight = FontWeight.Light,
-                    fontSize = 15.sp,
-                    color = textColor
-                ))
-                append("●")
-                pop()
-            } else if (isStreaming) {
-                append(" ")
-            }
-        }
+    val blocks = remember(text) { parseMarkdownBlocks(text) }
+    val cursor = when {
+        !isStreaming -> null
+        cursorVisible -> "●"
+        else -> " "
     }
-
-    Text(
-        text = annotatedString,
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Light,
-        fontSize = 15.sp,
-        color = textColor,
-        lineHeight = 22.sp
+    MarkdownBlocksView(
+        blocks = blocks,
+        textColor = MaterialTheme.colorScheme.primary,
+        trailingCursor = cursor
     )
 }
 
 fun parseSimpleMarkdownInto(builder: AnnotatedString.Builder, text: String) {
-    val boldRegex = """\*\*(.*?)\*\*""".toRegex()
-    var lastIndex = 0
-
-    boldRegex.findAll(text).forEach { match ->
-        builder.append(text.substring(lastIndex, match.range.first))
-        builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-        builder.append(match.groupValues[1])
-        builder.pop()
-        lastIndex = match.range.last + 1
-    }
-    builder.append(text.substring(lastIndex))
+    parseInlineMarkdownInto(builder, text)
 }
 
 fun parseAdvancedMarkdownInto(builder: AnnotatedString.Builder, text: String) {
-    val boldRegex = """\*\*(.*?)\*\*""".toRegex()
-    val italicRegex = """\*(.*?)\*""".toRegex()
-    val codeRegex = """`(.*?)`""".toRegex()
-
-    val patterns = listOf(
-        boldRegex to SpanStyle(fontWeight = FontWeight.Bold),
-        italicRegex to SpanStyle(fontStyle = FontStyle.Italic),
-        codeRegex to SpanStyle(
-            fontFamily = FontFamily.Monospace,
-            background = Color.Gray.copy(alpha = 0.2f)
-        )
-    )
-
-    val matches = mutableListOf<Triple<IntRange, String, SpanStyle>>()
-
-    patterns.forEach { (regex, style) ->
-        regex.findAll(text).forEach { match ->
-            matches.add(Triple(match.range, match.groupValues[1], style))
-        }
-    }
-
-    matches.sortBy { it.first.first }
-
-    var lastIndex = 0
-    matches.forEach { (range, content, style) ->
-        if (range.first >= lastIndex) {
-            builder.append(text.substring(lastIndex, range.first))
-            builder.pushStyle(style)
-            builder.append(content)
-            builder.pop()
-            lastIndex = range.last + 1
-        }
-    }
-    builder.append(text.substring(lastIndex))
+    parseInlineMarkdownInto(builder, text)
 }

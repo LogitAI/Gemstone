@@ -15,6 +15,8 @@ import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 
 @Serializable
@@ -117,6 +119,7 @@ object ChatViewModel {
 
     // History size when the turn in flight started: a failed turn drops what it added from here
     private var turnStart = 0
+    private var turnStartMark: TimeMark? = null
     // The saved chat on screen; null until a new chat's first reply completes (SPEC S2.6)
     private var currentChatId: String? = null
 
@@ -141,8 +144,14 @@ object ChatViewModel {
         coroutineScope.launch { block() }
     }
 
-    fun initialize() {
-        // Called again while no session exists (server down): collecting twice would double every event
+    // Collect the client's events from the first use on, not from the first prompt: a session opened by
+    // selecting a model (S2.5) must get its reply too, and a SharedFlow drops what nobody collects (#233).
+    init {
+        initialize()
+    }
+
+    private fun initialize() {
+        // Collecting twice would double every event
         if (observing) return
         observing = true
         observeClientEvents()
@@ -317,6 +326,15 @@ object ChatViewModel {
                             isResponding = false
                         )
                         saveCurrentChat()
+                        val elapsed = maxOf(
+                            currentMessage.thoughtElapsed,
+                            turnStartMark?.elapsedNow()?.inWholeMilliseconds?.div(1000f) ?: 0f
+                        )
+                        turnStartMark = null
+                        NotificationViewModel.notifyReplyCompleted(
+                            _uiState.value.title.ifEmpty { currentMessage.user },
+                            elapsed
+                        )
                     }
 
                     is ChatEvent.ErrorOccurred -> failTurn(event.error)
@@ -386,10 +404,10 @@ object ChatViewModel {
                         AIModelViewModel.selectedAIModelDescription = "Server Not Available"
                     }
                 }
-                initialize()
             }
 
             turnStart = chatHistory.size
+            turnStartMark = TimeSource.Monotonic.markNow()
             val result = webSocketClient.sendMessage(messageInput, chatHistory)
             if (result.isFailure) {
                 failTurn("Failed to send message: ${result.exceptionOrNull()?.message}")
