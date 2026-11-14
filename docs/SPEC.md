@@ -939,7 +939,7 @@ Depends on S3.1. Today every chat goes through the server. Tracked in #190.
 
 No code. The meaning of sync is an open question in `INTENT.md` § 5. Tracked in #167.
 
-### S3.4 Native desktop executable (GraalVM native-image): `planned` · G8
+### S3.4 Native desktop executable (GraalVM native-image): `partial` · G8
 
 Managed long-term by `compose-multiplatform-extended` (decided 2026-10-02). That plugin has no code
 yet, so Gemstone keeps its own path in the meantime (on `develop` since #71): Gradle tasks `generateNativeResourceConfig`,

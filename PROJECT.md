@@ -13,7 +13,7 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 모든 플랫폼에서 같은 클라이언트로 쓰는 오픈소스 AI 채팅 시스템. 지금은 Python 서버가 모델을 돌리고,
 목표는 Python Multiplatform 으로 모델을 **앱 안에서** 돌리는 것이다.
 
-## 2. 현재 상태 (2026-10-17, develop 기준)
+## 2. 현재 상태 (2026-11-14, develop 기준)
 
 `api/tests/` 의 Python 테스트는 CI(GitHub Actions)에서 실제 모델(SmolLM2-135M, float32)로 돈다. 표에서
 "테스트 있음"은 그 검증을 뜻하고, 나머지는 코드를 읽고 판정했다.
@@ -37,7 +37,7 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 | 설정 화면 | 구현 | 서버 주소와 API 키 대화상자(#166). 키는 플랫폼 보안 저장소에 둔다. 사용자 이름은 아직 하드코딩 |
 | 도메인 계층(Clean Architecture) | 계획 | 빈 파일 |
 | 온디바이스 추론 · 오프라인 · 동기화 | 계획 | 코드 없음. 온디바이스는 #42, 오프라인은 #190, 동기화는 #167 |
-| 네이티브 데스크톱 (GraalVM) | 계획 (SPEC S3.4) | Windows x64 빌드 경로는 develop 에 있으나(#71) 네이티브 빌드는 실행해 본 적이 없다. 장기적으로 compose-multiplatform-extended 가 관리 (#191) |
+| 네이티브 데스크톱 (GraalVM) | 부분 (SPEC S3.4) | Windows x64 전용. CI(`native-desktop` 잡, #231/#232/#234/#236)가 매 develop 푸시마다 `:app:nativeDist`를 빌드하고 창 열기·입력·채팅 응답 저장과 JNI 메타데이터 오류 없음을 검증한다. 장기적으로 compose-multiplatform-extended 가 관리 (#191) |
 | Kotlin 테스트 | 부분 | 서버 주소, 모델 목록 파싱, 종료 코드 매핑은 테스트 있음(CI). 화면과 뷰모델은 테스트 없음 |
 | GPU(CUDA) 추론 | 계획 (M4) | 엔진 기본값은 `device="cpu"`. torchnative CUDA 는 실행해 본 적이 없다 (#164) |
 | free-threaded 3.15t (torchnative) | 부분 | 표준 인터프리터로 정했다(#177, #188). torchnative 0.1.0b6 의 import 가 GIL 을 다시 켠다. cp315t wheel 이 없는 의존성은 CI 가 소스에서 빌드한다(#178) |
@@ -163,7 +163,7 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 | 빠른 paged attention 커널 | 완전히 새로 만들어야 하는 torchnative 커널이다(TN-M2). 11월에는 순수 torch op 경로로 정확성만 맞춘다 | #74 |
 | 4비트(Q4) 가중치, GGUF 가져오기 | torchnative Q4_0 의 생성 품질이 떨어진다(logit RMS 29.5%). GGUF 리더도 없다(TN-M3). 11월에는 q8_0 만 낸다 | #67 |
 | ~~여러 모델 동시 상주와 축출, 나머지 Ollama 명령(create/copy/push, Modelfile, embeddings)~~ | **구현함**(develop 반영, 010e78f). 상주 모델 수 3개(`GEMSTONE_MAX_LOADED_MODELS`)와 메모리 한도, 사용 중이 아닌 모델의 LRU 축출, copy·create(system·parameters)·embed. push 는 501, Modelfile·template 은 지원하지 않는다 | #75 |
-| 세션 프리픽스 캐시 | 체감 속도는 좋아지지만 정확성 기능은 아니다 | #37 |
+| ~~세션 프리픽스 캐시~~ | **구현함**(develop 반영, 529f29a). WebSocket 앱 채팅(S1.4)에서 세션별 `DynamicCache` 공통 프리픽스를 `cache.crop()`으로 재사용한다 | #211 |
 | Qwen3 4B 이상과 8B 이상 모델 | Qwen3 은 0.6B 부터 검증한다(torchnative #23). 4비트가 없으면 큰 모델은 메모리 부담이 크다 | - |
 | CUDA 서버 경로 | torchnative CUDA 는 연결만 돼 있고 실행해 본 적이 없다 | #164 |
 
