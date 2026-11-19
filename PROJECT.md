@@ -20,7 +20,7 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 
 | 영역 | 상태 | 근거 |
 |---|---|---|
-| 단일 서빙 엔진 (transformers) | 구현, 테스트 있음 | `engine.py` (#85). torchnative 0.1.0b8(3.15.2t)에서 `sys._is_gil_enabled() == False`이고 단독(exclusive) 생성은 잘 되며, 연속 배칭 뷰 `index_copy_` 병목(`thisisthepy/torchnative#254`, PR #338)은 torchnative에서 고쳐졌고 `0.1.0b9` 릴리스를 기다린다(#84, #177) |
+| 단일 서빙 엔진 (transformers) | 구현, 테스트 있음 | `engine.py` (#85). torchnative 0.1.0b8(3.15.2t)에서 `sys._is_gil_enabled() == False`이고 단독(exclusive) 생성은 잘 되며, 모든 0.1.0b6 `torch._C` shim 거부(`triu_`, `nansum`, `Generator.get_state`; `thisisthepy/torchnative#115`)는 `thisisthepy/torchnative#117` (`58bd28a7`)을 통해 해결되어 `torchnative 0.1.0b7` 및 `0.1.0b8`에 포함되었다. 연속 배칭 뷰 `index_copy_` 병목(`thisisthepy/torchnative#254`, PR #338)은 torchnative에서 고쳐졌고 `0.1.0b9` 릴리스를 기다린다(#84, #177) |
 | 연속 배칭 · 페이지드 KV 캐시 | 구현, 테스트 있음 | `engine.py` (#91). 동일성 기준은 float32. 처리량 측정과 torchnative 검증은 남음 |
 | 모델 상주 (앱 · OpenAI · Ollama 공유, keep_alive, 여러 모델과 LRU 축출) | 구현, 테스트 있음 | `registry.py`, `leases.py` (#92, #94, #75) |
 | OpenAI 호환 API (`/v1`, tool call pass-through) | 부분, 테스트 있음 | `openai_api.py` (#88). n>1, logprobs, embeddings 없음 |

@@ -359,11 +359,13 @@ SmolLM2-135M. Still open for M1: the same tests on torchnative (cpu, mps) once t
 lands (2026-10-24). On torchnative 0.1.0b6 (run 39023653125), 412 tests passed, 19 failed (`triu_`, `nansum`,
 `Generator.get_state`), and `import torch` re-enabled the GIL.
 On torchnative 0.1.0b8 (free-threaded 3.15.2t, runs 43279615254 and 43290335531),
-`sys._is_gil_enabled()` is `False` and exclusive generation works (`triu_` fixed), while continuous
+`sys._is_gil_enabled()` is `False` and exclusive generation works; all three `0.1.0b6` shim gaps
+(`triu_`/`tril_`, `nansum`/`nanmean`, `Generator.get_state`/`set_state`; `thisisthepy/torchnative#115`)
+were fixed in `thisisthepy/torchnative#117` (`58bd28a7`) and shipped in `0.1.0b7` and `0.1.0b8`, while continuous
 batching timed out at 45 min because in-place `index_copy_` into a slice view of transformers'
 shared KV buffer cost `O(base buffer)` (444 ms per call vs 0.002 ms on upstream PyTorch, ~27 s/token).
-That bottleneck is fixed in `thisisthepy/torchnative#254` (PR #338), and full verification of `#177` /
-`#84` awaits the `torchnative 0.1.0b9` release.
+That bottleneck is fixed in `thisisthepy/torchnative#254` (PR #338, awaiting `torchnative 0.1.0b9`), and full verification of `#177` /
+`#84` awaits that release.
 
 The 2026-10-02 proposal, now implemented (#85, #91) and awaiting verification on torchnative: the engine is transformers 5.x continuous batching with a paged KV
 cache, kernels live in torchnative, and the engine uses only the public `torch` / `transformers`
