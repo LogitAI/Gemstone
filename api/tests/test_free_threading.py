@@ -180,3 +180,50 @@ def test_ft3_ollama_stream_concurrent_next_and_close_releases_lease_once():
             errors.append(f"Lease released {lease.release_count} times instead of 1")
 
     assert errors == [], f"FT3 lease release failures: {errors}"
+
+
+def test_ft4_locked_tokenizer_isolates_concurrent_truncation_and_max_length():
+    from api.src.main.engine import _LockedTokenizer
+
+    class FakeTokenizerFast:
+        def __init__(self):
+            self._truncation_max_length = None
+
+        def __call__(self, text, truncation=False, max_length=None, **kwargs):
+            if truncation and max_length is not None:
+                self._truncation_max_length = max_length
+                time.sleep(0.0001)  # yield thread to allow race if unlocked
+                actual_len = self._truncation_max_length
+                # slice tokens based on actual_len
+                tokens = list(range(20))
+                return {"input_ids": tokens[:actual_len]}
+            return {"input_ids": list(range(20))}
+
+    raw = FakeTokenizerFast()
+    lock = threading.Lock()
+    locked = _LockedTokenizer(raw, lock)
+
+    errors = []
+    barrier = threading.Barrier(12)
+    lengths = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26]
+
+    def worker(target_len):
+        try:
+            barrier.wait(timeout=5)
+            for _ in range(100):
+                res = locked("test input", truncation=True, max_length=target_len)
+                ids = res["input_ids"]
+                if len(ids) != target_len:
+                    errors.append(f"Expected length {target_len}, got {len(ids)}")
+        except BaseException as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker, args=(l,)) for l in lengths]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+
+    assert not any(t.is_alive() for t in threads), "tokenizer concurrency test threads deadlocked"
+    assert errors == [], f"FT4 tokenizer isolation errors: {errors}"
+
