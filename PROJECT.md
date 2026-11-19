@@ -13,14 +13,14 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 모든 플랫폼에서 같은 클라이언트로 쓰는 오픈소스 AI 채팅 시스템. 지금은 Python 서버가 모델을 돌리고,
 목표는 Python Multiplatform 으로 모델을 **앱 안에서** 돌리는 것이다.
 
-## 2. 현재 상태 (2026-11-14, develop 기준)
+## 2. 현재 상태 (2026-11-19, develop 기준)
 
 `api/tests/` 의 Python 테스트는 CI(GitHub Actions)에서 실제 모델(SmolLM2-135M, float32)로 돈다. 표에서
 "테스트 있음"은 그 검증을 뜻하고, 나머지는 코드를 읽고 판정했다.
 
 | 영역 | 상태 | 근거 |
 |---|---|---|
-| 단일 서빙 엔진 (transformers) | 구현, 테스트 있음 | `engine.py` (#85). torchnative 위 검증은 TN-M1(10-24) 이후 (#84). torchnative 0.1.0b6 에서는 생성이 실패한다(§6.4, #177) |
+| 단일 서빙 엔진 (transformers) | 구현, 테스트 있음 | `engine.py` (#85). torchnative 0.1.0b8(3.15.2t)에서 `sys._is_gil_enabled() == False`이고 단독(exclusive) 생성은 잘 되며, 연속 배칭 뷰 `index_copy_` 병목(`thisisthepy/torchnative#254`, PR #338)은 torchnative에서 고쳐졌고 `0.1.0b9` 릴리스를 기다린다(#84, #177) |
 | 연속 배칭 · 페이지드 KV 캐시 | 구현, 테스트 있음 | `engine.py` (#91). 동일성 기준은 float32. 처리량 측정과 torchnative 검증은 남음 |
 | 모델 상주 (앱 · OpenAI · Ollama 공유, keep_alive, 여러 모델과 LRU 축출) | 구현, 테스트 있음 | `registry.py`, `leases.py` (#92, #94, #75) |
 | OpenAI 호환 API (`/v1`, tool call pass-through) | 부분, 테스트 있음 | `openai_api.py` (#88). n>1, logprobs, embeddings 없음 |
@@ -37,10 +37,10 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 | 설정 화면 | 구현 | 서버 주소와 API 키 대화상자(#166). 키는 플랫폼 보안 저장소에 둔다. 사용자 이름은 아직 하드코딩 |
 | 도메인 계층(Clean Architecture) | 계획 | 빈 파일 |
 | 온디바이스 추론 · 오프라인 · 동기화 | 계획 | 코드 없음. 온디바이스는 #42, 오프라인은 #190, 동기화는 #167 |
-| 네이티브 데스크톱 (GraalVM) | 부분 (SPEC S3.4) | Windows x64 전용. CI(`native-desktop` 잡, #231/#232/#234/#236)가 매 develop 푸시마다 `:app:nativeDist`를 빌드하고 창 열기·입력·채팅 응답 저장과 JNI 메타데이터 오류 없음을 검증한다. 장기적으로 compose-multiplatform-extended 가 관리 (#191) |
+| 네이티브 데스크톱 (GraalVM) | 부분 (SPEC S3.4) | Windows x64 전용. CI(`native-desktop` 잡, #231/#232/#234/#236)가 test.yml 실행 시(2026-11-14 CI 정책에 따라 수동 dispatch, #239) `:app:nativeDist`를 빌드하고 창 열기·입력·채팅 응답 저장과 JNI 메타데이터 오류 없음을 검증한다(compose-multiplatform-extended 플러그인 인계만 남음, #191) |
 | Kotlin 테스트 | 부분 | 서버 주소, 모델 목록 파싱, 종료 코드 매핑은 테스트 있음(CI). 화면과 뷰모델은 테스트 없음 |
 | GPU(CUDA) 추론 | 계획 (M4) | 엔진 기본값은 `device="cpu"`. torchnative CUDA 는 실행해 본 적이 없다 (#164) |
-| free-threaded 3.15t (torchnative) | 부분 | 표준 인터프리터로 정했다(#177, #188). torchnative 0.1.0b6 의 import 가 GIL 을 다시 켠다. cp315t wheel 이 없는 의존성은 CI 가 소스에서 빌드한다(#178) |
+| free-threaded 3.15t (torchnative) | 부분 | 표준 인터프리터로 정했다(#177, #188). torchnative 0.1.0b8 에서 `sys._is_gil_enabled() == False` 이고, `hf-xet` 은 직접 의존성에서 제거되었으며(#242) cp315t wheel 이 없는 5개 패키지(`psutil`, `pyyaml`, `safetensors`, `tokenizers`, `hf-xet`)는 `test-torchnative.yml` 이 소스에서 빌드해 캐시한다(#178). `uv.lock` 은 `transformers 5.23.0` 까지 판올림했다(#241) |
 
 ## 3. 구조
 
@@ -122,6 +122,7 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
      실패는 모두 torchnative 의 `torch._C` shim 에 없는 op 다(`triu_`, `nansum`, `Generator.get_state`).
      `triu_` 가 연속 배칭의 마스크 생성을 막아 모든 생성이 실패한다. `import torch` 는 GIL 을 다시 켠다.
      수정은 torchnative 몫이다(#177).
+   - torchnative 0.1.0b8 (3.15.2t) 상태: GIL False, 단독 생성 통과, 연속 배칭 index_copy_ 뷰 병목은 thisisthepy/torchnative#254 / PR #338에서 수정되었으며 0.1.0b9 릴리스 대기 중.
    - 처리량 측정(`benchmarks/batching_throughput.py`)은 아직 돌리지 않았다.
 5. **Python 테스트의 위치**: 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산도
    `api/src/test/` 에서 `api/src/main/{static,webpack}/` 로 옮겼다(#83).

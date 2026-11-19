@@ -58,13 +58,14 @@ names the pull request that resolved it.
 
 Importing an extension module that does not declare `Py_mod_gil` (`Py_MOD_GIL_NOT_USED`) turns the
 GIL back on for the whole process, with a `RuntimeWarning`. To check (cannot be verified on 3.13):
-tokenizers, hf-xet, psutil, pyyaml, safetensors, torchnative, and the other compiled packages in the
+tokenizers, psutil, pyyaml, safetensors, torchnative (and `hf-xet` as a transitive dependency of
+`huggingface-hub`, dropped from direct dependencies in #242), and the other compiled packages in the
 current environment: torch, numpy, regex, pydantic-core, markupsafe, charset-normalizer, websockets
 (plus httptools and uvloop if `uvicorn[standard]` is installed).
 
-Measured on torchnative 0.1.0b6 (CI run 39023653125, #177): `import torch` prints "The global
-interpreter lock (GIL) has been enabled to load module 'torch._C'", so the 3.15t run holds the GIL.
-torchnative's extension does not declare `Py_mod_gil`; the fix belongs to torchnative.
+Measured on torchnative 0.1.0b8 with CPython 3.15.2t (CI runs 43279615254 and 43290335531): `import torch`
+and all 5 source-built extensions (`psutil`, `pyyaml`, `safetensors`, `tokenizers`, `hf-xet`) keep
+`sys._is_gil_enabled() == False`.
 
 At runtime: `sys._is_gil_enabled()` tells whether the GIL is on after the imports;
 `PYTHON_GIL=0` or `python -X gil=0` forces it off even for undeclared modules (then the code above

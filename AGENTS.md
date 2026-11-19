@@ -252,13 +252,16 @@ GEMSTONE_TEST_DEVICE=mps uv run --extra torch pytest -m real_model   # the real-
 ```
 
 The tests run on torchnative (free-threaded 3.15t) in the non-blocking `.github/workflows/test-torchnative.yml`
-(manual, with torchnative version and Python inputs, and weekly; `-rs` lists skips). There a test marked `needs_batching`
+(manual dispatch, with torchnative version and Python inputs; `-rs` lists skips). There a test marked `needs_batching`
 (`engine.batching` is False; the reason is `engine.batching_unavailable`) or `needs_quantization`
 (`torchnative.quant` lacks `TorchnativeConfig` / q8_0) skips with a reason naming that capability and
 the torchnative version, and `torchnative_only` tests (q8_0 engine) exist only there. On upstream
 PyTorch nothing skips and `torchnative_only` tests are not collected (`api/tests/test_substrate.py`).
 Any other failure on torchnative is a real failure. On torchnative 0.1.0b6 generation fails, because its
-`torch._C` shim lacks `triu_`, `nansum` and `Generator.get_state`; the fix belongs to torchnative (#177).
+`torch._C` shim lacks `triu_`, `nansum` and `Generator.get_state` (the fix belongs to torchnative, #177),
+while on torchnative 0.1.0b8 `sys._is_gil_enabled()` is `False` and exclusive generation works, and
+continuous-batching `index_copy_` view bottleneck is fixed in `thisisthepy/torchnative#254` (awaiting
+`0.1.0b9`).
 
 The tests load a real model. `GEMSTONE_TEST_MODEL` picks it (default `HuggingFaceTB/SmolLM2-135M`);
 it is read from the local Hugging Face cache and never downloaded unless
@@ -286,8 +289,8 @@ Verification follows rule 8: redirect Gradle output to a file and read `$?`; run
 task as its own invocation; delete `app/build/test-results/` before counting.
 
 CI runs the Python tests, the quick-start check, `:app:desktopTest` with `:app:compileKotlinWasmJs`,
-and the web bundle check on every push to `develop` and on demand (`workflow_dispatch`), not on pull
-requests (#175). They are the jobs `pytest`, `quickstart`, `gradle`, `web-bundle` and `native-desktop` of
+and the web bundle check on demand (`workflow_dispatch`, owner policy 2026-11-14, #239/#240), not on
+push, schedule or pull requests (#175). They are the jobs `pytest`, `quickstart`, `gradle`, `web-bundle` and `native-desktop` of
 `.github/workflows/test.yml`. `native-desktop` (windows-latest; owner approval 2026-11-13, #191) builds
 `:app:nativeDist` and checks that the executable opens its window, takes input and streams a chat reply (SmolLM2-135M-Instruct). A red `develop` is fixed forward by its own pull request. Test workflows are named `test.yml`, or
 `test-<target>.yml` only when their triggers or environment differ (`test-torchnative.yml`).
@@ -340,8 +343,8 @@ with a real failing test (rule 5).
   from Gemstone (`torch.library` is a no-op on torchnative); they belong in torchnative.
 - Python dependency versions are locked in the tracked `uv.lock` (#186). CI installs with `uv sync --locked`,
   so a run never takes an upstream release the lock has not been upgraded to. Change a dependency
-  with `uv add` / `uv lock` and commit the lock with it. `.github/workflows/lock-upgrade.yml` opens a
-  weekly pull request with `uv lock --upgrade`; upstream breakage shows up there, not on develop.
+  with `uv add` / `uv lock` and commit the lock with it. `.github/workflows/lock-upgrade.yml` (dispatched on demand, #239/#240) opens a
+  pull request with `uv lock --upgrade`; upstream breakage shows up there, not on develop.
   `test-torchnative.yml` still takes the newest torchnative pre-release (`--upgrade-package`).
 - Kotlin and library versions live in `gradle/libs.versions.toml`. Bump them there, not inline.
 - Example commands use `uv`, `ppp` or `tcl` only. Never write a `pip install` example (in docs,
