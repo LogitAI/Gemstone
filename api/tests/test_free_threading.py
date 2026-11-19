@@ -237,3 +237,59 @@ def test_ft4_locked_tokenizer_isolates_concurrent_truncation_and_max_length():
     locked_mismatches = run_workers(locked, n_threads=12, iters=50, lengths=lengths)
     assert locked_mismatches == [], f"FT4 tokenizer isolation errors: {locked_mismatches}"
 
+
+def test_ft8_tool_sessions_are_thread_local_with_consistent_headers():
+    from api.src.main.utils.weather import WeatherAPI
+    from api.src.main.utils.calendar import CalendarAPI
+    from api.src.main.utils.currency import CurrencyAPI
+    from api.src.main.utils.web_search import WebSearchAPI
+
+    tools = [
+        WeatherAPI(),
+        CalendarAPI(),
+        CurrencyAPI(),
+        WebSearchAPI(),
+    ]
+
+    for tool in tools:
+        main_s1 = tool.session
+        main_s2 = tool.session
+        assert main_s1 is main_s2
+
+        main_id = id(main_s1)
+        main_headers = dict(main_s1.headers)
+        main_adapters = sorted(main_s1.adapters.keys())
+
+        results = []
+        barrier = threading.Barrier(8)
+
+        def worker():
+            try:
+                barrier.wait(timeout=5)
+                s1 = tool.session
+                s2 = tool.session
+                assert s1 is s2
+                results.append((id(s1), dict(s1.headers), sorted(s1.adapters.keys())))
+            except BaseException as e:
+                results.append(e)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(10)
+
+        for res in results:
+            assert not isinstance(res, BaseException), f"Worker failed: {res}"
+
+        session_ids = [r[0] for r in results]
+        # Verify 8 distinct session instances, all different from main thread session
+        assert len(set(session_ids)) == 8
+        assert main_id not in session_ids
+
+        # Verify headers and adapters are identical across all threads
+        for sid, headers, adapters in results:
+            assert headers == main_headers
+            assert adapters == main_adapters
+
+

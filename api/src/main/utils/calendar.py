@@ -9,12 +9,22 @@ class CalendarAPI:
     
     def __init__(self):
         """Initialize Calendar API client."""
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        })
+        self._local = threading.local()
         # Using date.nager.at (completely free, no API key required)
         self.base_url = "https://date.nager.at/api/v3"
+
+    def _make_session(self) -> requests.Session:
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        })
+        return session
+
+    @property
+    def session(self) -> requests.Session:
+        if not hasattr(self._local, "session"):
+            self._local.session = self._make_session()
+        return self._local.session
     
     def get_holidays_data(self, country: str, year: int, month: int = None) -> Dict[str, Any]:
         """

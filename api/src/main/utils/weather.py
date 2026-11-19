@@ -9,12 +9,22 @@ class WeatherAPI:
     
     def __init__(self):
         """Initialize Weather API client."""
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        })
+        self._local = threading.local()
         self.base_url = "https://api.open-meteo.com/v1"
         self.geocoding_url = "https://geocoding-api.open-meteo.com/v1/search"
+
+    def _make_session(self) -> requests.Session:
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        })
+        return session
+
+    @property
+    def session(self) -> requests.Session:
+        if not hasattr(self._local, "session"):
+            self._local.session = self._make_session()
+        return self._local.session
     
     def get_coordinates(self, location: str) -> Dict[str, Any]:
         """
