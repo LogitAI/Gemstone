@@ -10,7 +10,6 @@ dependencies = [
     "uvicorn>=0.34.2",
     "fastapi>=0.115.12",
     "websockets>=15.0.1",
-    "hf-xet>=1.1.2",
     "bs4>=0.0.2",
     "serpapi>=0.1.5",
     "python-dotenv>=1.1.0",
