@@ -180,3 +180,60 @@ def test_ft3_ollama_stream_concurrent_next_and_close_releases_lease_once():
             errors.append(f"Lease released {lease.release_count} times instead of 1")
 
     assert errors == [], f"FT3 lease release failures: {errors}"
+
+
+def test_ft4_locked_tokenizer_isolates_concurrent_truncation_and_max_length():
+    from api.src.main.engine import _LockedTokenizer
+
+    class FakeTokenizerFast:
+        def __init__(self, overlap_barrier=None):
+            self._truncation_max_length = None
+            self._overlap_barrier = overlap_barrier
+
+        def __call__(self, text, truncation=False, max_length=None, **kwargs):
+            if truncation and max_length is not None:
+                self._truncation_max_length = max_length
+                if self._overlap_barrier is not None:
+                    self._overlap_barrier.wait(timeout=5)
+                else:
+                    time.sleep(0.0001)  # yield thread to allow race if unlocked
+                actual_len = self._truncation_max_length
+                tokens = list(range(30))
+                return {"input_ids": tokens[:actual_len]}
+            return {"input_ids": list(range(30))}
+
+    def run_workers(tok, n_threads, iters, lengths):
+        mismatches = []
+        barrier = threading.Barrier(n_threads)
+
+        def worker(target_len):
+            try:
+                barrier.wait(timeout=5)
+                for _ in range(iters):
+                    res = tok("test input", truncation=True, max_length=target_len)
+                    ids = res["input_ids"]
+                    if len(ids) != target_len:
+                        mismatches.append(f"Expected length {target_len}, got {len(ids)}")
+            except BaseException as e:
+                mismatches.append(e)
+
+        threads = [threading.Thread(target=worker, args=(l,)) for l in lengths]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(10)
+        assert not any(t.is_alive() for t in threads), "tokenizer concurrency test threads deadlocked"
+        return mismatches
+
+    # Deterministic control: barrier between setting and reading _truncation_max_length guarantees
+    # at least one thread observes another thread's max_length even on a GIL build.
+    control_tok = FakeTokenizerFast(overlap_barrier=threading.Barrier(2))
+    unlocked_mismatches = run_workers(control_tok, n_threads=2, iters=1, lengths=[4, 20])
+    assert unlocked_mismatches, "control check expected unlocked tokenizer to leak max_length across threads"
+
+    # Under _LockedTokenizer, every thread receives its own exact max_length (no barrier inside lock).
+    locked = _LockedTokenizer(FakeTokenizerFast(), threading.Lock())
+    lengths = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26]
+    locked_mismatches = run_workers(locked, n_threads=12, iters=50, lengths=lengths)
+    assert locked_mismatches == [], f"FT4 tokenizer isolation errors: {locked_mismatches}"
+

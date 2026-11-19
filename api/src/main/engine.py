@@ -58,6 +58,49 @@ PAGED_ATTENTION = {
 _GREEDY = dict(temperature=1.0, top_k=0, top_p=1.0, min_p=0.0, seed=-1)
 
 
+class _LockedTokenizer:
+    """
+    Thread-safe proxy for a Hugging Face tokenizer.
+    Acquires `lock` only around individual tokenizer method calls (`__call__`, `encode`, `decode`,
+    `apply_chat_template`, `batch_decode`, `convert_tokens_to_ids`, `convert_ids_to_tokens`),
+    and delegates attribute reads directly to the underlying tokenizer via `__getattr__`.
+    """
+    def __init__(self, tokenizer: Any, lock: threading.Lock):
+        object.__setattr__(self, "_tokenizer", tokenizer)
+        object.__setattr__(self, "_lock", lock)
+
+    def __call__(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer(*args, **kwargs)
+
+    def encode(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.encode(*args, **kwargs)
+
+    def decode(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.decode(*args, **kwargs)
+
+    def apply_chat_template(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.apply_chat_template(*args, **kwargs)
+
+    def batch_decode(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.batch_decode(*args, **kwargs)
+
+    def convert_tokens_to_ids(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.convert_tokens_to_ids(*args, **kwargs)
+
+    def convert_ids_to_tokens(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.convert_ids_to_tokens(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._tokenizer, name)
+
+
 class Engine:
     """
     Loads one causal LM and streams chat completions from it.
@@ -107,7 +150,9 @@ class Engine:
             model_kwargs["quantization_config"] = _quantization_config(quantization)
 
         self.model_id = model_id
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id, **hub_kwargs)
+        raw_tokenizer = AutoTokenizer.from_pretrained(model_id, **hub_kwargs)
+        self._tokenizer_lock = threading.Lock()
+        self.tokenizer = _LockedTokenizer(raw_tokenizer, self._tokenizer_lock)
         self.model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs).to(device).eval()
         self.chat_template = chat_template
         self.context_length = context_length or getattr(self.model.config, "max_position_embeddings", None)
