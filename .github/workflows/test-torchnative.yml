@@ -22,6 +22,11 @@ on:
         description: "Python to run on (3.15t is the standard interpreter for torchnative; 3.13 for a GIL comparison)"
         required: false
         default: "3.15t"
+      measure:
+        description: "Run benchmarks/batching_throughput.py (1/2/4 concurrent requests, torchnative vs upstream torch) for #74 baseline"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -106,3 +111,26 @@ jobs:
 
       - name: Test
         run: uv run --no-sync pytest -v -m "real_model or not real_model" -rs
+
+      - name: Measure batching throughput (#74)
+        if: ${{ inputs.measure }}
+        run: |
+          {
+            echo "### Batching throughput baseline (#74)"
+            echo
+            echo "#### torchnative"
+            echo '```'
+            for c in 1 2 4; do
+              uv run --no-sync python benchmarks/batching_throughput.py --concurrency "$c" --tokens 64 --attn sdpa_paged
+            done
+            echo '```'
+            echo
+            echo "#### upstream PyTorch (3.13, CPU)"
+            echo '```'
+            uv venv --python 3.13 "$RUNNER_TEMP/upstream-venv"
+            UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/upstream-venv" uv sync --locked --python 3.13 --extra torch
+            for c in 1 2 4; do
+              UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/upstream-venv" uv run --no-sync python benchmarks/batching_throughput.py --concurrency "$c" --tokens 64 --attn sdpa_paged
+            done
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
