@@ -258,10 +258,11 @@ The tests run on torchnative (free-threaded 3.15t) in the non-blocking `.github/
 the torchnative version, and `torchnative_only` tests (q8_0 engine) exist only there. On upstream
 PyTorch nothing skips and `torchnative_only` tests are not collected (`api/tests/test_substrate.py`).
 Any other failure on torchnative is a real failure. On torchnative 0.1.0b6 generation fails, because its
-`torch._C` shim lacks `triu_`, `nansum` and `Generator.get_state` (the fix belongs to torchnative, #177),
-while on torchnative 0.1.0b8 `sys._is_gil_enabled()` is `False` and exclusive generation works, and
-continuous-batching `index_copy_` view bottleneck is fixed in `thisisthepy/torchnative#254` (awaiting
-`0.1.0b9`).
+`torch._C` shim lacks `triu_`, `nansum` and `Generator.get_state` (all three, along with `tril_`, `nanmean`
+and `Generator.set_state`, were fixed in `thisisthepy/torchnative#117` [`58bd28a7`] and are included in
+`torchnative 0.1.0b7` and `0.1.0b8`, tracked in `thisisthepy/torchnative#115`), while on torchnative 0.1.0b8
+`sys._is_gil_enabled()` is `False` and exclusive generation works, and the continuous-batching
+`index_copy_` view bottleneck is fixed in `thisisthepy/torchnative#254` (PR #338, awaiting `0.1.0b9`).
 
 The tests load a real model. `GEMSTONE_TEST_MODEL` picks it (default `HuggingFaceTB/SmolLM2-135M`);
 it is read from the local Hugging Face cache and never downloaded unless

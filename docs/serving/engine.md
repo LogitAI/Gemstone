@@ -126,4 +126,8 @@ torchnative. Confirm §2 or revise it from the result.
 
 First result (2026-10-17, torchnative 0.1.0b6, CI run 39023653125): generation fails, because the
 torchnative `torch._C` shim lacks `triu_` (transformers' continuous batching), `nansum` and
-`Generator.get_state`. The missing operators are reported on #177.
+`Generator.get_state`. The missing operators are reported on #177. All three missing operators
+(along with `tril_`, `nanmean` and `Generator.set_state`; `thisisthepy/torchnative#115`) were fixed in
+`thisisthepy/torchnative#117` (`58bd28a7`) and shipped in `torchnative 0.1.0b7` and `0.1.0b8`
+(`sys._is_gil_enabled() == False`, exclusive generation works). The remaining continuous-batching
+`index_copy_` slice-view bottleneck is fixed in `thisisthepy/torchnative#254` (PR #338, awaiting `0.1.0b9`).
