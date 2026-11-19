@@ -4,8 +4,7 @@ Compiles the desktop target to a standalone native executable: no JVM, no JDK on
 machine, no installer.
 
 Status: `partial` (`docs/SPEC.md` S3.4). The build path is on `develop` (#71) for Windows x64 only.
-CI builds it on every push to `develop`: job `native-desktop` of `.github/workflows/test.yml`
-(windows-latest, Temurin 21 for the Gradle daemon, GraalVM for JDK 22 for `nativeCompile`). The job
+CI builds it in job `native-desktop` of `.github/workflows/test.yml` (dispatched on demand, #239; windows-latest, Temurin 21 for the Gradle daemon, GraalVM for JDK 22 for `nativeCompile`). The job
 starts the executable and fails unless the "Gemstone AI" window opens and the process is still alive
 15 s later, and unless a click on the chat input field focuses it (text typed before the click must
 change nothing; text typed after it must appear in the input row and nowhere else). It then

@@ -295,9 +295,11 @@ Decided (2026-10-02):
 - The Python requirement is `>=3.13` (torchnative's floor). The standard interpreter is
   free-threaded CPython 3.15t on torchnative (decided 2026-10-17, #177); torchnative ships cp315t
   wheels from 0.1.0b6, and `--extra torchnative` installs its pre-release from PyPI. The upstream
-  PyTorch comparison stays on 3.13, because torch has no 3.15 wheels on macOS. Native dependencies
-  without cp315t wheels are tracked in #178. Only `test-torchnative.yml` builds them from source,
-  and it caches the built wheels.
+  PyTorch comparison stays on 3.13, because torch has no 3.15 wheels on macOS. The five native
+  dependencies without cp315t wheels (`psutil` as a direct dependency; `pyyaml`, `safetensors`,
+  `tokenizers` and `hf-xet` as transitive dependencies of `transformers` and `huggingface-hub`;
+  `hf-xet` was dropped from direct dependencies in #242) are tracked in #178, and only
+  `test-torchnative.yml` builds them from source and caches the built wheels.
 - vLLM is not a dependency: a consequence of the torchnative decision, because vLLM assumes the
   CUDA PyTorch runtime and cannot run on torchnative.
 
@@ -343,8 +345,7 @@ Implemented (#84), `api/src/main/engine.py`:
 - The substrate is chosen at install time: `uv sync --extra torch` (upstream PyTorch) or
   `--extra torchnative`.
 
-Capability-based skips: the CI job `.github/workflows/test-torchnative.yml` (manual with a
-torchnative version input, weekly, non-blocking) runs `api/tests` on torchnative. `conftest.py`
+Capability-based skips: the CI job `.github/workflows/test-torchnative.yml` (manual dispatch with torchnative version and Python inputs, non-blocking; schedule triggers were removed from development workflows on develop and main via #239 / #240) runs `api/tests` on torchnative. `conftest.py`
 detects the substrate (torchnative and its version, or upstream PyTorch). On torchnative only,
 `needs_batching` skips when `engine.batching` is False (reason: `engine.batching_unavailable` and the
 torchnative version; all of `test_batching.py` and the concurrent q8_0 test) and `needs_quantization`
@@ -355,11 +356,14 @@ skips when `torchnative.quant` has no `TorchnativeConfig` or q8_0 (`test_quantiz
 Tests: `api/tests/test_queue_budget.py` (fake tokenizer and batcher: the budget rule, the queue
 timeout and its 503 / 1013 mapping), `api/tests/test_engine.py`, `api/tests/test_server.py`, on upstream PyTorch with
 SmolLM2-135M. Still open for M1: the same tests on torchnative (cpu, mps) once torchnative TN-M1
-lands (2026-10-24). On torchnative 0.1.0b6 (free-threaded 3.15t, Linux CPU, CI run 39023653125)
-412 tests pass and 19 fail. Every failure is an op the torchnative `torch._C` shim lacks: `triu_`
-(used by transformers' continuous batching, so every generation fails), `nansum` (`typical_p`) and
-`Generator.get_state`. Importing torchnative also re-enables the GIL. The fix belongs to
-torchnative (#177).
+lands (2026-10-24). On torchnative 0.1.0b6 (run 39023653125), 412 tests passed, 19 failed (`triu_`, `nansum`,
+`Generator.get_state`), and `import torch` re-enabled the GIL.
+On torchnative 0.1.0b8 (free-threaded 3.15.2t, runs 43279615254 and 43290335531),
+`sys._is_gil_enabled()` is `False` and exclusive generation works (`triu_` fixed), while continuous
+batching timed out at 45 min because in-place `index_copy_` into a slice view of transformers'
+shared KV buffer cost `O(base buffer)` (444 ms per call vs 0.002 ms on upstream PyTorch, ~27 s/token).
+That bottleneck is fixed in `thisisthepy/torchnative#254` (PR #338), and full verification of `#177` /
+`#84` awaits the `torchnative 0.1.0b9` release.
 
 The 2026-10-02 proposal, now implemented (#85, #91) and awaiting verification on torchnative: the engine is transformers 5.x continuous batching with a paged KV
 cache, kernels live in torchnative, and the engine uses only the public `torch` / `transformers`
@@ -944,7 +948,7 @@ No code. The meaning of sync is an open question in `INTENT.md` § 5. Tracked in
 Managed long-term by `compose-multiplatform-extended` (decided 2026-10-02). That plugin has no code
 yet, so Gemstone keeps its own path in the meantime (on `develop` since #71): Gradle tasks `generateNativeResourceConfig`,
 `nativeCompile`, `nativeDist` and `metadataCopy`, plus `NativeRuntime.kt`, the reachability
-metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 only so far. CI builds it on every develop push (job `native-desktop` of `test.yml`, windows-latest,
+metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 only so far. CI builds it in the native-desktop job of test.yml (dispatched by hand per the 2026-11-14 CI policy, #239; windows-latest,
 GraalVM for JDK 22; added 2026-11-13 with the owner's approval): `:app:nativeDist` succeeds, and the
 job requires `app/build/dist/bin/gemstone.exe` to open its "Gemstone AI" window and still run 15 s
 later (first green run 43302411294: 108.3 MB executable), and that a click on the chat input field
