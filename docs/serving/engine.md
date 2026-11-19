@@ -131,3 +131,13 @@ torchnative `torch._C` shim lacks `triu_` (transformers' continuous batching), `
 `thisisthepy/torchnative#117` (`58bd28a7`) and shipped in `torchnative 0.1.0b7` and `0.1.0b8`
 (`sys._is_gil_enabled() == False`, exclusive generation works). The remaining continuous-batching
 `index_copy_` slice-view bottleneck is fixed in `thisisthepy/torchnative#254` (PR #338, awaiting `0.1.0b9`).
+
+### 7.1 Throughput baseline table (#74)
+
+Measured on CI run `44592107867` (commit `416a649`, runner `ubuntu26 20261111.82.6`, `Intel(R) Xeon(R) 6975P-C`, model `HuggingFaceTB/SmolLM2-135M`, float32, CPU, `--tokens 64`, `--attn sdpa_paged`, artifact `batching-throughput-baseline-44592107867`). Comparison between torchnative 0.1.0b9 (CPython 3.15.2t, GIL off) and upstream PyTorch 2.15.0+cpu (CPython 3.13.18):
+
+| Concurrency | torchnative (1 request / batched / exclusive) | upstream torch (1 request / batched / exclusive) |
+|---|---|---|
+| c=1 | 5.3 / 5.2 / 7.4 tok/s | 34.3 / 34.1 / 52.9 tok/s |
+| c=2 | 5.2 / 8.6 / 7.6 tok/s | 34.6 / 50.3 / 53.4 tok/s |
+| c=4 | 5.2 / 15.0 / 7.5 tok/s | 34.8 / 87.1 / 54.1 tok/s |

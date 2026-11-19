@@ -6,7 +6,7 @@ comparison stays on 3.13. Native wheels are tracked in #178. This file lists eve
 shared between threads or where code leans on the GIL, with a verdict for each. Line numbers are
 from `develop` at b55520e (2026-10-17). Third-party code was read in transformers 5.18.0.
 
-Verdicts: **safe** (locks or the design already cover it), **lock** (needs a lock), **test**
+Verdictal review and automated stress tests (`api/tests/test_free_threading.py` covering the GIL guard and FT1 through FT3 for issue #177). Verdicts: **safe** (locks or the design already cover it), **lock** (needs a lock), **test**
 (probably safe, needs a stress test on 3.15t), **upstream** (third-party, check upstream). **fixed**
 names the pull request that resolved it.
 
