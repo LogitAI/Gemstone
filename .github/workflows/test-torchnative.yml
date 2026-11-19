@@ -110,10 +110,11 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Test
+        id: test
         run: uv run --no-sync pytest -v -m "real_model or not real_model" -rs
 
       - name: Measure batching throughput (#74)
-        if: ${{ success() && inputs.measure }}
+        if: ${{ !cancelled() && inputs.measure }}
         run: |
           mkdir -p "$RUNNER_TEMP/bench-74"
           cpu_model=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs || echo "unknown")
@@ -121,6 +122,7 @@ jobs:
             echo "### Batching throughput baseline (#74)"
             echo
             echo "- run_id: ${{ github.run_id }}"
+            echo "- test_outcome: ${{ steps.test.outcome }}"
             echo "- commit: ${{ github.sha }}"
             echo "- runner: ${ImageOS:-unknown} / ${ImageVersion:-unknown}"
             echo "- cpu: $cpu_model"
@@ -148,6 +150,7 @@ jobs:
           dir_path = os.path.join(temp, "bench-74")
           data = {
               "run_id": "${{ github.run_id }}",
+              "test_outcome": "${{ steps.test.outcome }}",
               "commit": "${{ github.sha }}",
               "image_os": os.environ.get("ImageOS", "unknown"),
               "image_version": os.environ.get("ImageVersion", "unknown"),
@@ -164,7 +167,7 @@ jobs:
           EOF
 
       - name: Upload batching throughput artifact (#74)
-        if: ${{ success() && inputs.measure }}
+        if: ${{ !cancelled() && inputs.measure }}
         uses: actions/upload-artifact@v4
         with:
           name: batching-throughput-baseline-${{ github.run_id }}
