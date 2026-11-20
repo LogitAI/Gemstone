@@ -81,3 +81,37 @@ def test_the_measure_run_uploads_the_breakdown_next_to_the_throughput():
     assert "bench-74/batching-throughput.json" in workflow
     assert "bench-74/batching-breakdown.json" in workflow
     assert workflow.count("batching_breakdown.py --tokens") == 2, "torchnative and upstream, alternated in one loop"
+
+
+def test_engine_phases_drop_the_profiled_step_and_summarize_each_series():
+    """ #74: the engine layer times the model forward, the logits processors and the sampling inside
+    the step. The step run under the operator profilers is left out of the series that clocked it. """
+    import pytest
+
+    timings = {
+        "prepare": [0.5, 0.5, 0.5, 0.5, 0.01],
+        "forward": [10.0, 11.0, 90.0, 12.0],
+        "model": [8.0, 8.5, 70.0, 9.0],
+        "logits": [1.0, 1.5, 2.0],  # the profiled step (index 2) was not recorded
+        "sample": [0.1, 0.1, 0.9, 0.1],
+        "update": [0.05, 0.05, 0.05, 0.05],
+        "decode": [0.1, 0.2],
+    }
+    by_processor = {"TopK": [0.4, 0.5, 0.6]}
+
+    phases = load_script().engine_phases(timings, by_processor, profiled_step=2)
+
+    assert phases["step_forward"]["samples_ms"] == [10.0, 11.0, 12.0]
+    assert phases["step_model"]["samples_ms"] == [8.0, 8.5, 9.0]
+    assert phases["step_sample"]["samples_ms"] == [0.1, 0.1, 0.1]
+    assert phases["step_logits"]["samples_ms"] == [1.0, 1.5, 2.0]
+    assert phases["step_logits_by_processor"]["TopK"]["median_ms"] == 0.5
+    assert phases["step_prepare"]["repetitions"] == 5
+    assert phases["step_update"]["repetitions"] == 4
+    assert phases["decode_call"]["repetitions"] == 2
+    assert phases["decode_total_ms"] == pytest.approx(0.3)
+    assert phases["profiled_at_step"] == 2
+
+    unprofiled = load_script().engine_phases(timings, by_processor, profiled_step=None)
+    assert unprofiled["step_forward"]["repetitions"] == 4
+    assert unprofiled["profiled_at_step"] is None

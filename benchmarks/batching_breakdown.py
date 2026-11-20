@@ -16,8 +16,16 @@ float32, read from the local Hugging Face cache only) and the same prompts:
   timed), with no thread, no queue, no tokenizer and none of Gemstone's logits processors. The
   difference to `forward` is the paged KV cache write, the paged attention gather and the scheduler.
 - `engine`: the full Gemstone `Engine`, N concurrent requests on N threads, as served. The manager's
-  three calls are timed from inside its loop too, so the time outside them (Gemstone's samplers,
-  per-token decoding, queues and the gate) is visible as `outside_loop_ms`.
+  three calls are timed from inside its loop too, so the time outside them (per-token decoding,
+  queues and the gate) is visible as `outside_loop_ms`. Inside `_generation_step` the model forward,
+  Gemstone's logits processors (the list, and each filter) and the manager's sampling are timed as
+  well, because the processors run inside that call and the manager layer has none (#74): their
+  cost is the difference between the two layers' forward time. One decode step's logits processing
+  is also run under the operator profilers (`logits_ops`), and every `tokenizer.decode` of the
+  request threads is clocked (`decode_call`, lock wait included). The layer runs twice: `engine`
+  with greedy requests (`temperature=0`, as the throughput script), where a filter at its neutral
+  value is skipped (SPEC S1.12), and `engine_sampled` with the API's default sampling (`SAMPLED`:
+  the defaults of `models/base.py` and a fixed seed), where every filter runs.
 
 Every series discards a warm-up run and reports repetitions, median and minimum. For one decode step
 at each batch size the ten most expensive operators are recorded twice: with `torch.profiler` where
@@ -41,6 +49,9 @@ from api.tests.conftest import CHAT_TEMPLATE, TEST_DEVICE, TEST_MODEL  # noqa: E
 from benchmarks.batching_throughput import PROMPTS, run as run_engine  # noqa: E402
 
 TOP = 10  # operators kept per profile table
+# The sampling of the `engine_sampled` layer: the API's defaults (`api/src/main/models/base.py`)
+# with a fixed seed, so every filter runs and the replies are reproducible.
+SAMPLED = dict(temperature=0.2, top_p=0.95, top_k=40, min_p=0.05, seed=1)
 
 
 # ------------------------------------------------------------------------------------------------ #
@@ -357,39 +368,109 @@ def measure_manager(manager, model, paged, original, prompt_ids, tokens, warmup_
     }
 
 
-def measure_engine(concurrency, tokens, attn, dtype, device, warmup_tokens):
+def engine_phases(timings, by_processor, profiled_step):
+    """
+    The engine layer's per-phase summaries (no model needed; `api/tests/test_benchmarks.py`). The
+    per-step series `forward`, `model` and `sample` clocked the step run under the operator profilers
+    too, so that step is dropped from them; `logits` and the per-filter series did not record it.
+    `prepare` (which also counts the calls that found nothing), `update` and `decode` are left as
+    they are.
+    """
+    def without_profiled(series):
+        if profiled_step is None or profiled_step >= len(series):
+            return list(series)
+        return [s for i, s in enumerate(series) if i != profiled_step]
+
+    return {
+        "step_forward": summarize(without_profiled(timings["forward"])),
+        "step_model": summarize(without_profiled(timings["model"])),
+        "step_logits": summarize(timings["logits"]),
+        "step_logits_by_processor": {name: summarize(series) for name, series in by_processor.items()},
+        "step_sample": summarize(without_profiled(timings["sample"])),
+        "step_prepare": summarize(timings["prepare"]),
+        "step_update": summarize(timings["update"]),
+        "decode_call": summarize(timings["decode"]),
+        "decode_total_ms": sum(timings["decode"]),
+        "profiled_at_step": profiled_step,
+    }
+
+
+def measure_engine(concurrency, tokens, attn, dtype, device, warmup_tokens, profile_at=None, sampling=None):
     """
     Layer 3: the full `Engine` serving `concurrency` requests at once, as `batching_throughput.py`'s
-    `batched` case, with the manager's three loop calls timed from inside its thread. `prepare` also
+    `batched` case (`sampling`: its sampling arguments, None for greedy), with the manager's three
+    loop calls timed from inside its thread. `prepare` also
     counts the calls that found nothing to do (the loop polls between the last token and the stop),
     and `outside_loop_ms` includes the loop's idle wait of up to 0.1 s at the end.
+
+    Inside `_generation_step` three more phases are clocked (#74): `model`, the model forward;
+    `logits`, Gemstone's logits-processor list, and each filter of it by class name; `sample`, the
+    manager's argmax and output copy. What is left of the step is the logits slicing and `.float()`.
+    The logits processing of step `profile_at` runs under the operator profilers instead of the clock
+    (`logits_ops`), and that step is dropped from the per-step series (`engine_phases`). Every
+    `tokenizer.decode` of the request threads is clocked as `decode_call` (lock wait included); it
+    runs off the loop thread, so its total is CPU time beside the forward, not time in the step.
     """
+    from transformers.generation.continuous_batching.cb_logits_processors import (
+        ContinuousBatchingLogitsProcessorList,
+    )
     from transformers.generation.continuous_batching.continuous_api import ContinuousBatchProcessor
+    from transformers.generation.continuous_batching.model_runner import ModelRunner
 
-    from api.src.main.engine import Engine
+    from api.src.main.engine import Engine, _SAMPLERS
 
-    timings = {"prepare": [], "forward": [], "update": []}
+    timings = {"prepare": [], "forward": [], "model": [], "logits": [], "sample": [], "update": [], "decode": []}
+    by_processor = {}
+    state = {"step": 0, "tables": None, "profiling": False}
     originals = {
         "prepare": ContinuousBatchProcessor.prepare_next_batch,
         "forward": ContinuousBatchProcessor._generation_step,
         "update": ContinuousBatchProcessor.update_batch,
+        "sample": ModelRunner._sample,
+        "logits": ContinuousBatchingLogitsProcessorList.__call__,
     }
+    filters = {cls.__name__: cls.__call__ for cls in _SAMPLERS}
 
-    def timed(name):
-        original = originals[name]
-
-        def call(self, *args, **kwargs):
+    def timed(name, original, series):
+        def call(*args, **kwargs):
             start = time.perf_counter()
             try:
-                return original(self, *args, **kwargs)
+                return original(*args, **kwargs)
             finally:
-                timings[name].append((time.perf_counter() - start) * 1000)
+                if not state["profiling"]:
+                    series.append((time.perf_counter() - start) * 1000)
 
         return call
 
-    ContinuousBatchProcessor.prepare_next_batch = timed("prepare")
-    ContinuousBatchProcessor._generation_step = timed("forward")
-    ContinuousBatchProcessor.update_batch = timed("update")
+    def logits_call(self, *args, **kwargs):
+        step = state["step"]  # None during the warm-up, which is never profiled
+        if step is not None:
+            state["step"] = step + 1
+        if step is None or step != profile_at:
+            return timed("logits", originals["logits"], timings["logits"])(self, *args, **kwargs)
+        holder = {}
+
+        def processed():
+            holder["scores"] = originals["logits"](self, *args, **kwargs)
+
+        state["profiling"] = True
+        try:
+            state["tables"] = operator_tables(processed)
+        finally:
+            state["profiling"] = False
+        if "scores" not in holder:  # neither profiler could run the call: run it unprofiled
+            holder["scores"] = originals["logits"](self, *args, **kwargs)
+        return holder["scores"]
+
+    ContinuousBatchProcessor.prepare_next_batch = timed("prepare", originals["prepare"], timings["prepare"])
+    ContinuousBatchProcessor._generation_step = timed("forward", originals["forward"], timings["forward"])
+    ContinuousBatchProcessor.update_batch = timed("update", originals["update"], timings["update"])
+    ModelRunner._sample = timed("sample", originals["sample"], timings["sample"])
+    ContinuousBatchingLogitsProcessorList.__call__ = logits_call
+    for cls in _SAMPLERS:
+        series = by_processor[cls.__name__] = []
+        cls.__call__ = timed(cls.__name__, filters[cls.__name__], series)
+    engine = None
     try:
         engine = Engine(
             TEST_MODEL, chat_template=CHAT_TEMPLATE, local_files_only=True, batching=True,
@@ -397,22 +478,37 @@ def measure_engine(concurrency, tokens, attn, dtype, device, warmup_tokens):
         )
         if not engine.batching:
             raise RuntimeError(f"batching unavailable: {engine.batching_unavailable}")
+        # The model forward and the tokenizer's decode are instance attributes, so only this engine
+        # is clocked: `nn.Module.__call__` reads `self.forward`, `_Batcher.stream` reads `tokenizer.decode`.
+        engine.model.forward = timed("model", engine.model.forward, timings["model"])
+        engine.tokenizer.decode = timed("decode", engine.tokenizer.decode, timings["decode"])
         prompts = (PROMPTS * ((concurrency // len(PROMPTS)) + 1))[:concurrency]
-        run_engine(engine, prompts[:1], warmup_tokens, False)  # warm-up, discarded
-        for series in timings.values():
+        state["step"] = None  # the warm-up is never profiled
+        run_engine(engine, prompts[:1], warmup_tokens, False, sampling)  # warm-up, discarded
+        for series in list(timings.values()) + list(by_processor.values()):
             series.clear()
-        generated, elapsed = run_engine(engine, prompts, tokens, True)
+        state["step"] = 0
+        generated, elapsed = run_engine(engine, prompts, tokens, True, sampling)
         engine.close()
     finally:
         ContinuousBatchProcessor.prepare_next_batch = originals["prepare"]
         ContinuousBatchProcessor._generation_step = originals["forward"]
         ContinuousBatchProcessor.update_batch = originals["update"]
+        ModelRunner._sample = originals["sample"]
+        ContinuousBatchingLogitsProcessorList.__call__ = originals["logits"]
+        for cls in _SAMPLERS:
+            cls.__call__ = filters[cls.__name__]
+        if engine is not None:
+            engine.model.__dict__.pop("forward", None)
+            engine.tokenizer.__dict__.pop("decode", None)
     # `prepare_next_batch` runs once more than the steps (the call that finds nothing left): the
     # forward series is the step count.
     steps = len(timings["forward"])
     in_loop_ms = sum(timings["prepare"]) + sum(timings["forward"]) + sum(timings["update"])
+    profiled = profile_at if state["tables"] is not None else None
     return {
         "concurrency": concurrency,
+        "sampling": dict(temperature=0) if sampling is None else dict(sampling),
         "generated_tokens": generated,
         "elapsed_seconds": elapsed,
         "tokens_per_second": generated / elapsed if elapsed > 0 else 0.0,
@@ -420,9 +516,8 @@ def measure_engine(concurrency, tokens, attn, dtype, device, warmup_tokens):
         "ms_per_step_end_to_end": elapsed * 1000 / steps if steps else None,
         "in_loop_ms": in_loop_ms,
         "outside_loop_ms": elapsed * 1000 - in_loop_ms,
-        "step_forward": summarize(timings["forward"]),
-        "step_prepare": summarize(timings["prepare"]),
-        "step_update": summarize(timings["update"]),
+        **engine_phases(timings, by_processor, profiled),
+        "logits_ops": state["tables"],
     }
 
 
@@ -523,15 +618,28 @@ def main():
     model.destroy_cached_continuous_batching_manager()
     del manager, model
 
-    # Layer 3: the engine
-    engine = measure_engine(args.concurrency, args.tokens, args.attn, torch.float32, device, args.warmup_tokens)
-    print(f"engine c={engine['concurrency']}: {engine['generated_tokens']} tokens in {engine['elapsed_seconds']:.2f} s "
-          f"= {engine['tokens_per_second']:.1f} tokens/s, {engine['steps']} steps, "
-          f"{engine['ms_per_step_end_to_end']:.2f} ms/step end to end, "
-          f"{engine['in_loop_ms']:.0f} ms in the loop, {engine['outside_loop_ms']:.0f} ms outside it")
-    show("step _generation_step", engine["step_forward"])
-    show("step prepare_next_batch", engine["step_prepare"])
-    show("step update_batch", engine["step_update"])
+    # Layer 3: the engine, greedy (as the throughput script) and with the API's default sampling
+    layers = {}
+    for label, sampling in (("engine", None), ("engine_sampled", SAMPLED)):
+        engine = layers[label] = measure_engine(
+            args.concurrency, args.tokens, args.attn, torch.float32, device, args.warmup_tokens, args.profile_at,
+            sampling,
+        )
+        print(f"{label} c={engine['concurrency']} {engine['sampling']}: {engine['generated_tokens']} tokens in "
+              f"{engine['elapsed_seconds']:.2f} s = {engine['tokens_per_second']:.1f} tokens/s, {engine['steps']} steps, "
+              f"{engine['ms_per_step_end_to_end']:.2f} ms/step end to end, "
+              f"{engine['in_loop_ms']:.0f} ms in the loop, {engine['outside_loop_ms']:.0f} ms outside it")
+        show("step _generation_step", engine["step_forward"])
+        show("  of which model forward", engine["step_model"])
+        show("  of which logits processors", engine["step_logits"])
+        for name, summary in engine["step_logits_by_processor"].items():
+            show(f"    {name}", summary)
+        show("  of which sampling", engine["step_sample"])
+        show("step prepare_next_batch", engine["step_prepare"])
+        show("step update_batch", engine["step_update"])
+        show("tokenizer.decode per call", engine["decode_call"])
+        print(f"{'tokenizer.decode total':>34}: {engine['decode_total_ms']:9.2f} ms off the loop thread")
+        show_ops(f"  {label} step {engine['profiled_at_step']} logits processors", engine["logits_ops"])
 
     if args.json:
         payload = {
@@ -550,7 +658,8 @@ def main():
             "load_average": load_average,
             "forward": forward,
             "manager": managed,
-            "engine": engine,
+            "engine": layers["engine"],
+            "engine_sampled": layers["engine_sampled"],
         }
         os.makedirs(os.path.dirname(os.path.abspath(args.json)), exist_ok=True)
         with open(args.json, "w", encoding="utf-8") as f:
