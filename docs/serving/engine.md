@@ -141,3 +141,33 @@ Measured on CI run `44592107867` (commit `416a649`, runner `ubuntu26 20261111.82
 | c=1 | 5.3 / 5.2 / 7.4 tok/s | 34.3 / 34.1 / 52.9 tok/s |
 | c=2 | 5.2 / 8.6 / 7.6 tok/s | 34.6 / 50.3 / 53.4 tok/s |
 | c=4 | 5.2 / 15.0 / 7.5 tok/s | 34.8 / 87.1 / 54.1 tok/s |
+
+### 7.2 Breakdown of the gap (#74)
+
+The table in §7.1 says how far behind torchnative is, not where the time goes. The plan below came
+from the Gemstone teammate and was approved by the thisisthepy leader on 2026-11-20 (no owner
+decision is involved; it is a measurement, not a direction). `benchmarks/batching_breakdown.py`
+measures three layers in one process, on the same model and prompts (SmolLM2-135M, float32, CPU,
+`--tokens 64`, `--attn sdpa_paged`), and writes one JSON:
+
+| Layer | What runs | What the difference to the layer above means |
+|---|---|---|
+| `forward` | The raw model forward with a `DynamicCache`: the prefill of the prompts and one decode step (one token per row), timed separately, at batch 1 and 4. No manager, no Gemstone. | The substrate's kernel time. Decode-step milliseconds is the key number. |
+| `manager` | transformers' `ContinuousBatchingManager`, built with the engine's `ContinuousBatchingConfig`, driven step by step in the calling thread (`prepare_next_batch`, `_generation_step`, `update_batch`, each timed) with no thread, no queue, no tokenizer and none of Gemstone's logits processors. Batch 1 and 4. | The paged KV cache write, the paged attention gather and the scheduler. |
+| `engine` | The full `Engine`, 4 concurrent requests on 4 threads, as served. The manager's three calls are timed from inside the loop as well, so the time outside them is visible. | Gemstone's own overhead: the per-request samplers, per-token decoding, the queues and the gate. |
+
+Every series discards a warm-up run and reports its repetitions, median and minimum (`summarize`).
+For one decode step at each batch size, the script also records the ten most expensive operators
+(`time_operators`): with `torch.profiler` where the substrate has one, and always with a
+`TorchDispatchMode` that clocks every operator the dispatcher sees, with the time of nested
+operators subtracted. torchnative 0.1.0b9 has no profiler (`torch.profiler.profile()` raises
+`NotImplementedError: _supported_activities`; `torchnative/rust/torch_c/src/bootstrap.py` states it),
+but its dispatcher does call a `TorchDispatchMode` (`torchnative/docs/design/DISPATCH3.md`), so the
+table exists on both substrates and is comparable only with itself (the mode's own overhead is in
+the numbers; `torch.profiler` on upstream is the reference for what the mode costs).
+
+`test-torchnative.yml` with `measure=true` runs the script twice per substrate, alternating
+torchnative and upstream PyTorch (`--round 1` torchnative, upstream, `--round 2` torchnative,
+upstream) on the same runner, and uploads `batching-breakdown.json` in the same artifact as
+`batching-throughput.json`. Not yet measured: the numbers go here when the leader's run has
+produced them.

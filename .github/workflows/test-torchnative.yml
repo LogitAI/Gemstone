@@ -23,7 +23,7 @@ on:
         required: false
         default: "3.15t"
       measure:
-        description: "Run benchmarks/batching_throughput.py (1/2/4 concurrent requests, torchnative vs upstream torch) for #74 baseline"
+        description: "Run benchmarks/batching_throughput.py (1/2/4 concurrent requests) and benchmarks/batching_breakdown.py (forward / manager / engine, two A/B rounds), torchnative vs upstream torch, for #74"
         required: false
         type: boolean
         default: false
@@ -158,7 +158,7 @@ jobs:
               "runs": {}
           }
           for fname in sorted(os.listdir(dir_path)):
-              if fname.endswith(".json") and fname != "batching-throughput.json":
+              if fname.endswith(".json") and fname not in ("batching-throughput.json", "batching-breakdown.json"):
                   fpath = os.path.join(dir_path, fname)
                   with open(fpath, "r", encoding="utf-8") as f:
                       data["runs"][fname[:-5]] = json.load(f)
@@ -166,10 +166,66 @@ jobs:
               json.dump(data, f, indent=2)
           EOF
 
-      - name: Upload batching throughput artifact (#74)
+      - name: Measure batching breakdown (#74)
+        # Where a decode step's time goes (docs/serving/engine.md 7.2): the raw forward, transformers'
+        # manager driven step by step, and the engine, with the top operators of one step. Two rounds,
+        # torchnative and upstream alternated, so a drift of the runner shows up as a difference
+        # between rounds rather than between substrates.
+        if: ${{ !cancelled() && inputs.measure }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/bench-74/breakdown"
+          if [ ! -x "$RUNNER_TEMP/upstream-venv/bin/python" ]; then
+            uv venv --python 3.13 "$RUNNER_TEMP/upstream-venv"
+            UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/upstream-venv" uv sync --locked --python 3.13 --extra torch
+          fi
+          {
+            echo "### Batching breakdown (#74): forward / manager / engine"
+            echo
+            echo "- run_id: ${{ github.run_id }}"
+            echo "- commit: ${{ github.sha }}"
+            echo
+            for round in 1 2; do
+              echo "#### round $round, torchnative"
+              echo '```'
+              uv run --no-sync python benchmarks/batching_breakdown.py --tokens 64 --attn sdpa_paged --round "$round" --json "$RUNNER_TEMP/bench-74/breakdown/torchnative-r${round}.json"
+              echo '```'
+              echo
+              echo "#### round $round, upstream PyTorch (3.13, CPU)"
+              echo '```'
+              UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/upstream-venv" uv run --no-sync python benchmarks/batching_breakdown.py --tokens 64 --attn sdpa_paged --round "$round" --json "$RUNNER_TEMP/bench-74/breakdown/upstream-r${round}.json"
+              echo '```'
+              echo
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+          python3 - << 'EOF'
+          import json, os
+          temp = os.environ["RUNNER_TEMP"]
+          dir_path = os.path.join(temp, "bench-74", "breakdown")
+          data = {
+              "run_id": "${{ github.run_id }}",
+              "test_outcome": "${{ steps.test.outcome }}",
+              "commit": "${{ github.sha }}",
+              "image_os": os.environ.get("ImageOS", "unknown"),
+              "image_version": os.environ.get("ImageVersion", "unknown"),
+              "cpu_model": os.popen("grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs").read().strip() or "unknown",
+              "order": ["torchnative-r1", "upstream-r1", "torchnative-r2", "upstream-r2"],
+              "runs": {}
+          }
+          for fname in sorted(os.listdir(dir_path)):
+              if fname.endswith(".json"):
+                  with open(os.path.join(dir_path, fname), "r", encoding="utf-8") as f:
+                      data["runs"][fname[:-5]] = json.load(f)
+          with open(os.path.join(temp, "bench-74", "batching-breakdown.json"), "w", encoding="utf-8") as f:
+              json.dump(data, f, indent=2)
+          EOF
+
+      - name: Upload batching throughput and breakdown artifact (#74)
         if: ${{ !cancelled() && inputs.measure }}
         uses: actions/upload-artifact@v4
         with:
           name: batching-throughput-baseline-${{ github.run_id }}
-          path: ${{ runner.temp }}/bench-74/batching-throughput.json
+          path: |
+            ${{ runner.temp }}/bench-74/batching-throughput.json
+            ${{ runner.temp }}/bench-74/batching-breakdown.json
           if-no-files-found: error
