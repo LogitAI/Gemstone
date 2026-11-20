@@ -39,11 +39,13 @@ def count_tokens(engine, text):
     return len(engine.tokenizer(text, add_special_tokens=False)["input_ids"])
 
 
-def run(engine, prompts, tokens, concurrent):
+def run(engine, prompts, tokens, concurrent, sampling=None):
+    """ `sampling`: the engine's sampling arguments (None: greedy, `temperature=0`). """
+    params = dict(temperature=0) if sampling is None else dict(sampling)
     replies = [None] * len(prompts)
 
     def one(i):
-        replies[i] = "".join(engine([{"role": "user", "content": prompts[i]}], temperature=0, max_new_tokens=tokens))
+        replies[i] = "".join(engine([{"role": "user", "content": prompts[i]}], max_new_tokens=tokens, **params))
 
     start = time.perf_counter()
     if concurrent:

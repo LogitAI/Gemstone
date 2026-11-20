@@ -400,6 +400,14 @@ Implemented (#63), `api/src/main/engine.py`:
   Tests: `api/tests/test_sampler_rng.py` (draws, request ids, `typical_p` against transformers);
   `api/tests/test_batching.py` (`test_same_seed_sample_is_identical_batched_or_exclusive`);
   `api/tests/test_engine.py` (`test_seeded_exclusive_sample_reproduces_without_the_global_rng`).
+- A filter whose argument is neutral for every row it would process (temperature 1, `top_k` 0,
+  `top_p` 1, `min_p` 0, no seed: a greedy request) is an identity and is skipped, on both paths,
+  and the `top_k` threshold comes from a partial selection of the batch's largest k
+  (`torch.topk`) instead of a sort of the whole vocabulary. Neither changes a token: the filter
+  at its neutral value returns the scores unchanged, ties and `-inf` included, and the k-th
+  largest value is the same from a selection or a sort (`api/tests/test_sampler_rng.py`). #74: on
+  torchnative each skipped filter saved a sort, a softmax or a cumulative sum over the vocabulary
+  per decode step, see `serving/engine.md` §7.2.
 - Each batched request gets a request id unique across engines (the sampler state is keyed by
   it), drawn under a lock so concurrent requests never share one without the GIL either (#180).
 - Requests the batch does not serve take the exclusive path (S1.11).
@@ -422,7 +430,10 @@ Benchmarks: `benchmarks/batching_throughput.py` (1 versus N concurrent requests;
 44592107867, [`serving/engine.md`](serving/engine.md) §7.1) and `benchmarks/batching_breakdown.py` (#74:
 where one decode step's time goes, measured in one process as the raw model forward, transformers'
 `ContinuousBatchingManager` driven step by step, and the full engine, with the ten most expensive
-operators of one decode step; method in `serving/engine.md` §7.2, not yet measured). Both run in
+operators of one decode step; in the engine the model forward, each logits processor and the
+sampling are timed inside the step as well, one step's logits processing is profiled by
+operator, and the engine runs greedy and with the API's default sampling; method and the first
+run in `serving/engine.md` §7.2). Both run in
 `.github/workflows/test-torchnative.yml` with `measure=true`, torchnative and upstream PyTorch on the
 same runner, and their JSON is uploaded as one artifact. Test of the parts that need no model:
 `api/tests/test_benchmarks.py`.
