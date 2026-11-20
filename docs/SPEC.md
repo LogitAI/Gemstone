@@ -418,7 +418,14 @@ Implemented (#63), `api/src/main/engine.py`:
 Tests: `api/tests/test_batching.py` (two and four concurrent greedy requests equal sequential
 ones; requests overlap in time, also with no `max_new_tokens`; a seeded sample is the same batched or alone, next to a greedy
 neighbour; cancelling or closing one stream leaves the others correct).
-Benchmark: `benchmarks/batching_throughput.py` (1 versus N concurrent requests); not yet measured.
+Benchmarks: `benchmarks/batching_throughput.py` (1 versus N concurrent requests; measured on CI run
+44592107867, [`serving/engine.md`](serving/engine.md) §7.1) and `benchmarks/batching_breakdown.py` (#74:
+where one decode step's time goes, measured in one process as the raw model forward, transformers'
+`ContinuousBatchingManager` driven step by step, and the full engine, with the ten most expensive
+operators of one decode step; method in `serving/engine.md` §7.2, not yet measured). Both run in
+`.github/workflows/test-torchnative.yml` with `measure=true`, torchnative and upstream PyTorch on the
+same runner, and their JSON is uploaded as one artifact. Test of the parts that need no model:
+`api/tests/test_benchmarks.py`.
 
 Unverified:
 
