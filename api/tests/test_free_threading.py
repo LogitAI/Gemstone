@@ -237,3 +237,67 @@ def test_ft4_locked_tokenizer_isolates_concurrent_truncation_and_max_length():
     locked_mismatches = run_workers(locked, n_threads=12, iters=50, lengths=lengths)
     assert locked_mismatches == [], f"FT4 tokenizer isolation errors: {locked_mismatches}"
 
+
+def test_ft8_tool_sessions_are_thread_local_with_consistent_headers():
+    from api.src.main.utils.weather import WeatherAPI
+    from api.src.main.utils.calendar import CalendarAPI
+    from api.src.main.utils.currency import CurrencyAPI
+    from api.src.main.utils.web_search import WebSearchAPI
+
+    tools = [
+        WeatherAPI(),
+        CalendarAPI(),
+        CurrencyAPI(),
+        WebSearchAPI(),
+    ]
+
+    for tool in tools:
+        main_s1 = tool.session
+        main_s2 = tool.session
+        assert main_s1 is main_s2
+
+        main_headers = dict(main_s1.headers)
+        main_adapters = sorted(main_s1.adapters.keys())
+
+        results = []
+        results_lock = threading.Lock()
+        start_barrier = threading.Barrier(8)
+        done_barrier = threading.Barrier(8)
+
+        def worker():
+            try:
+                start_barrier.wait(timeout=5)
+                s1 = tool.session
+                s2 = tool.session
+                assert s1 is s2
+                # Keep the session alive across all 8 threads so CPython cannot reuse addresses
+                done_barrier.wait(timeout=5)
+                with results_lock:
+                    results.append((s1, dict(s1.headers), sorted(s1.adapters.keys())))
+            except BaseException as e:
+                with results_lock:
+                    results.append(e)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(10)
+
+        for res in results:
+            assert not isinstance(res, BaseException), f"Worker failed: {res}"
+
+        sessions = [r[0] for r in results]
+        assert len(sessions) == 8
+        # Verify 8 distinct live session instances, all different from the main thread's session
+        for i, s in enumerate(sessions):
+            assert s is not main_s1
+            for j in range(i + 1, len(sessions)):
+                assert s is not sessions[j]
+
+        # Verify headers and adapters are identical across all threads
+        for _, headers, adapters in results:
+            assert headers == main_headers
+            assert adapters == main_adapters
+
+
