@@ -24,15 +24,10 @@ entries below are changes against earlier `develop` builds (team leader, 2026-11
 - **Checked** by the two test workflows on the release commit: upstream PyTorch with every client job, and
   torchnative on 3.15t from the lock file, including the start command.
 
-### Not in 1.0
+### After 1.0
 
-A fast paged-attention kernel ([#74](https://github.com/LogitAI/Gemstone/issues/74)), 4-bit weights
-([#67](https://github.com/LogitAI/Gemstone/issues/67)), CUDA ([#164](https://github.com/LogitAI/Gemstone/issues/164)),
-on-device inference and offline chat ([#42](https://github.com/LogitAI/Gemstone/issues/42),
-[#190](https://github.com/LogitAI/Gemstone/issues/190)), cross-device sync
-([#167](https://github.com/LogitAI/Gemstone/issues/167)) and a global search overlay
-([#207](https://github.com/LogitAI/Gemstone/issues/207)). Known input issues on the web (Korean IME) and the
-desktop wait on the Compose fork ([#41](https://github.com/LogitAI/Gemstone/issues/41)).
+Cross-device sync ([#167](https://github.com/LogitAI/Gemstone/issues/167)) and a global search overlay
+([#207](https://github.com/LogitAI/Gemstone/issues/207)), by the owner's decision of 2026-11-21.
 
 ### Changed
 
