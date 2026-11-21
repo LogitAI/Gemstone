@@ -77,15 +77,41 @@ def test_version_is_the_pyproject_version_without_installing():
     assert VERSION == declared
 
 
-def test_client_and_server_share_one_version():
-    # AGENTS 11: the client and the API are versioned together. A release tags one version.
+def test_the_client_takes_its_version_from_pyproject():
+    # AGENTS 11: the client and the API are versioned together. pyproject.toml is the one place the
+    # version is written (owner, 2026-11-21: "앞으로 버전 차이 나지 못하게 막을 방법"); the Gradle build
+    # reads it, so the two cannot drift.
     gradle = (ROOT / "app" / "build.gradle.kts").read_text()
-    client = {
-        "versionName": re.search(r'versionName\s*=\s*"([^"]+)"', gradle).group(1),
-        "appVersion": re.search(r'val appVersion\s*=\s*"([^"]+)"', gradle).group(1),
-        "packageVersion": re.search(r'packageVersion\s*=\s*"([^"]+)"', gradle).group(1),
-    }
-    assert client == dict.fromkeys(client, VERSION)
+    assert re.search(r'val appVersion\b[^\n]*\n?[^\n]*pyproject\.toml', gradle), "appVersion must be read from pyproject.toml"
+    assert re.search(r"^\s*versionName = appVersion$", gradle, re.M)
+    assert re.search(r"^\s*packageVersion = appVersion$", gradle, re.M)
+    assert not re.search(r'(versionName|packageVersion|appVersion)\s*=\s*"', gradle), "a version literal in the Gradle build"
+
+
+def test_no_second_copy_of_the_version():
+    # A hand-written copy of the version anywhere else (code, build files, docs) is how the client
+    # and the server drifted to 1.0.1 and 1.0.0. Only pyproject.toml, the changelog and uv.lock name it.
+    roots = ["api/src/main", "app/src", "app/build.gradle.kts", "docs/guide", "docs/SPEC.md", "README.md",
+             "docs/locale/README_ko.md", "AGENTS.md", "PROJECT.md"]
+    skip = ("api/src/main/webpack", "api/src/main/static")
+    found = []
+    for root in roots:
+        base = ROOT / root
+        files = [base] if base.is_file() else [f for f in base.rglob("*") if f.is_file()]
+        for f in files:
+            rel = f.relative_to(ROOT).as_posix()
+            if rel.startswith(skip) or f.suffix not in (".py", ".kt", ".kts", ".md", ".html", ".toml", ".json", ".xml", ".swift", ".plist"):
+                continue
+            if re.search(rf"(?<![\d.]){re.escape(VERSION)}(?![\d.])", f.read_text(encoding="utf-8", errors="ignore")):
+                found.append(rel)
+    assert not found, f"{VERSION} is written outside pyproject.toml in: {found}"
+
+
+def test_the_ios_app_carries_the_same_version():
+    # Xcode reads its version from an xcconfig before any Gradle step runs, so this is the one checked
+    # copy: MARKETING_VERSION must equal VERSION.
+    xcconfig = (ROOT / "app/src/iosMain/swift/Configuration/Config.xcconfig").read_text()
+    assert re.search(r"^MARKETING_VERSION=(.+)$", xcconfig, re.M).group(1).strip() == VERSION
 
 
 def test_changelog_heads_the_current_version():

@@ -317,7 +317,7 @@ Implemented (#84), `api/src/main/engine.py`:
   (#182, FT7 of `serving/free-threading.md`). The exclusive path also applies `typical_p` there,
   after `min_p`, with transformers' `TypicalLogitsWarper` rule; `repeat_penalty` stays
   transformers' own processor and runs first.
-- **Changed before 1.0.0:** before #182 the exclusive path seeded `torch.manual_seed` and sampled
+- **Changed before the first release:** before #182 the exclusive path seeded `torch.manual_seed` and sampled
   with `generate`'s own warpers, so a seeded reply on that path (a request with `typical_p` or
   `repeat_penalty` set, extra `generate` arguments, batching off, or a budget larger than the KV
   cache) differs once from what the same seed gave on `develop` before #182. Seeded batched replies are unchanged.
