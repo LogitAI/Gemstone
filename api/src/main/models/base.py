@@ -38,7 +38,9 @@ class BaseModel:
         self.runtime = engine if engine is not None else self._create_engine()
 
     def _create_engine(self) -> Engine:
-        return Engine(self.model_id, context_length=self.context_length or None, **self.engine_options)
+        from .. import settings
+        return Engine(self.model_id, context_length=self.context_length or None,
+                      **settings.engine_options(self.engine_options))
 
     def parse_tool_calling(
         self,

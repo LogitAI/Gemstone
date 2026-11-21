@@ -21,12 +21,16 @@ dependencies = [
 
 
 # The serving engine runs on whatever `import torch` resolves to. Pick exactly one substrate:
-#   uv sync --extra torch          upstream PyTorch
+#   uv sync --extra torch          upstream PyTorch (CPU wheels on Windows and Linux)
+#   uv sync --extra cuda           upstream PyTorch with CUDA 13.2 (Windows and Linux; GEMSTONE_DEVICE=cuda, #164)
 #   uv sync --extra torchnative    torchnative, which replaces `import torch` and cannot coexist with it
 [project.optional-dependencies]
 torch = [
     "torch",
 ]  # !do not add version-specfic torch here!
+cuda = [
+    "torch",
+]  # the same torch from the CUDA index ([tool.uv.sources]); no version pin either
 torchnative = [
     "torchnative>=0.1.0b11",  # continuous batching (index_copy_ on views, torchnative#254) and the skinny gemm (#74); all api/tests pass on it (run 44877496387)
 ]
@@ -44,22 +48,31 @@ conflicts = [
     [
         { extra = "torch" },
         { extra = "torchnative" },
+        { extra = "cuda" },
     ],
 ]
 prerelease = "if-necessary"
 
 
-# The engine runs on CPU (CUDA is planned for M4 as a `cuda` extra), so Windows and Linux take the
-# PyTorch CPU wheels instead of multi-GB CUDA builds; macOS uses the PyPI default (CPU/MPS).
+# `--extra torch` takes the PyTorch CPU wheels on Windows and Linux instead of multi-GB CUDA builds;
+# `--extra cuda` takes the CUDA 13.2 wheels there (SPEC S1.17, #164). macOS uses the PyPI default
+# (CPU/MPS) for both.
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cpu", marker = "platform_system == 'Windows' or platform_system == 'Linux'" },
+    { index = "pytorch-cpu", marker = "platform_system == 'Windows' or platform_system == 'Linux'", extra = "torch" },
+    { index = "pytorch-cu132", marker = "platform_system == 'Windows' or platform_system == 'Linux'", extra = "cuda" },
 ]
 
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+
+[[tool.uv.index]]
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
 explicit = true
 
 
