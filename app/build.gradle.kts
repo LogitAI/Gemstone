@@ -16,6 +16,12 @@ plugins {
     kotlin("plugin.serialization").version(libs.versions.kotlin.get())
 }
 
+// Gemstone's one version, shared by the client and the API: the `version` of pyproject.toml's
+// [project] table, written nowhere else (owner, 2026-11-21; api/tests/test_client_compat.py guards it).
+val appVersion: String = Regex("""(?m)^version\s*=\s*"([^"]+)"""")
+    .find(providers.fileContents(rootProject.layout.projectDirectory.file("pyproject.toml")).asText.get())
+    ?.groupValues?.get(1) ?: error("pyproject.toml has no [project] version")
+
 
 kotlin {
     androidTarget {
@@ -195,8 +201,8 @@ android {
         applicationId = "io.github.thisisthepy.gemstone"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3  // an integer that grows with every release Android installs over (owner, 2026-11-21)
+        versionName = appVersion
     }
     packaging {
         resources {
@@ -397,7 +403,6 @@ val nativeImageTool = if (isWindowsHost) "bin/native-image.cmd" else "bin/native
 // ---------------------------------------------------------------------------------------------
 
 val appDisplayName = "Gemstone AI"
-val appVersion = "1.0.1"
 val windowsIcon = layout.projectDirectory.file("src/desktopMain/resources/simple_white.ico")
 
 // Resolved eagerly: the configuration cache cannot serialise references back into the build
@@ -634,7 +639,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Gemstone AI"
-            packageVersion = "1.0.1"
+            packageVersion = appVersion
             macOS {
                 iconFile.set(project.file("src/desktopMain/resources/simple_white.icns"))
                 installationPath = "/Applications/StoneManager"
