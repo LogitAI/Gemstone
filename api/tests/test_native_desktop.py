@@ -32,7 +32,7 @@ def test_ci_builds_with_package_native_image_and_checks_the_one_file():
     job = _job((ROOT / ".github" / "workflows" / "test.yml").read_text(), "native-desktop")
     assert ":app:packageNativeImage" in job and "nativeDist" not in job
     assert "bellsoft-liberica-vm-full-openjdk25" in job and "ilammy/msvc-dev-cmd" in job
-    assert "build-skiko-static-jvm.sh" in job and "ref: v1.11.1-ext.2" in job
+    assert "build-skiko-static-jvm.sh" in job and "ref: v1.11.1-ext.5" in job
     assert 'app/build/compose/native-image/main' in job
     assert "ProductVersion" in job and "permonitorv2" in job
     assert "chats.json" in job  # the chat check stays

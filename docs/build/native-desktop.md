@@ -12,7 +12,7 @@ CI builds it in job `native-desktop` of `.github/workflows/test.yml` (dispatched
 windows-latest, Temurin 21 for the Gradle daemon, Liberica NIK 25 Full for native-image, the MSVC
 tools from `ilammy/msvc-dev-cmd`, and skiko's static archive built once by
 compose-multiplatform-core-extended's `extended/skiko/build-skiko-static-jvm.sh` at tag
-`v1.11.1-ext.2` and cached). The job fails unless the output directory holds only `gemstone.exe`, its
+`v1.11.1-ext.5` and cached). The job fails unless the output directory holds only `gemstone.exe`, its
 version resource says the `pyproject.toml` version and "Gemstone AI", and its embedded manifest is
 Gemstone's (per-monitor DPI). It then starts the executable and fails unless the "Gemstone AI" window
 opens and the process is still alive 15 s later, and unless a click on the chat input field focuses it
@@ -36,7 +36,7 @@ export SKIKO_STATIC="$(cygpath -w "$PWD/.cache/skiko-static/out/windows-x64")"
 ./app/build/compose/native-image/main/gemstone.exe
 ```
 
-`<core-extended>` is a checkout of compose-multiplatform-core-extended at `v1.11.1-ext.2`, the tag of
+`<core-extended>` is a checkout of compose-multiplatform-core-extended at `v1.11.1-ext.5`, the tag of
 the Compose libraries Gemstone uses; its script pins skiko's revision. The plugin's own requirements
 are in its README (`extended/README.md`, "One executable: packageNativeImage").
 
