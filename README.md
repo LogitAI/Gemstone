@@ -41,7 +41,7 @@ chat needs no separate server (planned, [#42](https://github.com/LogitAI/Gemston
 - 🧠 **Visible reasoning**: the model's `<think>` block appears as a collapsible panel with elapsed time.
 - 🔌 **Tool calling**: weather, public holidays, exchange rates, a calculator and web search, run server-side in parallel and fed back to the model.
 - 📦 **Open-weight models on one engine**: Qwen 3 0.6B runs on a single transformers-based engine, on PyTorch or on [torchnative](https://github.com/thisisthepy/torchnative).
-- 🔁 **A local Ollama replacement**: concurrent requests share one batch (continuous batching with a paged KV cache), and Ollama and OpenAI clients connect with a base URL. 4-bit weights and GGUF are planned ([#67](https://github.com/LogitAI/Gemstone/issues/67)).
+- 🔁 **A local Ollama replacement**: concurrent requests share one batch (continuous batching with a paged KV cache), and Ollama and OpenAI clients connect with a base URL. On torchnative, `GEMSTONE_QUANTIZATION=q4_k` loads 4-bit weights ([#67](https://github.com/LogitAI/Gemstone/issues/67)); `GEMSTONE_DEVICE=cuda` runs on an NVIDIA GPU ([#164](https://github.com/LogitAI/Gemstone/issues/164)).
 - 🖥️ **Native desktop feel**: a JetBrains Jewel decorated window, with Dmg / Msi / Deb installers.
 
 ## 🚀 Quick start
@@ -172,8 +172,8 @@ that tracks it. Python tests (a real model included) and the Kotlin network-laye
 | Chat history | ✅ Implemented: saved on the device as plain JSON (not encrypted), deletable per chat or all at once ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
 | UI tests | ⏳ Planned |
 | Native desktop executable (GraalVM, no JVM) | ⏳ Planned: a Windows x64 build path exists but has not been run |
-| GPU (CUDA) inference | ⏳ Planned ([#164](https://github.com/LogitAI/Gemstone/issues/164)) |
-| 4-bit weights, GGUF | ⏳ Planned ([#67](https://github.com/LogitAI/Gemstone/issues/67)) |
+| GPU (CUDA) inference | 🟡 Partial: `uv sync --python 3.13 --extra cuda`, `GEMSTONE_DEVICE=cuda`; not yet run on a GPU in CI ([#164](https://github.com/LogitAI/Gemstone/issues/164)) |
+| 4-bit weights, GGUF | 🟡 Partial: `GEMSTONE_QUANTIZATION=q4_k` on torchnative; GGUF files not yet ([#67](https://github.com/LogitAI/Gemstone/issues/67)) |
 | On-device inference via Python Multiplatform | ⏳ Planned ([#42](https://github.com/LogitAI/Gemstone/issues/42)) |
 | Offline mode, cross-device sync | ⏳ Planned ([#42](https://github.com/LogitAI/Gemstone/issues/42), [#167](https://github.com/LogitAI/Gemstone/issues/167)) |
 

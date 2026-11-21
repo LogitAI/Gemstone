@@ -41,7 +41,7 @@ Python 서버로 이루어져 있습니다. 서버의 엔진은 CPU 에서 돌�
 - 🧠 **보이는 추론 과정**: 모델의 `<think>` 블록이 경과 시간과 함께 접을 수 있는 패널로 표시됩니다.
 - 🔌 **도구 호출**: 날씨, 공휴일, 환율, 계산기, 웹 검색을 서버에서 병렬로 실행하고 결과를 모델에 돌려줍니다.
 - 📦 **엔진 하나로 도는 공개 가중치 모델**: Qwen 3 0.6B 를 transformers 기반 단일 엔진이 돌립니다. 이 엔진은 PyTorch 위에서도, [torchnative](https://github.com/thisisthepy/torchnative) 위에서도 돕니다.
-- 🔁 **로컬 Ollama 대체제**: 동시 요청이 한 배치를 함께 씁니다(페이지드 KV 캐시를 쓰는 연속 배칭). Ollama 와 OpenAI 클라이언트는 base URL 만 바꿔 붙습니다. 4비트 가중치와 GGUF 는 계획입니다([#67](https://github.com/LogitAI/Gemstone/issues/67)).
+- 🔁 **로컬 Ollama 대체제**: 동시 요청이 한 배치를 함께 씁니다(페이지드 KV 캐시를 쓰는 연속 배칭). Ollama 와 OpenAI 클라이언트는 base URL 만 바꿔 붙습니다. torchnative 에서는 `GEMSTONE_QUANTIZATION=q4_k` 로 4비트 가중치를 올리고([#67](https://github.com/LogitAI/Gemstone/issues/67)), `GEMSTONE_DEVICE=cuda` 로 NVIDIA GPU 에서 돌립니다([#164](https://github.com/LogitAI/Gemstone/issues/164)).
 - 🖥️ **네이티브 데스크톱 경험**: JetBrains Jewel 데코레이티드 윈도우를 쓰고, Dmg / Msi / Deb 설치 파일을 만듭니다.
 
 ## 🚀 빠른 시작
@@ -172,8 +172,8 @@ Gemstone 은 초기 단계의, 동작하는 프로토타입입니다. 각 행에
 | 대화 기록 | ✅ 구현: 기기에 평문 JSON 으로 저장(암호화하지 않음), 하나씩 또는 전부 삭제 가능 ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
 | UI 테스트 | ⏳ 계획 |
 | 네이티브 데스크톱 실행 파일 (GraalVM, JVM 없음) | ⏳ 계획: Windows x64 빌드 경로는 있으나 아직 실행해 보지 않음 |
-| GPU(CUDA) 추론 | ⏳ 계획 ([#164](https://github.com/LogitAI/Gemstone/issues/164)) |
-| 4비트 가중치, GGUF | ⏳ 계획 ([#67](https://github.com/LogitAI/Gemstone/issues/67)) |
+| GPU(CUDA) 추론 | 🟡 부분: `uv sync --python 3.13 --extra cuda`, `GEMSTONE_DEVICE=cuda`. CI 에서 GPU 로 돌려 본 적은 아직 없음 ([#164](https://github.com/LogitAI/Gemstone/issues/164)) |
+| 4비트 가중치, GGUF | 🟡 부분: torchnative 에서 `GEMSTONE_QUANTIZATION=q4_k`. GGUF 파일은 아직 ([#67](https://github.com/LogitAI/Gemstone/issues/67)) |
 | Python Multiplatform 을 통한 온디바이스 추론 | ⏳ 계획 ([#42](https://github.com/LogitAI/Gemstone/issues/42)) |
 | 오프라인 모드, 기기 간 동기화 | ⏳ 계획 ([#42](https://github.com/LogitAI/Gemstone/issues/42), [#167](https://github.com/LogitAI/Gemstone/issues/167)) |
 

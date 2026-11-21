@@ -612,10 +612,14 @@ async def ps():
     models = []
     for entry in _registry().loaded():
         info = entry["info"]
+        details = info.details() if info else {}
+        if entry.get("quantization"):
+            details["quantization_level"] = entry["quantization"].upper()
+        on_gpu = entry.get("device", "cpu").split(":")[0] in ("cuda", "mps")
         models.append(dict(
             name=entry["hf_id"], model=entry["hf_id"], size=entry["size"],
-            digest=info.digest if info else "", details=info.details() if info else {},
-            expires_at=entry["expires_at"], size_vram=0,
+            digest=info.digest if info else "", details=details,
+            expires_at=entry["expires_at"], size_vram=entry["size"] if on_gpu else 0,
         ))
     return {"models": models}
 
