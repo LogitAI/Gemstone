@@ -236,7 +236,7 @@ def _engine_kwargs(options) -> tuple:
     return kwargs, list(stop)
 
 
-def _count_tokens(engine, text: str) -> Optional[int]:
+def _count_tokens_sync(engine, text: str) -> Optional[int]:
     tokenizer = getattr(engine, "tokenizer", None)
     if tokenizer is None:
         return None
@@ -246,12 +246,16 @@ def _count_tokens(engine, text: str) -> Optional[int]:
         return None
 
 
+async def _count_tokens(engine, text: str) -> Optional[int]:
+    return await run_in_threadpool(_count_tokens_sync, engine, text)
+
+
 def _template_kwargs(think: Optional[bool]) -> dict:
     """ `think` -> the chat template's `enable_thinking` (Qwen3 and others); unset leaves the template's default. """
     return {} if think is None else {"chat_template_kwargs": {"enable_thinking": think}}
 
 
-def _prompt_tokens(engine, messages, tools, template_kwargs=None) -> Optional[int]:
+def _prompt_tokens_sync(engine, messages, tools, template_kwargs=None) -> Optional[int]:
     tokenizer = getattr(engine, "tokenizer", None)
     if tokenizer is None:
         return None
@@ -261,7 +265,11 @@ def _prompt_tokens(engine, messages, tools, template_kwargs=None) -> Optional[in
             add_generation_prompt=True, tokenize=False, **(template_kwargs or {}))
     except Exception:
         return None
-    return _count_tokens(engine, prompt)
+    return _count_tokens_sync(engine, prompt)
+
+
+async def _prompt_tokens(engine, messages, tools, template_kwargs=None) -> Optional[int]:
+    return await run_in_threadpool(_prompt_tokens_sync, engine, messages, tools, template_kwargs)
 
 
 def _clean_messages(messages) -> list:
@@ -294,7 +302,7 @@ def _generate(lease, messages, tools, kwargs, stops, think, cancel, started, rel
     chunks = None
     try:
         template = _template_kwargs(think)
-        prompt_eval_count = _prompt_tokens(engine, messages, tools, template.get("chat_template_kwargs"))
+        prompt_eval_count = _prompt_tokens_sync(engine, messages, tools, template.get("chat_template_kwargs"))
         chunks = engine(messages, tools=tools or None, cancel=cancel, **template, **kwargs)
         for chunk in chunks:
             if first_token is None:
@@ -310,7 +318,7 @@ def _generate(lease, messages, tools, kwargs, stops, think, cancel, started, rel
         yield from parser.flush()
         chunks.close()
         end = time.perf_counter()
-        eval_count = _count_tokens(engine, "".join(raw))
+        eval_count = _count_tokens_sync(engine, "".join(raw))
         max_new = kwargs.get("max_new_tokens", 0)
         reason = "length" if (not stop_filter.hit and eval_count is not None and 0 < max_new <= eval_count) else "stop"
         first = first_token or end
@@ -797,7 +805,10 @@ async def _embed(body: dict, inputs: List[str]) -> tuple:
         if embed is None:
             raise _NotImplemented(f"model '{name}' cannot produce embeddings")
         vectors = await run_in_threadpool(embed, inputs, truncate) if inputs else []
-        count = sum(_count_tokens(lease.engine, text) or 0 for text in inputs)
+        count = 0
+        for text in inputs:
+            c = await _count_tokens(lease.engine, text)
+            count += c or 0
     finally:
         reg.release(lease)
     return vectors, count, lease.load_duration

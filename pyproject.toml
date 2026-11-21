@@ -28,7 +28,7 @@ torch = [
     "torch",
 ]  # !do not add version-specfic torch here!
 torchnative = [
-    "torchnative>=0.1.0b6",  # first release with cp315t wheels (free-threaded 3.15t, #177)
+    "torchnative>=0.1.0b11",  # continuous batching (index_copy_ on views, torchnative#254) and the skinny gemm (#74); all api/tests pass on it (run 44877496387)
 ]
 
 
