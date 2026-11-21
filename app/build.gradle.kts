@@ -1,6 +1,5 @@
 import java.net.URLClassLoader
 import java.util.zip.ZipFile
-import org.gradle.process.CommandLineArgumentProvider
 import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
@@ -226,16 +225,15 @@ dependencies {
 }
 
 // ---------------------------------------------------------------------------------------------
-// GraalVM native-image for the desktop target.
+// GraalVM native-image for the desktop target (SPEC S3.4, #191).
 //
-// native-build-tools binds itself to the `main` source set of a plain JVM project, which a
-// Kotlin Multiplatform project does not have, so the binary is pointed at the desktop
-// compilation's own output and runtime classpath instead.
+// compose-multiplatform-extended builds it: `packageNativeImage` of the org.thisisthepy.compose
+// plugin links AWT, JAWT and Skia statically into one executable (configured in `nativeImage { }`
+// below). Gemstone keeps only what is its own: the reachability metadata derived from its classes
+// and classpath, its bundled metadata, and the Windows icon and version resource.
 // ---------------------------------------------------------------------------------------------
 
 val nativeExecutableName = "gemstone"
-val nativeImageJdk = "22"
-val nativeMainClass = "gemstone.Main_desktopKt"
 
 val desktopMainCompilation = kotlin.targets.getByName("desktop").compilations.getByName("main")
 val desktopRuntimeClasspath = files(
@@ -243,14 +241,7 @@ val desktopRuntimeClasspath = files(
     desktopMainCompilation.runtimeDependencyFiles
 )
 
-// AWT resolves its native libraries as <java.home>/bin/<name> and java.home is null in a native
-// image, so the executable is built straight into a `bin` directory: that makes its parent a
-// valid java.home, which NativeRuntime.kt derives at startup. Building anywhere else produces
-// an executable that hard-crashes on launch with no Java stack trace.
-val nativeImageRoot = layout.buildDirectory.dir("native/nativeCompile")
-val nativeBinDir = layout.buildDirectory.dir("native/nativeCompile/bin")
 val nativeMetadataDir = layout.projectDirectory.dir("src/desktopMain/resources/META-INF/native-image")
-val agentOutputDir = layout.buildDirectory.dir("native/agent-output")
 val generatedMetadataDir = layout.buildDirectory.dir("generated/native-image")
 
 /**
@@ -386,12 +377,7 @@ val generateNativeResourceConfig by tasks.registering {
     }
 }
 
-val graalHome = javaToolchains.launcherFor {
-    languageVersion.set(JavaLanguageVersion.of(nativeImageJdk))
-}.map { it.metadata.installationPath.asFile.absolutePath }
-
 val isWindowsHost = System.getProperty("os.name").startsWith("Windows")
-val nativeImageTool = if (isWindowsHost) "bin/native-image.cmd" else "bin/native-image"
 
 // ---------------------------------------------------------------------------------------------
 // Executable icon and version metadata.
@@ -471,8 +457,6 @@ val compileNativeResources by tasks.registering {
                 """
                 1 ICON "${iconFile.asFile.absolutePath.replace('\\', '/')}"
 
-                1 24 "${manifestFile.get().asFile.absolutePath.replace('\\', '/')}"
-
                 1 VERSIONINFO
                 FILEVERSION $versionQuad
                 PRODUCTVERSION $versionQuad
@@ -510,131 +494,32 @@ val compileNativeResources by tasks.registering {
     }
 }
 
-val nativeCompile by tasks.registering(Exec::class) {
-    group = "native"
-    description = "Builds a native executable of the desktop app with GraalVM native-image"
-
-    dependsOn(
-        desktopMainCompilation.compileTaskProvider,
-        "desktopProcessResources",
-        generateNativeResourceConfig,
-        generateNativeSerializerConfig,
-        compileNativeResources
-    )
-    inputs.files(desktopRuntimeClasspath).withPathSensitivity(PathSensitivity.RELATIVE)
-    // The bundle has to be an input too: editing it and getting an UP-TO-DATE build silently
-    // produces a binary that ignores the change, which is very hard to tell apart from the fix
-    // simply not working.
-    inputs.files(metadataBundleDirs.map { it.asFile }).withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.dir(nativeMetadataDir).optional()
-    inputs.dir(generatedMetadataDir)
-    outputs.dir(nativeImageRoot)
-
-    executable = "${graalHome.get()}/$nativeImageTool"
-
-    val binDir = nativeBinDir
-    val metadataDir = nativeMetadataDir
-    val classpath = desktopRuntimeClasspath
-    val imageName = nativeExecutableName
-    val mainClass = nativeMainClass
-    val argFile = layout.buildDirectory.file("native/native-image.args")
-    val generatedDir = generatedMetadataDir
-    val resourceBinary = nativeResourceBinary
-    val bundleDirs = metadataBundleDirs
-
-    // A real application's classpath blows straight past the 8191 character Windows command
-    // line limit, so the arguments go in a file. native-image reads backslashes in an argument
-    // file as escapes, hence the forward slashes -- Windows accepts them in paths.
-    doFirst {
-        binDir.get().asFile.mkdirs()
-        val args = buildList {
-            add("-cp"); add(classpath.asPath)
-            // native-image defaults java.awt.headless to true.
-            add("-Djava.awt.headless=false")
-            // Without this, native-image quietly emits a fallback image -- a launcher that
-            // shells out to a JVM -- instead of failing on missing metadata.
-            add("--no-fallback")
-            // Declared rather than observed: a tracing agent picks up whatever locale the machine
-            // that ran it happened to use, so the same source tree would otherwise produce
-            // different images for different developers.
-            add("-H:IncludeLocales=en,ko")
-            val configDirs = (bundleDirs.map { it.asFile } + metadataDir.asFile + generatedDir.get().asFile)
-                .filter { it.isDirectory }
-            if (configDirs.isNotEmpty()) {
-                add("-H:ConfigurationFileDirectories=${configDirs.joinToString(",") { it.absolutePath }}")
-            }
-            // link.exe takes a .res file as a plain input, so the icon and version information
-            // end up embedded in the executable itself.
-            resourceBinary.get().asFile.takeIf { it.isFile }?.let {
-                add("-H:NativeLinkerOption=${it.absolutePath}")
-            }
-            add("-o"); add(binDir.get().asFile.resolve(imageName).absolutePath)
-            add(mainClass)
-        }
-        argFile.get().asFile.apply {
-            parentFile.mkdirs()
-            writeText(args.joinToString("\n") { "\"${it.replace('\\', '/')}\"" })
-        }
-    }
-
-    argumentProviders.add(CommandLineArgumentProvider {
-        listOf("@${argFile.get().asFile.absolutePath}")
-    })
-
-    // A native-image output directory missing Skia and the AWT font configuration is an
-    // executable that exists and crashes on launch. Stage them here and not only in nativeDist,
-    // because the compiler's own output directory is the first thing anyone runs.
-    val graalLibDir = graalHome.map { "$it/lib" }
-    doLast {
-        val bin = binDir.get().asFile
-        val lib = bin.parentFile.resolve("lib").apply { mkdirs() }
-
-        val skikoJar = classpath.files.single { it.name.startsWith("skiko-awt-runtime-") }
-        ZipFile(skikoJar).use { jar ->
-            jar.entries().asSequence()
-                .filter { e ->
-                    !e.isDirectory && (e.name == "icudtl.dat" ||
-                        e.name.endsWith(".dll") || e.name.endsWith(".so") || e.name.endsWith(".dylib"))
-                }
-                .forEach { e ->
-                    jar.getInputStream(e).use { input ->
-                        bin.resolve(File(e.name).name).outputStream().use { input.copyTo(it) }
-                    }
-                }
-        }
-
-        listOf("fontconfig.bfc", "fontconfig.properties.src", "psfont.properties.ja", "psfontj2d.properties")
-            .map { File(graalLibDir.get(), it) }
-            .filter { it.isFile }
-            .forEach { it.copyTo(lib.resolve(it.name), overwrite = true) }
-    }
-}
-
-/**
- * A clean copy of the runnable layout, without the compiler's build reports. nativeCompile
- * already produces a complete `bin` + `lib` tree, so this only strips what is not needed to run.
- */
-val nativeDist by tasks.registering(Sync::class) {
-    group = "native"
-    description = "Copies the runnable native image layout into build/dist"
-    dependsOn(nativeCompile)
-
-    from(nativeImageRoot) {
-        exclude("*.txt", "*.args", "reports/**")
-    }
-    into(layout.buildDirectory.dir("dist"))
-}
-
-val metadataCopy by tasks.registering(Copy::class) {
-    group = "native"
-    description = "Copies tracing agent output into src/desktopMain/resources/META-INF/native-image"
-    from(agentOutputDir)
-    into(nativeMetadataDir)
-}
-
 compose.desktop {
     application {
         mainClass = "gemstone.Main_desktopKt"
+
+        // One executable through compose-multiplatform-extended (#191): `./gradlew :app:packageNativeImage`
+        // writes build/compose/native-image/main/gemstone(.exe). It needs Liberica NIK 25 Full in
+        // GRAALVM_HOME and skiko's static archive (core-extended's build-skiko-static-jvm.sh output)
+        // in SKIKO_STATIC; docs/build/native-desktop.md has the steps.
+        nativeImage {
+            imageName.set(nativeExecutableName)
+            metadataDirectory.set(nativeMetadataDir)
+            providers.environmentVariable("SKIKO_STATIC").orNull?.let { skikoStaticDirectory.set(file(it)) }
+            // Gemstone's manifest (DPI awareness, supported Windows versions) instead of the plugin's.
+            if (isWindowsHost) windowsManifest.set(nativeManifestFile)
+            buildArgs.addAll(
+                // Declared rather than observed: a tracing agent picks up whatever locale the machine
+                // that ran it happened to use.
+                "-H:IncludeLocales=en,ko",
+                "-H:ConfigurationFileDirectories=" +
+                    (metadataBundleDirs.map { it.asFile } + generatedMetadataDir.get().asFile)
+                        .joinToString(",") { it.absolutePath },
+            )
+            // link.exe takes the .res file as a plain input: the icon and version information end
+            // up in the executable itself.
+            if (isWindowsHost) buildArgs.add("-H:NativeLinkerOption=${nativeResourceBinary.get().asFile.absolutePath}")
+        }
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
@@ -659,12 +544,10 @@ compose.desktop {
     }
 }
 
-// `-Pagent` attaches the GraalVM tracing agent to `run`, so that exercising the app records the
-// reflection, JNI and resource access a native image cannot infer statically. This goes through
-// Compose's own jvmArgs because the plugin configures the run task after any `withType<JavaExec>`
-// hook and would overwrite arguments added there.
-if (project.hasProperty("agent")) {
-    val agentDir = agentOutputDir.get().asFile
-    agentDir.mkdirs()
-    compose.desktop.application.jvmArgs += "-agentlib:native-image-agent=config-output-dir=${agentDir.absolutePath}"
+// The tracing agent: `./gradlew :app:runNativeImageAgent` (the plugin's) runs the app on GraalVM's JVM and
+// merges what it sees into src/desktopMain/resources/META-INF/native-image (`metadataDirectory` above).
+
+// The plugin's task builds from the metadata and resources Gemstone derives; generate them first.
+tasks.matching { it.name == "packageNativeImage" }.configureEach {
+    dependsOn(generateNativeSerializerConfig, generateNativeResourceConfig, compileNativeResources)
 }

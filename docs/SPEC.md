@@ -1013,22 +1013,32 @@ No code. The meaning of sync is an open question in `INTENT.md` § 5. Tracked in
 
 ### S3.4 Native desktop executable (GraalVM native-image): `partial` · G8
 
-Managed long-term by `compose-multiplatform-extended` (decided 2026-10-02). That plugin has no code
-yet, so Gemstone keeps its own path in the meantime (on `develop` since #71): Gradle tasks `generateNativeResourceConfig`,
-`nativeCompile`, `nativeDist` and `metadataCopy`, plus `NativeRuntime.kt`, the reachability
-metadata and [`build/native-desktop.md`](build/native-desktop.md). Windows x64 only so far. CI builds it in the native-desktop job of test.yml (dispatched by hand per the 2026-11-14 CI policy, #239; windows-latest,
-GraalVM for JDK 22; added 2026-11-13 with the owner's approval): `:app:nativeDist` succeeds, and the
-job requires `app/build/dist/bin/gemstone.exe` to open its "Gemstone AI" window and still run 15 s
-later (first green run 43302411294: 108.3 MB executable), and that a click on the chat input field
-focuses it: text typed before the click must change nothing, text typed after it must appear in the
-input row and nowhere else (clicks and keys register: run 43309886148). The executable must also
-chat with the server: the job starts the server on SmolLM2-135M-Instruct (fetched into a cached
-`HF_HOME`, then served with `HF_HUB_OFFLINE=1`), selects that model in the sidebar, sends the typed
-text and requires the reply to be saved in `chats.json` within 300 s (S2.6; model download in CI
-approved by the leader 2026-11-13). Its stderr may not show a missing-metadata error
-(`NoSuchFieldError`, `NoSuchMethodError`, `NoClassDefFoundError`, `Missing...RegistrationError`); the JNI
-entry for `java.awt.Event` was missing until #235. When the plugin takes over, the Gradle
-tasks become plugin configuration and only Gemstone-specific metadata stays here. Tracked in #191.
+Built by `compose-multiplatform-extended` (decided 2026-10-02; in 1.0, owner 2026-11-21): the
+`org.thisisthepy.compose` plugin's `nativeImage { }` block and `:app:packageNativeImage` task link AWT,
+JAWT and Skia statically into one executable, `app/build/compose/native-image/main/gemstone.exe`, with
+nothing beside it. Gemstone keeps only what is its own (#191): the reachability metadata derived from
+its classes and classpath (`generateNativeSerializerConfig`, `generateNativeResourceConfig`), its
+bundled metadata (`app/native-metadata/`) and `META-INF/native-image/`, the Windows icon and version
+resource (`compileNativeResources`, version from `pyproject.toml`) and its DPI manifest
+(`windowsManifest`), and `NativeRuntime.kt` (a no-op in the static image). The tracing agent is the
+plugin's `:app:runNativeImageAgent`. See [`build/native-desktop.md`](build/native-desktop.md).
+
+CI builds it on Windows x64 in the native-desktop job of test.yml (dispatched by hand per the
+2026-11-14 CI policy, #239; added 2026-11-13 with the owner's approval): Liberica NIK 25 Full, the MSVC
+tools, and skiko's static archive built by compose-multiplatform-core-extended's
+`build-skiko-static-jvm.sh` at tag `v1.11.1-ext.2` (cached). The job requires `packageNativeImage` to
+succeed and its output directory to hold only `gemstone.exe`, whose version resource says the
+`pyproject.toml` version and "Gemstone AI" and whose embedded manifest is Gemstone's (per-monitor DPI).
+It then requires the executable to open its "Gemstone AI" window and still run 15 s later, and a
+click on the chat input field to focus it: text typed before the click must change nothing, text
+typed after it must appear in the input row and nowhere else (clicks and keys register since run
+43309886148 on the previous build path). The executable must also chat with the server: the job
+starts the server on SmolLM2-135M-Instruct (fetched into a cached `HF_HOME`, then served with
+`HF_HUB_OFFLINE=1`), selects that model in the sidebar, sends the typed text and requires the reply to
+be saved in `chats.json` within 300 s (S2.6; model download in CI approved by the leader 2026-11-13).
+Its stderr may not show a missing-metadata error (`NoSuchFieldError`, `NoSuchMethodError`,
+`NoClassDefFoundError`, `Missing...RegistrationError`; #235). `partial` until that job is green on the
+plugin's build; macOS and Linux, which the plugin also builds, are not in Gemstone's CI. Tracked in #191.
 
 ---
 

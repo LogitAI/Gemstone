@@ -104,16 +104,18 @@ Measured or stated by torchnative itself, as of 2026-10-02:
 
 ## 6. Native desktop build
 
-`compose-multiplatform-extended` is a fork of the Compose Gradle plugin. Its aim is to produce one
-native-image executable instead of a JVM-bundled package. It has no code yet, so nothing can move
-there today.
+`compose-multiplatform-extended` is a fork of the Compose Gradle plugin that produces one native-image
+executable instead of a JVM-bundled package. Since #191 Gemstone builds with it: `nativeImage { }` and
+`:app:packageNativeImage` (plugin `org.thisisthepy.compose:1.11.1-ext.3`).
 
-- **Kept in Gemstone for now:** the `nativeCompile` / `nativeDist` tasks in `app/build.gradle.kts`,
-  `NativeRuntime.kt`, `app/native-metadata/`, `META-INF/native-image/`,
+- **Moved to the plugin:** compiling and linking (`nativeCompile`), staging the native libraries
+  beside the executable (`nativeDist`; the plugin links them in), and the tracing agent (`-Pagent` and
+  `metadataCopy` became `runNativeImageAgent`).
+- **Kept in Gemstone:** the metadata generators, `app/native-metadata/`, `META-INF/native-image/`, the
+  icon and version resource and the DPI manifest, `NativeRuntime.kt`,
   [`docs/build/native-desktop.md`](../build/native-desktop.md), `tools/drive-desktop.ps1`.
-- **Moves later:** once the plugin does the same job, the Gradle tasks become plugin configuration.
-  Reachability metadata for the Compose/Skiko stack goes to the plugin, and only Gemstone-specific
-  metadata stays here.
+- **Still to move:** the Compose/Skiko part of `app/native-metadata/` belongs in the plugin once it ships
+  that metadata itself.
 - **Not GraalVM-specific:** the JNA dependency (Jewel needs it on any JVM) stays in Gemstone.
 - **Not committed:** the `GEMSTONE_INPUT_PROBE` debug branch in `Main.desktop.kt`.
 

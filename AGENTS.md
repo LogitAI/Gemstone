@@ -297,7 +297,7 @@ CI runs the Python tests, the quick-start check, `:app:desktopTest` with `:app:c
 and the web bundle check on demand (`workflow_dispatch`, owner policy 2026-11-14, #239/#240), not on
 push, schedule or pull requests (#175). They are the jobs `pytest`, `quickstart`, `gradle`, `web-bundle` and `native-desktop` of
 `.github/workflows/test.yml`. `native-desktop` (windows-latest; owner approval 2026-11-13, #191) builds
-`:app:nativeDist` and checks that the executable opens its window, takes input and streams a chat reply (SmolLM2-135M-Instruct). A red `develop` is fixed forward by its own pull request. Test workflows are named `test.yml`, or
+`:app:packageNativeImage` (through compose-multiplatform-extended's plugin) and checks that the executable opens its window, takes input and streams a chat reply (SmolLM2-135M-Instruct). A red `develop` is fixed forward by its own pull request. Test workflows are named `test.yml`, or
 `test-<target>.yml` only when their triggers or environment differ (`test-torchnative.yml`).
 
 **Current test reality.** Python tests live in `api/tests/`: the engine and continuous batching
