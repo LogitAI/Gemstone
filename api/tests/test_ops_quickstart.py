@@ -179,3 +179,22 @@ def test_quick_start_works_without_an_activated_venv(path):
 def test_ci_runs_the_documented_command():
     wf = (ROOT / ".github/workflows/test.yml").read_text()
     assert START in wf and "/api/version" in wf
+
+
+def _job(workflow: str, name: str) -> str:
+    """The text of one top-level job of a workflow (from `  name:` to the next job or the end)."""
+    m = re.search(rf"^  {re.escape(name)}:\n(.*?)(?=^  \S|\Z)", workflow, re.M | re.S)
+    assert m, f"no job {name!r}"
+    return m.group(1)
+
+
+def test_ci_gates_the_torchnative_release_path():
+    # Gemstone 1.0 runs on torchnative and free-threaded 3.15t. The release needs test.yml and
+    # test-torchnative.yml green (owner, 2026-11-21: "따로 두고 엄격하게"), so the torchnative run may not
+    # be allowed to fail, by default installs exactly uv.lock (the README command), runs every test,
+    # and starts the server with the documented torchnative command.
+    job = _job((ROOT / ".github/workflows/test-torchnative.yml").read_text(), "pytest")
+    assert "continue-on-error" not in job
+    assert "uv sync --locked --python 3.15t --extra torchnative" in job
+    assert 'pytest -v -m "real_model or not real_model" -rs' in job
+    assert "uv run --extra torchnative python -m api run server" in job and "/api/version" in job

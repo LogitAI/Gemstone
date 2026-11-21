@@ -54,7 +54,8 @@ uv sync --python 3.13 --extra torch</code></pre>
 
   <h2 data-lang="en">2. Start it</h2><h2 data-lang="ko">2. 실행</h2>
 <pre><code>uv run --extra torch python -m api run server                  <span class="c"># 127.0.0.1:23100 (loopback only)</span>
-uv run --extra torch python -m api run server 127.0.0.1 23100  <span class="c"># explicit host and port</span></code></pre>
+uv run --extra torch python -m api run server 127.0.0.1 23100  <span class="c"># explicit host and port</span>
+uv run --extra torchnative python -m api run server            <span class="c"># on torchnative</span></code></pre>
   <p data-lang="en"><code>uv run</code> uses the environment <code>uv sync</code> created, so there is no virtual environment to activate. Use <code>--extra torchnative</code> if you installed that one. Logs go to the console at INFO; set <code>GEMSTONE_LOG_LEVEL=DEBUG</code> to also log prompts and answers.</p><p data-lang="ko"><code>uv run</code> 은 <code>uv sync</code> 가 만든 환경을 쓰므로 가상환경을 따로 활성화할 필요가 없습니다. torchnative 를 설치했다면 <code>--extra torchnative</code> 를 쓰세요. 로그는 INFO 수준으로 콘솔에 나가며, <code>GEMSTONE_LOG_LEVEL=DEBUG</code> 를 설정하면 프롬프트와 답변도 기록합니다.</p>
   <p class="note" data-lang="en">The model downloads from Hugging Face the first time a session uses it, once. Qwen 3 0.6B is about 1.5 GB (its <code>model.safetensors</code> on the Hub).</p><p class="note" data-lang="ko">모델은 세션이 처음 사용할 때 Hugging Face 에서 한 번 내려받습니다. Qwen 3 0.6B 는 약 1.5 GB 입니다(Hub 의 <code>model.safetensors</code> 기준).</p>
 

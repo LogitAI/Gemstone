@@ -64,7 +64,7 @@ yet, so `uv sync` builds them from source and needs a C compiler and Rust ([#178
 **2. Start the model server** (port `23100`; the model downloads on first use)
 
 ```bash
-uv run --extra torch python -m api run server
+uv run --extra torch python -m api run server   # or: uv run --extra torchnative python -m api run server
 ```
 
 Open <http://127.0.0.1:23100/> for the web client the server bundles.

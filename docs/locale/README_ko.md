@@ -64,7 +64,7 @@ torchnative(0.1.0b11 이상)는 Linux x86_64 / aarch64 와 macOS arm64 용 free-
 **2. 모델 서버 실행** (포트 `23100`, 모델은 처음 쓸 때 내려받습니다)
 
 ```bash
-uv run --extra torch python -m api run server
+uv run --extra torch python -m api run server   # 또는: uv run --extra torchnative python -m api run server
 ```
 
 <http://127.0.0.1:23100/> 를 열면 서버에 함께 들어 있는 웹 클라이언트가 뜹니다.

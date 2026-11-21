@@ -9,7 +9,7 @@ name: Tests
 #   native-desktop  builds the GraalVM native executable on Windows x64 (:app:nativeDist) and checks
 #               that it opens its window, takes clicks and keys, and streams a chat reply from the server
 #               on SmolLM2-135M-Instruct (SPEC S3.4, #191; owner approval 2026-11-13)
-# The torchnative run is test-torchnative.yml (different triggers, non-blocking).
+# The torchnative run is test-torchnative.yml (its own inputs); a release needs both green (owner, 2026-11-21).
 on:
   # Development runs are started by hand only (owner, 2026-11-14: "개발 테스트 ci는
   # 명시적으로 실행하기").
