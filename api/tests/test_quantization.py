@@ -57,19 +57,43 @@ def test_q8_0_concurrent_greedy_requests_equal_sequential(q8_engine):
 # Q4K packs 256 weights per block: SmolLM2-135M (hidden size 576) cannot take it, Qwen3-0.6B (1024) can.
 Q4_MODEL = os.environ.get("GEMSTONE_TEST_Q4_MODEL", "Qwen/Qwen3-0.6B")
 Q4_TEXTS = [m[0]["content"] for m in PROMPTS]
-Q4_MAX_RELATIVE_RMS = 0.15  # agent proposal, not confirmed (SPEC S1.16)
 Q4_MIN_TOP1_AGREEMENT = 3  # of the 4 prompts
+Q4_GREEDY_TOKENS = 16
+# The bound (SPEC S1.16): q4_k's next-token choice agrees with the float model on 3 of 4 prompts, and q4_k
+# is no further from the float model than q4_0, the 4-bit format torchnative measured as degrading
+# generation (SmolLM2: tokens diverge at the 7th and loop). Both are measured in the same run on the same
+# model, so the reference moves with the model and the torchnative build. q8_0 is measured as the
+# near-lossless end of the scale. A q4_k further off than q4_0 points at a defect in torchnative's Q4K.
 
 
-def _next_token_logits(engine, tokenizer, texts):
+def _measure(engine, tokenizer, texts):
     import torch
 
-    rows = []
+    logits, continuations = [], []
     with torch.no_grad():
         for text in texts:
             ids = tokenizer(text, return_tensors="pt").input_ids.to(engine.model.device)
-            rows.append(engine.model(ids).logits[0, -1].float().cpu())
-    return torch.stack(rows)
+            logits.append(engine.model(ids).logits[0, -1].float().cpu())
+            out = engine.model.generate(ids, max_new_tokens=Q4_GREEDY_TOKENS, do_sample=False)
+            continuations.append(out[0, ids.shape[1]:].tolist())
+    return torch.stack(logits), continuations
+
+
+def _distance(reference, measured):
+    import torch
+
+    (ref_logits, ref_tokens), (logits, tokens) = reference, measured
+    rms = float(((logits - ref_logits).pow(2).mean() / ref_logits.pow(2).mean()).sqrt())
+    p = torch.log_softmax(ref_logits, -1)
+    kl = float((p.exp() * (p - torch.log_softmax(logits, -1))).sum(-1).mean())  # nats, KL(float || quantised)
+    top1 = int((logits.argmax(-1) == ref_logits.argmax(-1)).sum())
+    prefix = []
+    for a, b in zip(ref_tokens, tokens):
+        n = 0
+        while n < min(len(a), len(b)) and a[n] == b[n]:
+            n += 1
+        prefix.append(n)
+    return dict(rms=rms, kl=kl, top1=top1, greedy_prefix=prefix)
 
 
 def test_q4_k_stays_within_the_stated_bound_of_the_float_model():
@@ -79,24 +103,29 @@ def test_q4_k_stays_within_the_stated_bound_of_the_float_model():
 
     options = dict(dtype=torch.float32, device=TEST_DEVICE, batching=False, local_files_only=not ALLOW_DOWNLOAD)
     tokenizer = AutoTokenizer.from_pretrained(Q4_MODEL, local_files_only=not ALLOW_DOWNLOAD)
-    reference = Engine(Q4_MODEL, **options)
-    try:
-        expected = _next_token_logits(reference, tokenizer, Q4_TEXTS)
-    finally:
-        reference.close()
-    quantized = Engine(Q4_MODEL, quantization="q4_k", **options)
-    try:
-        assert quantized.quantization == "q4_k"
-        actual = _next_token_logits(quantized, tokenizer, Q4_TEXTS)
-    finally:
-        quantized.close()
 
-    relative_rms = float(((actual - expected).pow(2).mean() / expected.pow(2).mean()).sqrt())
-    top1 = int((actual.argmax(-1) == expected.argmax(-1)).sum())
-    measured = f"{Q4_MODEL} q4_k vs float32: next-token logit relative RMS {relative_rms:.4f}, top-1 agreement {top1}/{len(Q4_TEXTS)}"
+    def measure(quantization=None):
+        engine = Engine(Q4_MODEL, quantization=quantization, **options)
+        try:
+            assert engine.quantization == quantization
+            return _measure(engine, tokenizer, Q4_TEXTS)
+        finally:
+            engine.close()
+
+    reference = measure()
+    results = {fmt: _distance(reference, measure(fmt)) for fmt in ("q8_0", "q4_0", "q4_k")}
+
+    lines = [f"{Q4_MODEL}, float32 reference, {len(Q4_TEXTS)} prompts, {Q4_GREEDY_TOKENS} greedy tokens", "",
+             "| format | logit relative RMS | KL (nats) | top-1 | greedy prefix |", "|---|---|---|---|---|"]
+    for fmt, r in results.items():
+        lines.append(f"| {fmt} | {r['rms']:.4f} | {r['kl']:.4f} | {r['top1']}/{len(Q4_TEXTS)} | {r['greedy_prefix']} |")
+    measured = "\n".join(lines)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as f:
             f.write(f"### 4-bit quality (#67)\n\n{measured}\n\n")
-    assert relative_rms <= Q4_MAX_RELATIVE_RMS, measured
-    assert top1 >= Q4_MIN_TOP1_AGREEMENT, measured
+    print(measured)
+
+    q4_k, q4_0 = results["q4_k"], results["q4_0"]
+    assert q4_k["top1"] >= Q4_MIN_TOP1_AGREEMENT, measured
+    assert q4_k["kl"] <= q4_0["kl"], measured

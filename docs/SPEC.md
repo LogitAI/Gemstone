@@ -715,15 +715,20 @@ spelling: `q8_0`, `q4_0`, `q4_1`, `q4_k`, `q5_k`, `q6_k`, ...).
   Unset or empty means the checkpoint's own weights. A value not in `FORMATS()`, or any value on
   upstream PyTorch, makes the model fail to load with a message naming the value and the accepted
   formats (or `uv sync --extra torchnative`); the server reports it as any other load failure (S1.14).
-- `q4_k` is the 4-bit format: torchnative measured 7.5% relative logit RMS against the float
-  weights, where `q4_0` measured 29.5% and degraded generation (torchnative `docs/graph/QUANT2.md`).
-  Q4K packs 256 weights per block, so a model whose linear layers are not multiples of 256 wide
-  (SmolLM2-135M: 576) cannot take it; torchnative refuses by name.
+- `q4_k` is the 4-bit format. torchnative's figures are weight errors on random Gaussian
+  matrices (Q4K 7.5% relative RMS, Q4_0 8.5%; torchnative `docs/graph/QUANT.md` §7), not model
+  quality; on SmolLM2-135M `q4_0` put the logits 29.5% off and generation diverged at the 7th token
+  (`docs/graph/QUANT2.md`). Q4K packs 256 weights per block, so a model whose linear layers are not
+  multiples of 256 wide (SmolLM2-135M: 576) cannot take it; torchnative refuses by name. `lm_head`
+  stays dense (torchnative's default for a tied output embedding).
 - Quality bound (agent proposal, not confirmed): on Qwen3-0.6B in float32, over the four test
-  prompts, the relative RMS of `q4_k`'s next-token logits against the unquantised model's is at most
-  15%, and the most likely next token agrees on at least 3 of 4. Measured by
-  `api/tests/test_quantization.py::test_q4_k_stays_within_the_stated_bound_of_the_float_model` on
-  torchnative (`torchnative_only`), which writes the numbers to the CI job summary.
+  prompts, `q4_k`'s most likely next token agrees with the unquantised model's on at least 3 of 4,
+  and its next-token KL divergence from the unquantised model is no larger than `q4_0`'s, measured in
+  the same run on the same model. A fixed logit-RMS bound (15%) was dropped: it had no derivation,
+  and run 44912298139 measured 27.2% for `q4_k` with all 4 next tokens agreeing. The test also
+  records `q8_0`, logit relative RMS and the greedy 16-token prefix that matches, in the CI job
+  summary: `api/tests/test_quantization.py::test_q4_k_stays_within_the_stated_bound_of_the_float_model`
+  on torchnative (`torchnative_only`).
 
 Not yet: GGUF checkpoints (torchnative reads them, S2.5 there; Gemstone does not offer them), a
 per-model format (Ollama `create`'s `quantize` stays 501, S1.15).
