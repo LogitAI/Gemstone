@@ -750,8 +750,12 @@ GPU through the same public torch / transformers API (no CUDA graphs, S1.12).
 
 Tests: `api/tests/test_serving_options.py` (parsing, refusals, precedence, that the registry passes
 the settings to every engine, the unavailable-device message, and that `uv.lock` resolves the
-`cuda` extra to CUDA wheels). On a GPU, the real-model tests run with `GEMSTONE_TEST_DEVICE=cuda`.
-`partial` until they have run on a GPU runner (none exists yet).
+`cuda` extra to CUDA wheels), in CI. The GPU check is the owner's manual run, not CI (owner,
+2026-11-21: "그건 내가 테스트 해줄테니까 ci로 안할거야"): on a machine with an NVIDIA GPU,
+`uv sync --locked --python 3.13 --extra cuda`, then
+`GEMSTONE_TEST_DEVICE=cuda uv run --extra cuda pytest -m real_model -v`, then the server with
+`GEMSTONE_DEVICE=cuda uv run --extra cuda python -m api run server` and one chat. `partial` until that
+run passes and is recorded on #164.
 
 ## 2. Client (`app/`)
 
