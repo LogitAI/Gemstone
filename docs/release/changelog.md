@@ -8,6 +8,32 @@ issue that records the decision.
 Gemstone's first release; `pyproject.toml` has said 1.0.0 since before any release was cut. The
 entries below are changes against earlier `develop` builds (team leader, 2026-11-21: rename to 1.0.0).
 
+### In 1.0
+
+- **One serving engine** for every model, built on transformers, on upstream PyTorch or on
+  [torchnative](https://github.com/thisisthepy/torchnative) (0.1.0b11 or newer) on free-threaded
+  Python 3.15t with the GIL off: streaming chat, continuous batching, a paged KV cache, q8_0 weights on
+  torchnative, several resident models with keep-alive, and tool calling.
+- **OpenAI- and Ollama-compatible APIs** next to the app's own WebSocket chat, with an optional API key
+  (`GEMSTONE_API_KEY`).
+- **The chat client** for desktop (JVM, and a GraalVM native executable on Windows x64), Android and the
+  web (served by the API at `/`); iOS is partial (the Xcode project builds for the simulator).
+- **Install**: `uv sync --locked`, with `--python 3.13 --extra torch` or `--python 3.15t --extra torchnative`.
+  On 3.15t, `psutil`, `safetensors`, `tokenizers` and `hf-xet` are built from source (C compiler and Rust,
+  [#178](https://github.com/LogitAI/Gemstone/issues/178)).
+- **Checked** by the two test workflows on the release commit: upstream PyTorch with every client job, and
+  torchnative on 3.15t from the lock file, including the start command.
+
+### Not in 1.0
+
+A fast paged-attention kernel ([#74](https://github.com/LogitAI/Gemstone/issues/74)), 4-bit weights
+([#67](https://github.com/LogitAI/Gemstone/issues/67)), CUDA ([#164](https://github.com/LogitAI/Gemstone/issues/164)),
+on-device inference and offline chat ([#42](https://github.com/LogitAI/Gemstone/issues/42),
+[#190](https://github.com/LogitAI/Gemstone/issues/190)), cross-device sync
+([#167](https://github.com/LogitAI/Gemstone/issues/167)) and a global search overlay
+([#207](https://github.com/LogitAI/Gemstone/issues/207)). Known input issues on the web (Korean IME) and the
+desktop wait on the Compose fork ([#41](https://github.com/LogitAI/Gemstone/issues/41)).
+
 ### Changed
 
 - **Seeded sampling on the exclusive path gives different text, once.** The engine's exclusive

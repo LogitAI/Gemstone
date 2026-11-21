@@ -77,6 +77,25 @@ def test_version_is_the_pyproject_version_without_installing():
     assert VERSION == declared
 
 
+def test_client_and_server_share_one_version():
+    # AGENTS 11: the client and the API are versioned together. A release tags one version.
+    gradle = (ROOT / "app" / "build.gradle.kts").read_text()
+    client = {
+        "versionName": re.search(r'versionName\s*=\s*"([^"]+)"', gradle).group(1),
+        "appVersion": re.search(r'val appVersion\s*=\s*"([^"]+)"', gradle).group(1),
+        "packageVersion": re.search(r'packageVersion\s*=\s*"([^"]+)"', gradle).group(1),
+    }
+    assert client == dict.fromkeys(client, VERSION)
+
+
+def test_changelog_heads_the_current_version():
+    # The newest changelog section is the version the repository builds; the release notes of tag
+    # v<VERSION> are that section.
+    changelog = (ROOT / "docs" / "release" / "changelog.md").read_text(encoding="utf-8")
+    top = re.search(r"^## (.+)$", changelog, re.M).group(1)
+    assert re.fullmatch(rf"{re.escape(VERSION)}( \((unreleased|\d{{4}}-\d{{2}}-\d{{2}})\))?", top), top
+
+
 def test_api_version_is_real_semver(cached):
     body = cached["client"].get("/api/version").json()
     assert body == {"version": VERSION} and body["version"] != "0.0.0"
