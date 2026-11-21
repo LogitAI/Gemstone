@@ -163,7 +163,7 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
 | 뺀 것 | 이유 | 이슈 |
 |---|---|---|
 | 빠른 paged attention 커널 | 완전히 새로 만들어야 하는 torchnative 커널이다(TN-M2). 11월에는 순수 torch op 경로로 정확성만 맞춘다 | #74 |
-| 4비트(Q4) 가중치, GGUF 가져오기 | 4비트는 `q4_k`(torchnative 측정 logit RMS 7.5%; `q4_0` 은 29.5%)로 낸다. GGUF 파일 읽기는 Gemstone 에 아직 없다 | #67 |
+| 4비트(Q4) 가중치, GGUF 가져오기 | 4비트는 `q4_k` 로 낸다. 품질 기준은 같은 실행에서 잰 `q4_0` 보다 float 에 가깝고 다음 토큰이 4개 중 3개 이상 일치하는 것(SPEC S1.16; 고정 RMS 15% 기준은 근거가 없어 버렸다. Qwen3-0.6B `q4_k` 는 27.2%, 다음 토큰 4/4 일치). GGUF 파일 읽기는 Gemstone 에 아직 없다 | #67 |
 | ~~여러 모델 동시 상주와 축출, 나머지 Ollama 명령(create/copy/push, Modelfile, embeddings)~~ | **구현함**(develop 반영, 010e78f). 상주 모델 수 3개(`GEMSTONE_MAX_LOADED_MODELS`)와 메모리 한도, 사용 중이 아닌 모델의 LRU 축출, copy·create(system·parameters)·embed. push 는 501, Modelfile·template 은 지원하지 않는다 | #75 |
 | ~~세션 프리픽스 캐시~~ | **구현함**(develop 반영, 529f29a). WebSocket 앱 채팅(S1.4)에서 세션별 `DynamicCache` 공통 프리픽스를 `cache.crop()`으로 재사용한다 | #211 |
 | Qwen3 4B 이상과 8B 이상 모델 | Qwen3 은 0.6B 부터 검증한다(torchnative #23). 4비트가 없으면 큰 모델은 메모리 부담이 크다 | - |
