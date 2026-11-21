@@ -3,6 +3,7 @@ from typing import Optional
 from uuid import uuid4
 import logging
 import os
+import re
 import threading
 import time
 
@@ -32,6 +33,37 @@ def configure_logging() -> None:
         handler.setFormatter(logging.Formatter("%(levelname)s:     %(name)s - %(message)s"))
         log.addHandler(handler)
         log.propagate = False
+
+
+_DEVICE = re.compile(r"cpu|mps|cuda(:\d+)?")
+
+
+def serving_device() -> str:
+    """
+    The device every engine the server loads runs on (GEMSTONE_DEVICE, SPEC S1.17): `cpu` (default),
+    `cuda`, `cuda:<index>` or `mps`. A malformed value raises ValueError naming the accepted ones.
+    """
+    value = os.environ.get("GEMSTONE_DEVICE", "").strip().lower()
+    if not value:
+        return "cpu"
+    if not _DEVICE.fullmatch(value):
+        raise ValueError(f"GEMSTONE_DEVICE={value!r} is not a device: use cpu, cuda, cuda:<index> or mps.")
+    return value
+
+
+def serving_quantization() -> Optional[str]:
+    """ The weight format every engine loads with (GEMSTONE_QUANTIZATION, SPEC S1.16), or None. """
+    value = os.environ.get("GEMSTONE_QUANTIZATION", "").strip().lower()
+    return value or None
+
+
+def engine_options(class_options: dict) -> dict:
+    """ The server settings as Engine keyword arguments, under a model class's own options (which win). """
+    options = {"device": serving_device()}
+    quantization = serving_quantization()
+    if quantization is not None:
+        options["quantization"] = quantization
+    return {**options, **class_options}
 
 
 def session_ttl() -> float:

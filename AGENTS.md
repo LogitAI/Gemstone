@@ -338,12 +338,14 @@ with a real failing test (rule 5).
   Origins, comma-separated, `*` allowed; localhost and the server's own origin are always allowed) and
   `GEMSTONE_API_KEY` (when set, `Authorization: Bearer <key>` is required except for the web assets and
   health checks; a WebSocket may pass `?api_key=`). A key is a secret: never log or commit it.
+  `GEMSTONE_DEVICE` (`cpu`, `cuda[:n]`, `mps`) and `GEMSTONE_QUANTIZATION` (a torchnative format such as
+  `q4_k`) apply to every engine the server loads (SPEC S1.16, S1.17).
 
 ## 15. Dependencies
 
-- `torch` and `torchnative` are mutually exclusive extras (torchnative replaces `import torch`).
-  Do not add a version pin to `torch`; on Windows and Linux it comes from the PyTorch CPU index
-  configured under `[tool.uv.sources]` (the engine runs on CPU; CUDA returns in M4 as a `cuda` extra).
+- `torch`, `cuda` and `torchnative` are mutually exclusive extras (torchnative replaces `import torch`).
+  Do not add a version pin to `torch`; on Windows and Linux `--extra torch` takes it from the PyTorch CPU
+  index and `--extra cuda` from the CUDA 13.2 index (`[tool.uv.sources]`, #164).
 - The engine uses only the public `torch` / `transformers` API. Custom kernels cannot be registered
   from Gemstone (`torch.library` is a no-op on torchnative); they belong in torchnative.
 - Python dependency versions are locked in the tracked `uv.lock` (#186). CI installs with `uv sync --locked`,

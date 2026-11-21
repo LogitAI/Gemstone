@@ -559,9 +559,10 @@ def load_engine(hf_id: str):
     Load a model from the local cache only; /api/pull (or a first use of a catalogue model) is how
     a model gets there. The model class's context length and engine options apply.
     """
-    from .engine import Engine
+    from . import engine, settings
     cls = model_class_for(hf_id)
-    return Engine(hf_id, context_length=cls.context_length or None, local_files_only=True, **cls.engine_options)
+    return engine.Engine(hf_id, context_length=cls.context_length or None, local_files_only=True,
+                         **settings.engine_options(cls.engine_options))
 
 
 class ModelUnavailable(Exception):
@@ -848,8 +849,9 @@ class Registry:
 
     def loaded(self) -> List[dict]:
         """
-        The resident models for /api/ps: `hf_id`, `info`, `expires_at`, `size` (bytes) and `active`
-        (leases held), latest expiry first, as Ollama lists them.
+        The resident models for /api/ps: `hf_id`, `info`, `expires_at`, `size` (bytes), `active`
+        (leases held), and the engine's `device` and `quantization` (S1.17), latest expiry first, as
+        Ollama lists them.
         """
         with self._cond:
             entries = []
@@ -860,7 +862,9 @@ class Registry:
                     expires = _iso(datetime.now(timezone.utc) + timedelta(seconds=r.keep_alive))
                 else:
                     expires = _iso(r.expires_at)
-                entries.append(dict(hf_id=r.hf_id, info=r.info, expires_at=expires, size=r.memory, active=r.active))
+                entries.append(dict(hf_id=r.hf_id, info=r.info, expires_at=expires, size=r.memory, active=r.active,
+                                    device=str(getattr(r.engine, "device", "cpu")),
+                                    quantization=getattr(r.engine, "quantization", None)))
         return sorted(entries, key=lambda e: e["expires_at"], reverse=True)  # stable: ties stay most recent first
 
     def _victims_locked(self, incoming: int, best_effort: bool = False) -> Optional[List[Resident]]:

@@ -585,7 +585,7 @@ Implemented (M3 scope, #66; several resident models and derived models, #75),
   plus the other local models, for `GET /api/models` and `GET /v1/models` (S1.2).
 
 Not yet: memory accounting beyond weights and KV cache (activations, allocator overhead), GPU
-placement (`size_vram` is 0; CUDA is #164), pull progress per byte (it is per file; the Hub reports file
+placement beyond `size_vram` (S1.17), pull progress per byte (it is per file; the Hub reports file
 sizes), GGUF.
 
 Tests: `api/tests/test_multi_resident.py` (fake engine and store: two models resident and
@@ -704,12 +704,58 @@ format), and one test on the real engine (SmolLM2-135M, `test_chat_on_the_real_e
 `api/tests/test_multi_resident.py`: copy, create (and what it refuses), derived models in the
 Ollama and OpenAI APIs, show, embed and the legacy embeddings, push 501, per-file pull progress.
 
-### S1.16 4-bit quantised weights: `planned` · G5
+### S1.16 4-bit quantised weights: `partial` · G5
 
-An Ollama replacement has to run models at roughly 4-bit quality. Today torchnative offers
-`TorchnativeConfig("q8_0")` through transformers' `HfQuantizer` slot. Its Q4_0 shows 29.5% logit
-RMS error and degrades generation, and it has no GGUF reader. This item depends on torchnative.
-No code in Gemstone. Tracked in #67.
+An Ollama replacement has to run models at roughly 4-bit quality (#67; in 1.0, owner 2026-11-21).
+torchnative's `TorchnativeConfig` quantises the weights as they load, through transformers'
+`HfQuantizer` slot. torchnative 0.1.0b11 lists its formats in `torchnative.quant.FORMATS()` (GGUF
+spelling: `q8_0`, `q4_0`, `q4_1`, `q4_k`, `q5_k`, `q6_k`, ...).
+
+- `GEMSTONE_QUANTIZATION` (S1.17) loads every model the server serves with one of those formats.
+  Unset or empty means the checkpoint's own weights. A value not in `FORMATS()`, or any value on
+  upstream PyTorch, makes the model fail to load with a message naming the value and the accepted
+  formats (or `uv sync --extra torchnative`); the server reports it as any other load failure (S1.14).
+- `q4_k` is the 4-bit format: torchnative measured 7.5% relative logit RMS against the float
+  weights, where `q4_0` measured 29.5% and degraded generation (torchnative `docs/graph/QUANT2.md`).
+  Q4K packs 256 weights per block, so a model whose linear layers are not multiples of 256 wide
+  (SmolLM2-135M: 576) cannot take it; torchnative refuses by name.
+- Quality bound (agent proposal, not confirmed): on Qwen3-0.6B in float32, over the four test
+  prompts, the relative RMS of `q4_k`'s next-token logits against the unquantised model's is at most
+  15%, and the most likely next token agrees on at least 3 of 4. Measured by
+  `api/tests/test_quantization.py::test_q4_k_stays_within_the_stated_bound_of_the_float_model` on
+  torchnative (`torchnative_only`), which writes the numbers to the CI job summary.
+
+Not yet: GGUF checkpoints (torchnative reads them, S2.5 there; Gemstone does not offer them), a
+per-model format (Ollama `create`'s `quantize` stays 501, S1.15).
+
+### S1.17 Serving device and weight format: `partial` · G5
+
+Two server settings apply to every engine the registry loads (S1.14), from the environment:
+
+- `GEMSTONE_DEVICE` (default `cpu`): `cpu`, `cuda`, `cuda:<index>` or `mps`. A malformed value is
+  refused when the server starts, naming the accepted ones. A device the installed torch cannot
+  use (no CUDA build, no GPU, no MPS) makes the load fail with a message naming the device and,
+  for CUDA, `uv sync --extra cuda`.
+- `GEMSTONE_QUANTIZATION` (default none): S1.16.
+
+A model class's own `engine_options` (S1.7) win over both. `GET /api/ps` reports where each resident
+model runs: `size_vram` is its `size` when its engine is on `cuda` or `mps` (0 on the CPU), and
+`details.quantization_level` is the format in upper case (`Q4_K`) when it was loaded quantised.
+
+**CUDA (#164; in 1.0, owner 2026-11-21).** `uv sync --python 3.13 --extra cuda` installs PyTorch's
+CUDA 13.2 wheels from `https://download.pytorch.org/whl/cu132` on Linux and Windows; the extra
+conflicts with `torch` and `torchnative`, and on macOS it resolves to PyPI's torch, which has no
+CUDA. With `GEMSTONE_DEVICE=cuda` the engine, continuous batching and the paged KV cache run on the
+GPU through the same public torch / transformers API (no CUDA graphs, S1.12).
+
+Tests: `api/tests/test_serving_options.py` (parsing, refusals, precedence, that the registry passes
+the settings to every engine, the unavailable-device message, and that `uv.lock` resolves the
+`cuda` extra to CUDA wheels), in CI. The GPU check is the owner's manual run, not CI (owner,
+2026-11-21: "그건 내가 테스트 해줄테니까 ci로 안할거야"): on a machine with an NVIDIA GPU,
+`uv sync --locked --python 3.13 --extra cuda`, then
+`GEMSTONE_TEST_DEVICE=cuda uv run --extra cuda pytest -m real_model -v`, then the server with
+`GEMSTONE_DEVICE=cuda uv run --extra cuda python -m api run server` and one chat. `partial` until that
+run passes and is recorded on #164.
 
 ## 2. Client (`app/`)
 
