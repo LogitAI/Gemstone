@@ -3,7 +3,10 @@
 Changes that a user of the server or the client can notice, newest first. Each entry links the
 issue that records the decision.
 
-## Unreleased (1.1.0)
+## 1.0.0 (unreleased)
+
+Gemstone's first release; `pyproject.toml` has said 1.0.0 since before any release was cut. The
+entries below are changes against earlier `develop` builds (team leader, 2026-11-21: rename to 1.0.0).
 
 ### Changed
 
@@ -14,7 +17,7 @@ issue that records the decision.
   longer changes when another model samples at the same time. The cost: a seeded request that
   takes the exclusive path (it sets `typical_p` or `repeat_penalty`, passes extra `generate`
   arguments, runs with batching off, or asks for more tokens than the KV cache holds) returns
-  different text than the same seed returned in 1.0.x. Seeded batched requests are unchanged.
+  different text than the same seed returned on `develop` before #182. Seeded batched requests are unchanged.
 
 ### Fixed
 

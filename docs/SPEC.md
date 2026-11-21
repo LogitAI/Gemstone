@@ -307,7 +307,8 @@ Implemented (#84), `api/src/main/engine.py`:
 
 - `Engine(model_id, dtype=, device=, quantization=, chat_template=, ...)` loads a causal LM with
   `from_pretrained`. `quantization="q8_0"` goes through torchnative's `TorchnativeConfig`; this is the
-  November weight format but is unverified until torchnative's #15 gate measures q8_0 with batching.
+  November weight format; `test_quantization.py`, including q8_0 under continuous batching, passes on
+  torchnative 0.1.0b10 and 0.1.0b11 (runs 44828289290, 44877496387).
 - Calling it with chat messages streams the reply as text chunks. Temperature 0 is greedy and
   equals `transformers` `generate`; `seed` makes sampling reproducible. Both paths sample with
   the per-request sampler of S1.12 (on the exclusive path `generate` runs greedily and the sampler
@@ -316,10 +317,10 @@ Implemented (#84), `api/src/main/engine.py`:
   (#182, FT7 of `serving/free-threading.md`). The exclusive path also applies `typical_p` there,
   after `min_p`, with transformers' `TypicalLogitsWarper` rule; `repeat_penalty` stays
   transformers' own processor and runs first.
-- **Changed in 1.1.0:** before #182 the exclusive path seeded `torch.manual_seed` and sampled
+- **Changed before 1.0.0:** before #182 the exclusive path seeded `torch.manual_seed` and sampled
   with `generate`'s own warpers, so a seeded reply on that path (a request with `typical_p` or
   `repeat_penalty` set, extra `generate` arguments, batching off, or a budget larger than the KV
-  cache) differs once from what the same seed gave in 1.0.x. Seeded batched replies are unchanged.
+  cache) differs once from what the same seed gave on `develop` before #182. Seeded batched replies are unchanged.
 - Concurrent callers are batched (S1.12). A request the batch cannot serve takes the exclusive
   path, where one `generate` runs at a time and concurrent callers wait and get the same output as
   sequential calls (#36). The exclusive path is used when batching is off (`batching=False`) or
@@ -345,7 +346,7 @@ Implemented (#84), `api/src/main/engine.py`:
 - The substrate is chosen at install time: `uv sync --extra torch` (upstream PyTorch) or
   `--extra torchnative`.
 
-Capability-based skips: the CI job `.github/workflows/test-torchnative.yml` (manual dispatch with torchnative version and Python inputs, non-blocking; schedule triggers were removed from development workflows on develop and main via #239 / #240) runs `api/tests` on torchnative. `conftest.py`
+Capability-based skips: the CI job `.github/workflows/test-torchnative.yml` (manual dispatch with torchnative version and Python inputs; with no inputs it installs `uv.lock` on 3.15t, and a release needs it green along with `test.yml`, owner 2026-11-21; schedule triggers were removed from development workflows on develop and main via #239 / #240) runs `api/tests` on torchnative. `conftest.py`
 detects the substrate (torchnative and its version, or upstream PyTorch). On torchnative only,
 `needs_batching` skips when `engine.batching` is False (reason: `engine.batching_unavailable` and the
 torchnative version; all of `test_batching.py` and the concurrent q8_0 test) and `needs_quantization`
@@ -364,10 +365,10 @@ On torchnative 0.1.0b8 (free-threaded 3.15.2t, runs 43279615254 and 43290335531)
 were fixed in `thisisthepy/torchnative#117` (`58bd28a7`) and shipped in `0.1.0b7` and `0.1.0b8`, while continuous
 batching timed out at 45 min because in-place `index_copy_` into a slice view of transformers'
 shared KV buffer cost `O(base buffer)` (444 ms per call vs 0.002 ms on upstream PyTorch, ~27 s/token).
-That bottleneck is fixed in `thisisthepy/torchnative#254` (PR #338, awaiting `torchnative 0.1.0b9`), and full verification of `#177` /
-`#84` awaits that release.
+That bottleneck was fixed in `thisisthepy/torchnative#254` (PR #338), released in `torchnative 0.1.0b9`.
+On torchnative 0.1.0b10 and 0.1.0b11 (free-threaded 3.15.2t, GIL off) every test passes and nothing skips: 453 passed in runs 44828289290 (0.1.0b10) and 44877496387 (0.1.0b11), including all of `test_batching.py` and `test_quantization.py`. The torchnative floor is `>=0.1.0b11` and `uv.lock` holds 0.1.0b11.
 
-The 2026-10-02 proposal, now implemented (#85, #91) and awaiting verification on torchnative: the engine is transformers 5.x continuous batching with a paged KV
+The 2026-10-02 proposal (agent proposal, not confirmed by the owner), now implemented (#85, #91) and verified on torchnative 0.1.0b10 and 0.1.0b11 (runs above): the engine is transformers 5.x continuous batching with a paged KV
 cache, kernels live in torchnative, and the engine uses only the public `torch` / `transformers`
 API so a GPU server can run the same code on upstream PyTorch. Constraint: custom kernels cannot be
 registered from Gemstone, because `torch.library` registrations are no-ops on torchnative. They
@@ -448,7 +449,8 @@ Unverified:
   CI saw a greedy reply diverge at a step where both candidates scored exactly 21.375. The
   equality criteria are therefore stated for float32; upstream PyTorch is not self-consistent in
   bfloat16 either.
-- torchnative: transformers' continuous-batching modules import there but have not run.
+- torchnative: `test_batching.py` passes on torchnative 0.1.0b10 and 0.1.0b11 (runs 44828289290,
+  44877496387); throughput against upstream PyTorch is recorded in [`serving/engine.md`](serving/engine.md) §7.1 and #74.
 - Prefix sharing in continuous batching (`allow_block_sharing`) stays off, so that stateless
   server requests (OpenAI S1.10, Ollama S1.15) never depend on earlier requests and keep the
   reproducibility guarantees of S1.11 and S1.12. The chat app's stateful WebSocket sessions reuse

@@ -57,10 +57,14 @@ cd Gemstone
 uv sync --python 3.13 --extra torch   # 또는 --python 3.15t --extra torchnative (둘 다는 안 됩니다)
 ```
 
+torchnative(0.1.0b11 이상)는 Linux x86_64 / aarch64 와 macOS arm64 용 free-threaded 3.15t wheel 을 제공합니다. Windows 에서는
+`--extra torch` 를 쓰세요. 3.15t 에서는 `psutil`, `safetensors`, `tokenizers`, `hf-xet` 에 free-threaded wheel 이
+아직 없어 `uv sync` 가 소스에서 빌드하므로 C 컴파일러와 Rust 가 필요합니다([#178](https://github.com/LogitAI/Gemstone/issues/178)).
+
 **2. 모델 서버 실행** (포트 `23100`, 모델은 처음 쓸 때 내려받습니다)
 
 ```bash
-uv run --extra torch python -m api run server
+uv run --extra torch python -m api run server   # 또는: uv run --extra torchnative python -m api run server
 ```
 
 <http://127.0.0.1:23100/> 를 열면 서버에 함께 들어 있는 웹 클라이언트가 뜹니다.
@@ -156,7 +160,7 @@ Gemstone 은 초기 단계의, 동작하는 프로토타입입니다. 각 행에
 | 영역 | 상태 |
 |---|---|
 | 스트리밍 채팅, 추론 표시, 도구 호출 | ✅ 구현 |
-| transformers 단일 엔진, 연속 배칭, 페이지드 KV 캐시 (CPU) | ✅ PyTorch 에서 구현, 🟡 torchnative 에서는 부분: CPU 는 배칭을 빼고 통과, mps 는 torchnative 대기 ([#84](https://github.com/LogitAI/Gemstone/issues/84)) |
+| transformers 단일 엔진, 연속 배칭, 페이지드 KV 캐시 (CPU) | ✅ PyTorch 와 torchnative(CPU, 0.1.0b11 이상)에서 구현, mps 는 torchnative 대기 ([#84](https://github.com/LogitAI/Gemstone/issues/84)) |
 | 여러 모델 상주, 축출, `keep_alive` | ✅ 구현 |
 | OpenAI 호환 API (`/v1`, 도구 호출은 클라이언트로 전달) | 🟡 부분: `n` > 1, logprobs, embeddings 없음 |
 | Ollama 호환 API (chat, generate, tags, show, pull, delete, ps, copy, create, embed) | 🟡 부분: `push` 는 501, Modelfile · template · blobs 없음 |

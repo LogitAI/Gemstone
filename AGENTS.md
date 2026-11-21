@@ -251,7 +251,9 @@ uv run --extra torch pytest -m "real_model or not real_model"   # all, as CI run
 GEMSTONE_TEST_DEVICE=mps uv run --extra torch pytest -m real_model   # the real-model tests on another device
 ```
 
-The tests run on torchnative (free-threaded 3.15t) in the non-blocking `.github/workflows/test-torchnative.yml`
+The tests run on torchnative (free-threaded 3.15t) in `.github/workflows/test-torchnative.yml`, which gates the release
+alongside `test.yml` (owner, 2026-11-21: "따로 두고 엄격하게"; with no inputs it installs exactly `uv.lock` and also
+starts the server)
 (manual dispatch, with torchnative version and Python inputs; `-rs` lists skips). There a test marked `needs_batching`
 (`engine.batching` is False; the reason is `engine.batching_unavailable`) or `needs_quantization`
 (`torchnative.quant` lacks `TorchnativeConfig` / q8_0) skips with a reason naming that capability and
@@ -262,7 +264,9 @@ Any other failure on torchnative is a real failure. On torchnative 0.1.0b6 gener
 and `Generator.set_state`, were fixed in `thisisthepy/torchnative#117` [`58bd28a7`] and are included in
 `torchnative 0.1.0b7` and `0.1.0b8`, tracked in `thisisthepy/torchnative#115`), while on torchnative 0.1.0b8
 `sys._is_gil_enabled()` is `False` and exclusive generation works, and the continuous-batching
-`index_copy_` view bottleneck is fixed in `thisisthepy/torchnative#254` (PR #338, awaiting `0.1.0b9`).
+`index_copy_` view bottleneck was fixed in `thisisthepy/torchnative#254` (PR #338, released in `0.1.0b9`).
+On torchnative 0.1.0b10 and 0.1.0b11 all of `api/tests` passes with nothing skipped (runs 44828289290,
+44877496387); the floor is `>=0.1.0b11`.
 
 The tests load a real model. `GEMSTONE_TEST_MODEL` picks it (default `HuggingFaceTB/SmolLM2-135M`);
 it is read from the local Hugging Face cache and never downloaded unless
@@ -346,7 +350,7 @@ with a real failing test (rule 5).
   so a run never takes an upstream release the lock has not been upgraded to. Change a dependency
   with `uv add` / `uv lock` and commit the lock with it. `.github/workflows/lock-upgrade.yml` (dispatched on demand, #239/#240) opens a
   pull request with `uv lock --upgrade`; upstream breakage shows up there, not on develop.
-  `test-torchnative.yml` still takes the newest torchnative pre-release (`--upgrade-package`).
+  `test-torchnative.yml` installs `uv.lock` too; its `torchnative` input (e.g. `>=0.1.0b1`) tries a newer pre-release.
 - Kotlin and library versions live in `gradle/libs.versions.toml`. Bump them there, not inline.
 - Example commands use `uv`, `ppp` or `tcl` only. Never write a `pip install` example (in docs,
   messages or comments); a missing Python dependency is fixed with `uv sync` (or `uv add` when it
