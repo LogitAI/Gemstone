@@ -20,8 +20,8 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 
 | 영역 | 상태 | 근거 |
 |---|---|---|
-| 단일 서빙 엔진 (transformers) | 구현, 테스트 있음 | `engine.py` (#85). torchnative 0.1.0b8(3.15.2t)에서 `sys._is_gil_enabled() == False`이고 단독(exclusive) 생성은 잘 되며, 모든 0.1.0b6 `torch._C` shim 거부(`triu_`, `nansum`, `Generator.get_state`; `thisisthepy/torchnative#115`)는 `thisisthepy/torchnative#117` (`58bd28a7`)을 통해 해결되어 `torchnative 0.1.0b7` 및 `0.1.0b8`에 포함되었다. 연속 배칭 뷰 `index_copy_` 병목(`thisisthepy/torchnative#254`, PR #338)은 torchnative에서 고쳐졌고 `0.1.0b9` 릴리스를 기다린다(#84, #177) |
-| 연속 배칭 · 페이지드 KV 캐시 | 구현, 테스트 있음 | `engine.py` (#91). 동일성 기준은 float32. 처리량 측정과 torchnative 검증은 남음 |
+| 단일 서빙 엔진 (transformers) | 구현, 테스트 있음 | `engine.py` (#85). torchnative 0.1.0b8(3.15.2t)에서 `sys._is_gil_enabled() == False`이고 단독(exclusive) 생성은 잘 되며, 모든 0.1.0b6 `torch._C` shim 거부(`triu_`, `nansum`, `Generator.get_state`; `thisisthepy/torchnative#115`)는 `thisisthepy/torchnative#117` (`58bd28a7`)을 통해 해결되어 `torchnative 0.1.0b7` 및 `0.1.0b8`에 포함되었다. 연속 배칭 뷰 `index_copy_` 병목(`thisisthepy/torchnative#254`, PR #338)은 `0.1.0b9` 에 들어갔다. torchnative 0.1.0b10, 0.1.0b11 에서 `api/tests` 전부 통과, skip 없음(453 통과, 실행 44828289290, 44877496387). 하한은 `>=0.1.0b11`(#84, #177) |
+| 연속 배칭 · 페이지드 KV 캐시 | 구현, 테스트 있음 | `engine.py` (#91). 동일성 기준은 float32. torchnative 0.1.0b10, 0.1.0b11 에서 `test_batching.py` 통과. 처리량은 `docs/serving/engine.md` §7.1 과 #74 에 기록 |
 | 모델 상주 (앱 · OpenAI · Ollama 공유, keep_alive, 여러 모델과 LRU 축출) | 구현, 테스트 있음 | `registry.py`, `leases.py` (#92, #94, #75) |
 | OpenAI 호환 API (`/v1`, tool call pass-through) | 부분, 테스트 있음 | `openai_api.py` (#88). n>1, logprobs, embeddings 없음 |
 | Ollama 호환 API (핵심 8개 + copy/create/embed, 여러 상주 모델) | 부분, 테스트 있음 | `ollama_api.py` (#90, #75). push 는 501, Modelfile·template·blobs·format 없음 |
@@ -40,7 +40,7 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 | 네이티브 데스크톱 (GraalVM) | 부분 (SPEC S3.4) | Windows x64 전용. CI(`native-desktop` 잡, #231/#232/#234/#236)가 test.yml 실행 시(2026-11-14 CI 정책에 따라 수동 dispatch, #239) `:app:nativeDist`를 빌드하고 창 열기·입력·채팅 응답 저장과 JNI 메타데이터 오류 없음을 검증한다(compose-multiplatform-extended 플러그인 인계만 남음, #191) |
 | Kotlin 테스트 | 부분 | 서버 주소, 모델 목록 파싱, 종료 코드 매핑은 테스트 있음(CI). 화면과 뷰모델은 테스트 없음 |
 | GPU(CUDA) 추론 | 계획 (M4) | 엔진 기본값은 `device="cpu"`. torchnative CUDA 는 실행해 본 적이 없다 (#164) |
-| free-threaded 3.15t (torchnative) | 부분 | 표준 인터프리터로 정했다(#177, #188). torchnative 0.1.0b8 에서 `sys._is_gil_enabled() == False` 이고, `hf-xet` 은 직접 의존성에서 제거되었으며(#242) cp315t wheel 이 없는 5개 패키지(`psutil`, `pyyaml`, `safetensors`, `tokenizers`, `hf-xet`)는 `test-torchnative.yml` 이 소스에서 빌드해 캐시한다(#178). `uv.lock` 은 `transformers 5.23.0` 까지 판올림했다(#241) |
+| free-threaded 3.15t (torchnative) | 부분 | 표준 인터프리터로 정했다(#177, #188). torchnative 0.1.0b8 에서 `sys._is_gil_enabled() == False` 이고, `hf-xet` 은 직접 의존성에서 제거되었으며(#242) cp315t wheel 이 없는 4개 패키지(`psutil`, `safetensors`, `tokenizers`, `hf-xet`; `pyyaml` 은 6.0.4 부터 cp315t wheel 이 있다)는 `test-torchnative.yml` 이 소스에서 빌드해 캐시한다(#178). `uv.lock` 은 `transformers 5.23.0` 까지 판올림했다(#241) |
 
 ## 3. 구조
 
@@ -122,8 +122,9 @@ python3 docs/guide/check_guide.py            # 가이드 사이트 검사
      실패는 모두 torchnative 의 `torch._C` shim 에 없는 op 다(`triu_`, `nansum`, `Generator.get_state`).
      `triu_` 가 연속 배칭의 마스크 생성을 막아 모든 생성이 실패한다. `import torch` 는 GIL 을 다시 켠다.
      수정은 torchnative 몫이다(#177).
-   - torchnative 0.1.0b8 (3.15.2t) 상태: GIL False, 단독 생성 통과, 연속 배칭 index_copy_ 뷰 병목은 thisisthepy/torchnative#254 / PR #338에서 수정되었으며 0.1.0b9 릴리스 대기 중.
-   - 처리량 측정(`benchmarks/batching_throughput.py`)은 아직 돌리지 않았다.
+   - torchnative 0.1.0b8 (3.15.2t) 상태: GIL False, 단독 생성 통과, 연속 배칭 index_copy_ 뷰 병목은 thisisthepy/torchnative#254 / PR #338에서 수정되어 0.1.0b9 에 들어갔다.
+   - torchnative 0.1.0b10, 0.1.0b11 (3.15.2t, GIL False): 453 통과, skip 없음(실행 44828289290, 44877496387). 연속 배칭과 q8_0 포함.
+   - 처리량 측정(`benchmarks/batching_throughput.py`)은 `docs/serving/engine.md` §7.1 과 #74 에 기록했다.
 5. **Python 테스트의 위치**: 해결됨(2026-10-03): `api/tests/` 에 pytest 로 둔다. 정적 자산도
    `api/src/test/` 에서 `api/src/main/{static,webpack}/` 로 옮겼다(#83).
 6. **릴리스 흐름**: 해결됨. develop push 마다 CI 가 `release` 를 만들고 release → main PR 을 연다.

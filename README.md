@@ -57,6 +57,10 @@ cd Gemstone
 uv sync --python 3.13 --extra torch   # or --python 3.15t --extra torchnative (not both)
 ```
 
+torchnative (0.1.0b11 or newer) ships free-threaded 3.15t wheels for Linux x86_64 / aarch64 and macOS arm64; on Windows use
+`--extra torch`. On 3.15t, `psutil`, `safetensors`, `tokenizers` and `hf-xet` have no free-threaded wheels
+yet, so `uv sync` builds them from source and needs a C compiler and Rust ([#178](https://github.com/LogitAI/Gemstone/issues/178)).
+
 **2. Start the model server** (port `23100`; the model downloads on first use)
 
 ```bash
@@ -156,7 +160,7 @@ that tracks it. Python tests (a real model included) and the Kotlin network-laye
 | Area | State |
 |---|---|
 | Streaming chat, reasoning display, tool calling | ✅ Implemented |
-| One transformers engine, continuous batching, paged KV cache (CPU) | ✅ Implemented on PyTorch; 🟡 partial on torchnative: CPU passes except batching, mps waits for torchnative ([#84](https://github.com/LogitAI/Gemstone/issues/84)) |
+| One transformers engine, continuous batching, paged KV cache (CPU) | ✅ Implemented on PyTorch and on torchnative (CPU, 0.1.0b11 or newer); mps waits for torchnative ([#84](https://github.com/LogitAI/Gemstone/issues/84)) |
 | Several resident models, eviction, `keep_alive` | ✅ Implemented |
 | OpenAI-compatible API (`/v1`, tool calls passed through) | 🟡 Partial: no `n` > 1, logprobs or embeddings |
 | Ollama-compatible API (chat, generate, tags, show, pull, delete, ps, copy, create, embed) | 🟡 Partial: `push` returns 501; no Modelfile, template or blobs |

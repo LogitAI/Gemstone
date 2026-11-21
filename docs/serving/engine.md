@@ -21,8 +21,8 @@ proposal, and the findings both rest on. `docs/INTENT.md` G5 and
 **Engine = transformers 5.x continuous batching + paged KV cache. Kernels live in torchnative.
 Gemstone owns the serving layer above it.**
 
-Status: implemented on upstream PyTorch (#85, #91), not yet verified on torchnative
-(`SPEC.md` S1.11). The maintainer has not confirmed it as a decision.
+Status: implemented (#85, #91), with all tests passing on upstream PyTorch and on torchnative 0.1.0b10 and
+0.1.0b11 (§7, `SPEC.md` S1.11). The maintainer has not confirmed it as a decision.
 
 | Layer | Owner | Contents |
 |---|---|---|
@@ -130,7 +130,12 @@ torchnative `torch._C` shim lacks `triu_` (transformers' continuous batching), `
 (along with `tril_`, `nanmean` and `Generator.set_state`; `thisisthepy/torchnative#115`) were fixed in
 `thisisthepy/torchnative#117` (`58bd28a7`) and shipped in `torchnative 0.1.0b7` and `0.1.0b8`
 (`sys._is_gil_enabled() == False`, exclusive generation works). The remaining continuous-batching
-`index_copy_` slice-view bottleneck is fixed in `thisisthepy/torchnative#254` (PR #338, awaiting `0.1.0b9`).
+`index_copy_` slice-view bottleneck was fixed in `thisisthepy/torchnative#254` (PR #338, released in `0.1.0b9`).
+
+Result (2026-11-21): on torchnative 0.1.0b10 and 0.1.0b11 (CPython 3.15.2t, GIL off, Linux CPU) all of
+`api/tests` passes with nothing skipped, including continuous batching (`test_batching.py`) and q8_0
+(`test_quantization.py`): 453 passed in runs 44828289290 and 44877496387. §2 works as designed on both
+substrates; confirming it as a decision is still the owner's (agent proposal, not confirmed).
 
 ### 7.1 Throughput baseline table (#74)
 
