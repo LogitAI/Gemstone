@@ -725,7 +725,9 @@ spelling: `q8_0`, `q4_0`, `q4_1`, `q4_k`, `q5_k`, `q6_k`, ...).
   prompts, `q4_k`'s most likely next token agrees with the unquantised model's on at least 3 of 4,
   and it is not further from the unquantised model than `q4_0`, measured in the same run on the same
   model: over every position of every prompt, the paired difference KL(`q4_k`) minus KL(`q4_0`) has a
-  mean no larger than two standard errors. A fixed logit-RMS bound (15%) was dropped: it had no
+  mean no larger than two standard errors; `q4_k`'s top-1 agreement over all positions is at least 0.75;
+  and `q8_0`'s mean KL is below a quarter of the smaller 4-bit one (each fails on a broken Q4_K; fable-tn
+  measured the two 4-bit formats equal at model level with llama.cpp's reference arithmetic, 2026-11-22). A fixed logit-RMS bound (15%) was dropped: it had no
   derivation, and run 44912298139 measured 27.2% for `q4_k` with all 4 next tokens agreeing. A
   comparison of four last-position KL values (run 44946628389: `q4_k` 0.237, `q4_0` 0.107) was dropped
   too: four samples cannot order two formats, and torchnative's `q4_k` equals llama.cpp's reference
