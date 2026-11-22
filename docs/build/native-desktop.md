@@ -12,7 +12,7 @@ CI builds it in job `native-desktop` of `.github/workflows/test.yml` (dispatched
 windows-latest, Temurin 21 for the Gradle daemon, Liberica NIK 25 Full for native-image, the MSVC
 tools from `ilammy/msvc-dev-cmd`, and skiko's static archive built once by
 compose-multiplatform-core-extended's `extended/skiko/build-skiko-static-jvm.sh` at tag
-`v1.11.1-ext.2` and cached). GraalVM also writes its `java`/`jvm` shims and a few AWT DLLs beside the
+`v1.11.1-ext.5` and cached). GraalVM also writes its `java`/`jvm` shims and a few AWT DLLs beside the
 image on Windows (the plugin removes them on Linux only, run 44980924569), so the job copies
 `gemstone.exe` alone into an empty directory and runs that copy. It fails unless the executable imports
 none of those DLLs, its
@@ -39,7 +39,7 @@ export SKIKO_STATIC="$(cygpath -w "$PWD/.cache/skiko-static/out/windows-x64")"
 ./app/build/compose/native-image/main/gemstone.exe
 ```
 
-`<core-extended>` is a checkout of compose-multiplatform-core-extended at `v1.11.1-ext.2`, the tag of
+`<core-extended>` is a checkout of compose-multiplatform-core-extended at `v1.11.1-ext.5`, the tag of
 the Compose libraries Gemstone uses; its script pins skiko's revision. The plugin's own requirements
 are in its README (`extended/README.md`, "One executable: packageNativeImage").
 
