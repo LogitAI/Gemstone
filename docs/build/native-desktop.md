@@ -32,7 +32,7 @@ From an x64 Native Tools prompt (MSVC 14.51 or later, `clang-cl` on PATH), in Gi
 export GRAALVM_HOME=<Liberica NIK 25 Full>      # the JDK's static AWT archives come from the Full edition
 bash <core-extended>/extended/skiko/build-skiko-static-jvm.sh "$PWD/.cache/skiko-static"   # once; takes long
 export SKIKO_STATIC="$(cygpath -w "$PWD/.cache/skiko-static/out/windows-x64")"
-./gradlew :app:packageNativeImage
+./gradlew :app:packageNativeImage --no-configuration-cache   # the plugin's tasks cannot be cached yet
 ./app/build/compose/native-image/main/gemstone.exe
 ```
 
@@ -68,7 +68,7 @@ comes from a tracing agent run:
 
 ```powershell
 $env:GRAALVM_HOME = "<Liberica NIK 25 Full>"
-Start-Job { ./gradlew :app:runNativeImageAgent }
+Start-Job { ./gradlew :app:runNativeImageAgent --no-configuration-cache }
 ./tools/drive-desktop.ps1     # exercises the UI, then closes the window cleanly
 ```
 
