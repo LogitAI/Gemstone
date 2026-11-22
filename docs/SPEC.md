@@ -1005,7 +1005,7 @@ Test: `app/src/commonTest/.../ui/viewmodel/NotificationViewModelTest.kt`.
 ### S3.1 On-device inference through Python Multiplatform: `partial` · G2, G3
 
 The client embeds the Python model code via Python Multiplatform and runs without the server.
-The engine is the torchnative-based system of S1.11. In 1.1.0 (owner, 2026-11-21). Tracked in #42.
+The engine is the torchnative-based system of S1.11. In the release scope (owner, 2026-11-21). Tracked in #42.
 
 - **The transport seam (implemented).** The chat screen talks to a `ChatTransport`
   (`app/src/commonMain/kotlin/gemstone/framework/network/ChatTransport.kt`): `ChatWebSocketClient`
@@ -1025,8 +1025,8 @@ Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`.
 
 With the in-app transport active, a chat opens no network connection: the model list comes from the
 in-app engine and the reply from its stream. Every request the app's HTTP client sends (HTTP or a
-WebSocket upgrade) is counted (`NetworkActivity.requests`), so a test can assert that none was. In 1.1.0
-(owner, 2026-11-21). Tracked in #190.
+WebSocket upgrade) is counted (`NetworkActivity.requests`), so a test can assert that none was. In the
+release scope (owner, 2026-11-21). Tracked in #190.
 
 - **Implemented:** the client half, on a fake in-app engine: refreshing the model list, selecting a model
   and completing a chat send no request, and the same steps on the server transport do (the counter is

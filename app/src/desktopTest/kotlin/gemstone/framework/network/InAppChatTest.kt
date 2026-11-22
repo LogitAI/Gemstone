@@ -35,9 +35,15 @@ class InAppChatTest {
 
     @AfterTest
     fun reset() {
-        ChatTransports.active = webSocketClient
+        // Deselecting opens a session on the active transport from a launched coroutine. Done on the server
+        // transport, that request could land inside the next test's "no request" window; so it is done on
+        // an in-app transport, and the server comes back only after that session is open.
+        val quiet = InAppChatTransport(FakeEngine())
+        ChatTransports.active = quiet
         ChatViewModel.reset()
         AIModelViewModel.deselectAIModel()
+        waitFor("the teardown session") { quiet.sessionId != null }
+        ChatTransports.active = webSocketClient
     }
 
     private fun waitFor(what: String, condition: () -> Boolean) {
@@ -54,7 +60,8 @@ class InAppChatTest {
         ChatTransports.active = InAppChatTransport(engine)
         val before = NetworkActivity.requests
 
-        AIModelViewModel.refreshAIModels()
+        AIModelViewModel.refreshAIModels()  // launched on the view model's scope, not awaited
+        waitFor("the in-app model list") { AIModelViewModel.availableAIModels.isNotEmpty() }
         assertEquals(listOf("on-device/tiny"), AIModelViewModel.availableAIModels.map { it.id })
         AIModelViewModel.selectAIModel(AIModelViewModel.availableAIModels.single())
 
@@ -76,7 +83,9 @@ class InAppChatTest {
         // The other half of the check: without it a counter that never moves would pass the test above.
         ChatTransports.active = webSocketClient
         val before = NetworkActivity.requests
-        AIModelViewModel.refreshAIModels()  // whether or not a server answers, a request was sent
+        AIModelViewModel.refreshAIModels()  // whether or not a server answers, a request is sent
+        val deadline = System.currentTimeMillis() + 10_000
+        while (NetworkActivity.requests == before && System.currentTimeMillis() < deadline) Thread.sleep(20)
         assertTrue(NetworkActivity.requests > before, "a model-list request on the server transport was not counted")
     }
 }
