@@ -498,7 +498,8 @@ compose.desktop {
     application {
         mainClass = "gemstone.Main_desktopKt"
 
-        // One executable through compose-multiplatform-extended (#191): `./gradlew :app:packageNativeImage`
+        // One executable through compose-multiplatform-extended (#191): `./gradlew :app:packageNativeImage
+        // --no-configuration-cache` (the plugin's checkNativeImageNoAwt cannot be stored in the cache)
         // writes build/compose/native-image/main/gemstone(.exe). It needs Liberica NIK 25 Full in
         // GRAALVM_HOME and skiko's static archive (core-extended's build-skiko-static-jvm.sh output)
         // in SKIKO_STATIC; docs/build/native-desktop.md has the steps.
@@ -544,7 +545,7 @@ compose.desktop {
     }
 }
 
-// The tracing agent: `./gradlew :app:runNativeImageAgent` (the plugin's) runs the app on GraalVM's JVM and
+// The tracing agent: `./gradlew :app:runNativeImageAgent --no-configuration-cache` (the plugin's) runs the app on GraalVM's JVM and
 // merges what it sees into src/desktopMain/resources/META-INF/native-image (`metadataDirectory` above).
 
 // The plugin's task builds from the metadata and resources Gemstone derives; generate them first.

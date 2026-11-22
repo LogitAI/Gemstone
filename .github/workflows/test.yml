@@ -183,7 +183,9 @@ jobs:
         shell: bash
         run: |
           export SKIKO_STATIC="$(cygpath -w "$(cygpath -u "$RUNNER_TEMP")/skiko-static/out/windows-x64")"
-          ./gradlew :app:packageNativeImage --console=plain
+          # The plugin's checkNativeImageNoAwt cannot be stored in the configuration cache (run 44971053592:
+          # "Cannot run Project.afterEvaluate(Action) when the project is already evaluated").
+          ./gradlew :app:packageNativeImage --no-configuration-cache --console=plain
 
       - name: One file, with Gemstone's version, icon and manifest
         shell: pwsh
