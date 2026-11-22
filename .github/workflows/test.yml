@@ -6,7 +6,8 @@ name: Tests
 #   quickstart  the README's start command, run literally, must come up without a model
 #   gradle      the Kotlin client's common tests on the JVM, and the web (Wasm) target compiles
 #   web-bundle  rebuilds the web client from app/; on develop it commits api/src/main/webpack when it differs
-#   native-desktop  builds the GraalVM native executable on Windows x64 (:app:nativeDist) and checks
+#   native-desktop  builds the GraalVM native executable on Windows x64 through compose-multiplatform-extended
+#               (:app:packageNativeImage: one file, AWT and Skia linked in) and checks
 #               that it opens its window, takes clicks and keys, and streams a chat reply from the server
 #               on SmolLM2-135M-Instruct (SPEC S3.4, #191; owner approval 2026-11-13)
 # The torchnative run is test-torchnative.yml (its own inputs); a release needs both green (owner, 2026-11-21).
@@ -113,42 +114,108 @@ jobs:
     # SPEC S3.4 / #191: the desktop target as a GraalVM native image, Windows x64 only so far
     # (docs/build/native-desktop.md). Added with the owner's approval of 2026-11-13.
     runs-on: windows-latest
-    timeout-minutes: 75
+    timeout-minutes: 240  # a cold skiko static build takes hours; later runs use the cache
     env:
       HF_HOME: ${{ github.workspace }}/.hf-cache
     steps:
       - uses: actions/checkout@v4
 
-      # The Gradle daemon runs on JDK 21 (gradle/gradle-daemon-jvm.properties); nativeCompile uses
-      # the JDK 22 toolchain (nativeImageJdk in app/build.gradle.kts), which must be a GraalVM:
-      # auto-download is off so no plain JDK 22 is provisioned in its place.
+      # The Gradle daemon runs on JDK 21 (gradle/gradle-daemon-jvm.properties). The image is built by
+      # compose-multiplatform-extended's packageNativeImage (#191), which needs Liberica NIK 25 Full
+      # (the JDK's static AWT archives), the MSVC tools, and skiko as a static archive.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
 
-      - uses: graalvm/setup-graalvm@v1
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Liberica NIK 25 Full
+        shell: bash
+        run: |
+          url="https://github.com/bell-sw/LibericaNIK/releases/download/25.0.4.1+1-25.0.4.1+2/bellsoft-liberica-vm-full-openjdk25.0.4.1+2-25.0.4.1+1-windows-amd64.zip"
+          curl -fsSL -o "$RUNNER_TEMP/nik.zip" "$url"
+          unzip -q "$RUNNER_TEMP/nik.zip" -d "$RUNNER_TEMP/nik"
+          home="$(ls -d "$RUNNER_TEMP"/nik/*/ | head -1)"
+          echo "GRAALVM_HOME=$(cygpath -w "${home%/}")" >> "$GITHUB_ENV"
+          "${home}bin/native-image.cmd" --version
+
+      # skiko's static archive comes from the core fork's script at the tag of the Compose libraries
+      # Gemstone uses (1.11.1-ext.2); the script pins skiko's revision, so the cache key is the tag.
+      - name: The core fork's skiko script
+        uses: actions/checkout@v4
         with:
-          distribution: graalvm
-          java-version: "22"
+          repository: thisisthepy/compose-multiplatform-core-extended
+          ref: v1.11.1-ext.2
+          path: core-extended
+          sparse-checkout: extended/skiko
+
+      - name: skiko static archive cache
+        id: skiko-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/skiko-static/out/windows-x64
+          key: skiko-static-windows-x64-v1.11.1-ext.2
+
+      # skiko compiles with clang-cl from PATH. The runner's standalone LLVM (C:\Program Files\LLVM)
+      # comes first there and does not follow Visual Studio's STL: VS 18.12 (MSVC 14.52) failed with
+      # it while VS 18.11 (MSVC 14.51) built (run 44945907479). Visual Studio's own clang-cl is the one
+      # its STL is released with, so it goes first.
+      - name: Build skiko static archive
+        if: steps.skiko-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          export PATH="$(cygpath -u "${VCINSTALLDIR}Tools/Llvm/x64/bin"):$PATH"
+          command -v clang-cl.exe
+          clang-cl.exe --version
+          cl.exe 2>&1 | head -1
+          work="$(cygpath -u "$RUNNER_TEMP")/skiko-static"
+          if ! bash core-extended/extended/skiko/build-skiko-static-jvm.sh "$work"; then
+            # The script runs skiko's Gradle quietly, and skiko reports compiler errors as warnings.
+            (cd "$work/skiko/skiko" && ./gradlew --no-daemon compileJvmBindingsWindowsX64 > "$RUNNER_TEMP/skiko-compile.log" 2>&1) || true
+            grep -n -B2 -A12 -E "error:|error [A-Z]+[0-9]+" "$RUNNER_TEMP/skiko-compile.log" | head -200
+            exit 1
+          fi
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Point Gradle at the installed JDKs
+      - name: Build the native executable
+        shell: bash
+        run: |
+          export SKIKO_STATIC="$(cygpath -w "$(cygpath -u "$RUNNER_TEMP")/skiko-static/out/windows-x64")"
+          # The plugin's checkNativeImageNoAwt cannot be stored in the configuration cache (run 44971053592:
+          # "Cannot run Project.afterEvaluate(Action) when the project is already evaluated").
+          ./gradlew :app:packageNativeImage --no-configuration-cache --console=plain
+
+      # GraalVM also writes its java/jvm shims and some AWT DLLs beside the image on Windows; the plugin
+      # (1.11.1-ext.3) removes them on Linux only (run 44980924569: freetype, java, javaaccessbridge,
+      # jawt, jvm). The executable must not need them: it is copied alone into an empty directory, must
+      # import none of them, and the chat check below runs that copy.
+      - name: One file, with Gemstone's version, icon and manifest
         shell: pwsh
         run: |
-          # setup-gradle moves GRADLE_USER_HOME off the home directory; that is where Gradle reads it.
-          $props = Join-Path ($env:GRADLE_USER_HOME ?? "$HOME/.gradle") "gradle.properties"
-          New-Item -ItemType Directory -Force (Split-Path $props) | Out-Null
-          @(
-            "org.gradle.java.installations.auto-detect=false"
-            "org.gradle.java.installations.auto-download=false"
-            "org.gradle.java.installations.paths=$($env:JAVA_HOME_21_X64 -replace '\\','/'),$($env:GRAALVM_HOME -replace '\\','/')"
-          ) | Add-Content $props
-          Get-Content $props
-
-      - name: Build the native executable
-        run: ./gradlew :app:nativeDist --console=plain
+          $dir = "app/build/compose/native-image/main"
+          Get-ChildItem $dir | Format-Table Name, Length
+          if (-not (Test-Path "$dir/gemstone.exe")) { Write-Output "no gemstone.exe in $dir"; exit 1 }
+          $leftover = @(Get-ChildItem $dir -File | Where-Object Name -ne "gemstone.exe" | ForEach-Object Name)
+          $other = @($leftover | Where-Object { $_ -notlike "*.dll" })
+          if ($other.Count) { Write-Output "unexpected files beside gemstone.exe: $($other -join ', ')"; exit 1 }
+          New-Item -ItemType Directory -Force native-alone | Out-Null
+          Copy-Item "$dir/gemstone.exe" native-alone/
+          $exe = (Resolve-Path native-alone/gemstone.exe).Path
+          $imports = @(dumpbin /nologo /dependents $exe | ForEach-Object { $_.Trim() })
+          $imports
+          $needed = @($leftover | Where-Object { $imports -contains $_ })
+          if ($needed.Count) { Write-Output "gemstone.exe imports what GraalVM left beside it: $($needed -join ', ')"; exit 1 }
+          if ($leftover.Count) {
+            "GraalVM left $($leftover -join ', ') beside gemstone.exe; it imports none of them and is run alone." >> $env:GITHUB_STEP_SUMMARY
+          }
+          $version = (Select-String -Path pyproject.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          $info = (Get-Item $exe).VersionInfo
+          Write-Output "ProductVersion $($info.ProductVersion), FileDescription $($info.FileDescription)"
+          if ($info.ProductVersion -ne $version -or $info.FileDescription -ne "Gemstone AI") { Write-Output "version resource is not $version / Gemstone AI"; exit 1 }
+          mt.exe -nologo "-inputresource:$exe;#1" -out:manifest.xml
+          if (-not (Select-String -Path manifest.xml -Pattern "permonitorv2" -Quiet)) { Get-Content manifest.xml; Write-Output "Gemstone's DPI manifest is not embedded"; exit 1 }
 
       # The chat check (#191) talks to the real server on SmolLM2-135M-Instruct, the smallest model the
       # server maps (smollm2:135m), fetched once into a cached HF_HOME. The model download in CI was
@@ -190,7 +257,7 @@ jobs:
       - name: Start it, check input, and stream a chat reply
         shell: pwsh
         run: |
-          $exe = "app/build/dist/bin/gemstone.exe"
+          $exe = "native-alone/gemstone.exe"  # alone in its directory (the step above)
           if (-not (Test-Path $exe)) { Write-Output "missing $exe"; exit 1 }
           "{0:N1} MB  $exe" -f ((Get-Item $exe).Length / 1MB)
           New-Item -ItemType Directory -Force native-smoke | Out-Null
