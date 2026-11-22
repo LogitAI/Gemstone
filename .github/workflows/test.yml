@@ -187,14 +187,29 @@ jobs:
           # "Cannot run Project.afterEvaluate(Action) when the project is already evaluated").
           ./gradlew :app:packageNativeImage --no-configuration-cache --console=plain
 
+      # GraalVM also writes its java/jvm shims and some AWT DLLs beside the image on Windows; the plugin
+      # (1.11.1-ext.3) removes them on Linux only (run 44980924569: freetype, java, javaaccessbridge,
+      # jawt, jvm). The executable must not need them: it is copied alone into an empty directory, must
+      # import none of them, and the chat check below runs that copy.
       - name: One file, with Gemstone's version, icon and manifest
         shell: pwsh
         run: |
           $dir = "app/build/compose/native-image/main"
           Get-ChildItem $dir | Format-Table Name, Length
-          $files = @(Get-ChildItem $dir -File)
-          if ($files.Count -ne 1 -or $files[0].Name -ne "gemstone.exe") { Write-Output "expected only gemstone.exe in $dir"; exit 1 }
-          $exe = $files[0].FullName
+          if (-not (Test-Path "$dir/gemstone.exe")) { Write-Output "no gemstone.exe in $dir"; exit 1 }
+          $leftover = @(Get-ChildItem $dir -File | Where-Object Name -ne "gemstone.exe" | ForEach-Object Name)
+          $other = @($leftover | Where-Object { $_ -notlike "*.dll" })
+          if ($other.Count) { Write-Output "unexpected files beside gemstone.exe: $($other -join ', ')"; exit 1 }
+          New-Item -ItemType Directory -Force native-alone | Out-Null
+          Copy-Item "$dir/gemstone.exe" native-alone/
+          $exe = (Resolve-Path native-alone/gemstone.exe).Path
+          $imports = @(dumpbin /nologo /dependents $exe | ForEach-Object { $_.Trim() })
+          $imports
+          $needed = @($leftover | Where-Object { $imports -contains $_ })
+          if ($needed.Count) { Write-Output "gemstone.exe imports what GraalVM left beside it: $($needed -join ', ')"; exit 1 }
+          if ($leftover.Count) {
+            "GraalVM left $($leftover -join ', ') beside gemstone.exe; it imports none of them and is run alone." >> $env:GITHUB_STEP_SUMMARY
+          }
           $version = (Select-String -Path pyproject.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
           $info = (Get-Item $exe).VersionInfo
           Write-Output "ProductVersion $($info.ProductVersion), FileDescription $($info.FileDescription)"
@@ -242,7 +257,7 @@ jobs:
       - name: Start it, check input, and stream a chat reply
         shell: pwsh
         run: |
-          $exe = "app/build/compose/native-image/main/gemstone.exe"
+          $exe = "native-alone/gemstone.exe"  # alone in its directory (the step above)
           if (-not (Test-Path $exe)) { Write-Output "missing $exe"; exit 1 }
           "{0:N1} MB  $exe" -f ((Get-Item $exe).Length / 1MB)
           New-Item -ItemType Directory -Force native-smoke | Out-Null
