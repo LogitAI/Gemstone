@@ -38,11 +38,14 @@ class InAppChatTest {
         // Deselecting opens a session on the active transport from a launched coroutine. Done on the server
         // transport, that request could land inside the next test's "no request" window; so it is done on
         // an in-app transport, and the server comes back only after that session is open.
+        // Deselecting does nothing when no model is selected (the server test selects none), so there is
+        // then no session to wait for.
         val quiet = InAppChatTransport(FakeEngine())
         ChatTransports.active = quiet
         ChatViewModel.reset()
+        val opensSession = AIModelViewModel.selectedAIModel.isNotEmpty()
         AIModelViewModel.deselectAIModel()
-        waitFor("the teardown session") { quiet.sessionId != null }
+        if (opensSession) waitFor("the teardown session") { quiet.sessionId != null }
         ChatTransports.active = webSocketClient
     }
 

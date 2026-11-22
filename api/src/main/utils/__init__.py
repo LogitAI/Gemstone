@@ -15,6 +15,7 @@ from . import currency
 from . import calculator
 from . import web_search
 from . import cache
+from .connection import is_no_connection
 #from . import embedding
 
 
@@ -25,15 +26,6 @@ NETWORK_TOOLS = frozenset({
     "search_web", "search_website", "fetch_webpage",
 })
 
-# What urllib3 and requests write when the request never reached a server: name resolution failed, the
-# network is down, nothing accepted the connection, or the connection attempt timed out. "Max retries
-# exceeded" alone is not one of them: it also ends a run of 5xx answers.
-_NO_CONNECTION = (
-    "NameResolutionError", "Failed to resolve", "nodename nor servname", "Name or service not known",
-    "Temporary failure in name resolution", "getaddrinfo failed", "No address associated with hostname",
-    "NewConnectionError", "Failed to establish a new connection", "Network is unreachable",
-    "Connection refused", "ConnectTimeoutError", "No route to host",
-)
 
 
 def offline_result(name: str, result) -> str | None:
@@ -41,7 +33,7 @@ def offline_result(name: str, result) -> str | None:
     if name not in NETWORK_TOOLS:
         return None
     text = result if isinstance(result, str) else dumps(result, ensure_ascii=False, default=str)
-    if not any(marker in text for marker in _NO_CONNECTION):
+    if not is_no_connection(text):
         return None
     return (f"Unavailable offline: {name} needs the internet, and this device could not connect. "
             "Answer without it, and say that this information could not be fetched.")

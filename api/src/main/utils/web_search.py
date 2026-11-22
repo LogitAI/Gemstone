@@ -5,6 +5,8 @@ from typing import List, Dict, Optional, Any
 from urllib.parse import urlparse, quote_plus
 import os
 
+from .connection import is_no_connection
+
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
@@ -268,6 +270,8 @@ class WebSearchAPI:
         results = self.search_fallback_bing(query, max_results)
         if results and 'error' not in results[0]:
             return results
+        if results and is_no_connection(results[0]['error']):
+            return results  # offline: the dispatcher turns this into "unavailable offline" (SPEC S3.2)
         
         # If all else fails, create synthetic results with helpful guidance
         return [{
