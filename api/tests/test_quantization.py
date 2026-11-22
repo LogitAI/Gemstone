@@ -72,6 +72,12 @@ Q4_GREEDY_TOKENS = 16
 # 2026-11-22). Positions of one prompt are correlated, so the standard error is optimistic: the test leans
 # towards failing, not towards passing.
 Q4_STANDARD_ERRORS = 2.0
+# Two more checks that a broken Q4_K fails (fable-tn, 2026-11-22 11:50, llama.cpp reference arithmetic on
+# Qwen3-0.6B over 256 positions: q4_k top-1 agreement 0.828, q4_0 0.812; q8_0 KL about 1/40 of q4_0's in
+# run 44946628389): q4_k's top-1 agreement over all positions is at least 0.75, and q8_0 is far closer to
+# the float model than either 4-bit format (its mean KL below a quarter of the smaller of the two).
+Q4_MIN_TOP1_ALL = 0.75
+Q8_MAX_KL_FRACTION = 0.25
 
 
 def _measure(engine, tokenizer, texts):
@@ -153,3 +159,6 @@ def test_q4_k_stays_within_the_stated_bound_of_the_float_model():
 
     assert q4_k["top1"] >= Q4_MIN_TOP1_AGREEMENT, measured
     assert mean <= Q4_STANDARD_ERRORS * se, measured
+    assert q4_k["top1_all"] >= Q4_MIN_TOP1_ALL, measured
+    q8_kl = float(results["q8_0"]["kl"].mean())
+    assert q8_kl <= Q8_MAX_KL_FRACTION * min(float(q4_k["kl"].mean()), float(q4_0["kl"].mean())), measured
