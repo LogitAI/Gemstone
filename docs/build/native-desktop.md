@@ -12,7 +12,10 @@ CI builds it in job `native-desktop` of `.github/workflows/test.yml` (dispatched
 windows-latest, Temurin 21 for the Gradle daemon, Liberica NIK 25 Full for native-image, the MSVC
 tools from `ilammy/msvc-dev-cmd`, and skiko's static archive built once by
 compose-multiplatform-core-extended's `extended/skiko/build-skiko-static-jvm.sh` at tag
-`v1.11.1-ext.5` and cached). The job fails unless the output directory holds only `gemstone.exe`, its
+`v1.11.1-ext.5` and cached). GraalVM also writes its `java`/`jvm` shims and a few AWT DLLs beside the
+image on Windows (the plugin removes them on Linux only, run 44980924569), so the job copies
+`gemstone.exe` alone into an empty directory and runs that copy. It fails unless the executable imports
+none of those DLLs, its
 version resource says the `pyproject.toml` version and "Gemstone AI", and its embedded manifest is
 Gemstone's (per-monitor DPI). It then starts the executable and fails unless the "Gemstone AI" window
 opens and the process is still alive 15 s later, and unless a click on the chat input field focuses it
