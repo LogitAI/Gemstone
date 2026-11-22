@@ -1018,12 +1018,18 @@ The engine is the torchnative-based system of S1.11. In the release scope (owner
   it when it changes. An `InAppEngine` lists the models stored on the device and streams a reply in
   the server's WebSocket protocol (text chunks, `<think>`, `</think>`, `<tool_call>...</tool_call>`,
   `<EOS>`), which `ChatStreamDecoder` turns into the same chat events for both transports.
+- **The Python entry point (implemented).** `api/src/main/inapp.py` is what the client's `InAppEngine`
+  calls through Python Multiplatform. `models()` lists the models stored on the device: the local store's
+  models and the derived models of them, never a catalogue name whose weights are not there.
+  `chat(model_id, history, message)` yields the WebSocket stream's frames (S1.4), ending with `<EOS>`,
+  through the same registry and lease as the server; the lease is released however the stream ends. A
+  model that is not on the device raises `LookupError`: nothing is downloaded.
 - **Not yet:** an `InAppEngine` that runs `api/src/main/engine.py` through Python Multiplatform, the
   Python packages in the app, and model storage on the device. Means (owner, 2026-11-22: "배포된
   아티팩트로 (추천)"): python-multiplatform and toolchain's Gradle plugin as published artifacts, desktop
   first, wired when their 1.0 releases are published.
 
-Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`.
+Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`, `api/tests/test_inapp.py`.
 
 ### S3.2 Offline operation: `partial` · G3
 
