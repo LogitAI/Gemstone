@@ -157,10 +157,25 @@ jobs:
           path: ${{ runner.temp }}/skiko-static/out/windows-x64
           key: skiko-static-windows-x64-v1.11.1-ext.2
 
+      # skiko compiles with clang-cl from PATH. The runner's standalone LLVM (C:\Program Files\LLVM)
+      # comes first there and does not follow Visual Studio's STL: VS 18.12 (MSVC 14.52) failed with
+      # it while VS 18.11 (MSVC 14.51) built (run 44945907479). Visual Studio's own clang-cl is the one
+      # its STL is released with, so it goes first.
       - name: Build skiko static archive
         if: steps.skiko-cache.outputs.cache-hit != 'true'
         shell: bash
-        run: bash core-extended/extended/skiko/build-skiko-static-jvm.sh "$(cygpath -u "$RUNNER_TEMP")/skiko-static"
+        run: |
+          export PATH="$(cygpath -u "${VCINSTALLDIR}Tools/Llvm/x64/bin"):$PATH"
+          command -v clang-cl.exe
+          clang-cl.exe --version
+          cl.exe 2>&1 | head -1
+          work="$(cygpath -u "$RUNNER_TEMP")/skiko-static"
+          if ! bash core-extended/extended/skiko/build-skiko-static-jvm.sh "$work"; then
+            # The script runs skiko's Gradle quietly, and skiko reports compiler errors as warnings.
+            (cd "$work/skiko/skiko" && ./gradlew --no-daemon compileJvmBindingsWindowsX64 > "$RUNNER_TEMP/skiko-compile.log" 2>&1) || true
+            grep -n -B2 -A12 -E "error:|error [A-Z]+[0-9]+" "$RUNNER_TEMP/skiko-compile.log" | head -200
+            exit 1
+          fi
 
       - uses: gradle/actions/setup-gradle@v4
 
