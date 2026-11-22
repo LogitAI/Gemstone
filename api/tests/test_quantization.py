@@ -78,30 +78,38 @@ Q4_STANDARD_ERRORS = 2.0
 # the float model than either 4-bit format (its mean KL below a quarter of the smaller of the two).
 Q4_MIN_TOP1_ALL = 0.75
 Q8_MAX_KL_FRACTION = 0.25
+# The KL and all-position statistics are scored on the passage fable-tn's reference measurement used: the
+# first 256 tokens of this repository's README.md. Run 44990742713 scored them on the four prompts above
+# (23 positions, four of them a prompt's first token), too few for a paired standard error.
+Q4_PASSAGE = os.path.join(os.path.dirname(__file__), "..", "..", "README.md")
+Q4_PASSAGE_TOKENS = 256
 
 
 def _measure(engine, tokenizer, texts):
     import torch
 
+    with open(Q4_PASSAGE, encoding="utf-8") as f:
+        passage = f.read()
     logits, continuations = [], []
     with torch.no_grad():
         for text in texts:
             ids = tokenizer(text, return_tensors="pt").input_ids.to(engine.model.device)
-            logits.append(engine.model(ids).logits[0].float().cpu())  # every position: [tokens, vocab]
+            logits.append(engine.model(ids).logits[0, -1].float().cpu())  # the next-token choice
             out = engine.model.generate(ids, max_new_tokens=Q4_GREEDY_TOKENS, do_sample=False)
             continuations.append(out[0, ids.shape[1]:].tolist())
-    return logits, continuations
+        ids = tokenizer(passage, return_tensors="pt").input_ids[:, :Q4_PASSAGE_TOKENS].to(engine.model.device)
+        positions = engine.model(ids).logits[0].float().cpu()  # every position: [tokens, vocab]
+    return logits, continuations, positions
 
 
 def _distance(reference, measured):
     import torch
 
-    (ref_logits, ref_tokens), (logits, tokens) = reference, measured
-    ref_all, all_ = torch.cat(ref_logits), torch.cat(logits)
+    (ref_logits, ref_tokens, ref_all), (logits, tokens, all_) = reference, measured
     rms = float(((all_ - ref_all).pow(2).mean() / ref_all.pow(2).mean()).sqrt())
     p = torch.log_softmax(ref_all, -1)
     kl = (p.exp() * (p - torch.log_softmax(all_, -1))).sum(-1)  # nats per position, KL(float || quantised)
-    last = torch.stack([l[-1] for l in logits]).argmax(-1) == torch.stack([l[-1] for l in ref_logits]).argmax(-1)
+    last = torch.stack(logits).argmax(-1) == torch.stack(ref_logits).argmax(-1)
     prefix = []
     for a, b in zip(ref_tokens, tokens):
         n = 0
@@ -141,8 +149,8 @@ def test_q4_k_stays_within_the_stated_bound_of_the_float_model():
     mean, se = float(diff.mean()), float(diff.std() / diff.numel() ** 0.5)
 
     positions = q4_k["kl"].numel()
-    lines = [f"{Q4_MODEL}, float32 reference, {len(Q4_TEXTS)} prompts ({positions} positions), "
-             f"{Q4_GREEDY_TOKENS} greedy tokens", "",
+    lines = [f"{Q4_MODEL}, float32 reference, {len(Q4_TEXTS)} prompts ({Q4_GREEDY_TOKENS} greedy tokens), "
+             f"{positions} positions of README.md", "",
              "| format | logit relative RMS | mean KL (nats) | top-1, last position | top-1, all positions | greedy prefix |",
              "|---|---|---|---|---|---|"]
     for fmt, r in results.items():
