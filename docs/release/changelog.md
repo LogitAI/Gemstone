@@ -46,3 +46,11 @@ Cross-device sync ([#167](https://github.com/LogitAI/Gemstone/issues/167)) and a
 
 - Two simultaneous deletes of one session returned 500 instead of 404, and an expiry sweep could
   fail while another request created a session ([#180](https://github.com/LogitAI/Gemstone/issues/180)).
+
+### Added
+
+- **`GEMSTONE_DEVICE` and a `cuda` extra.** `uv sync --python 3.13 --extra cuda` installs PyTorch's
+  CUDA 13.2 wheels on Linux and Windows, and `GEMSTONE_DEVICE=cuda` (or `cuda:<n>`, `mps`) puts every
+  model on that device; `GET /api/ps` reports `size_vram` for it ([#164](https://github.com/LogitAI/Gemstone/issues/164)).
+- **`GEMSTONE_QUANTIZATION`.** On torchnative, every model loads in the named format, `q4_k` for 4-bit
+  weights, within a measured quality bound of the float model ([#67](https://github.com/LogitAI/Gemstone/issues/67)).

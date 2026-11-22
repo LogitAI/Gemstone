@@ -41,7 +41,7 @@
   <ul>
     <li data-lang="en">Git, <strong>Python 3.13</strong> for upstream PyTorch or free-threaded <strong>3.15t</strong> for torchnative, and <a href="https://docs.astral.sh/uv/">uv</a>. uv can install either one for you.</li><li data-lang="ko">Git, upstream PyTorch 용 <strong>Python 3.13</strong> 또는 torchnative 용 free-threaded <strong>3.15t</strong>, <a href="https://docs.astral.sh/uv/">uv</a>. 둘 다 uv 가 설치해 줍니다.</li>
     <li data-lang="en">JDK 21 or newer for the Kotlin client.</li><li data-lang="ko">Kotlin 클라이언트용 JDK 21 이상.</li>
-    <li data-lang="en">No GPU is needed: the engine runs on the CPU, and the default model, Qwen 3 0.6B, is small enough for it. GPU (CUDA) support is planned (<a href="https://github.com/LogitAI/Gemstone/issues/164">#164</a>).</li><li data-lang="ko">GPU 는 필요 없습니다. 엔진은 CPU 에서 돌고, 기본 모델인 Qwen 3 0.6B 는 CPU 로 충분할 만큼 작습니다. GPU(CUDA) 지원은 계획 단계입니다(<a href="https://github.com/LogitAI/Gemstone/issues/164">#164</a>).</li>
+    <li data-lang="en">No GPU is needed: the engine runs on the CPU, and the default model, Qwen 3 0.6B, is small enough for it. On an NVIDIA GPU, install with <code>uv sync --python 3.13 --extra cuda</code> and start with <code>GEMSTONE_DEVICE=cuda</code> (<a href="https://github.com/LogitAI/Gemstone/issues/164">#164</a>).</li><li data-lang="ko">GPU 는 필요 없습니다. 엔진은 CPU 에서 돌고, 기본 모델인 Qwen 3 0.6B 는 CPU 로 충분할 만큼 작습니다. NVIDIA GPU 에서는 <code>uv sync --python 3.13 --extra cuda</code> 로 설치하고 <code>GEMSTONE_DEVICE=cuda</code> 로 실행합니다(<a href="https://github.com/LogitAI/Gemstone/issues/164">#164</a>).</li>
     <li data-lang="en">Xcode, for iOS only.</li><li data-lang="ko">iOS 에만 Xcode.</li>
   </ul>
 

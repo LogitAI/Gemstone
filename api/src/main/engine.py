@@ -154,6 +154,7 @@ class Engine:
         """
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
+        check_device(device)
         hub_kwargs = dict(revision=revision, cache_dir=cache_dir, local_files_only=local_files_only)
         model_kwargs = dict(hub_kwargs)
         if dtype is not None:
@@ -166,6 +167,8 @@ class Engine:
         self._tokenizer_lock = threading.Lock()
         self.tokenizer = _LockedTokenizer(raw_tokenizer, self._tokenizer_lock)
         self.model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs).to(device).eval()
+        self.device = device
+        self.quantization = quantization
         self.chat_template = chat_template
         self.context_length = context_length or getattr(self.model.config, "max_position_embeddings", None)
         self._gate = _Gate()
@@ -975,10 +978,32 @@ class _LazySamplers:
 _SAMPLERS = _LazySamplers()
 
 
+def check_device(device: str) -> None:
+    """
+    Refuse a device the installed torch cannot use, before any weights load (SPEC S1.17), naming the
+    device and, for CUDA, the install that provides it.
+    """
+    import torch
+
+    kind = str(device).split(":")[0]
+    if kind == "cuda" and not torch.cuda.is_available():
+        built = getattr(torch.version, "cuda", None)
+        why = "no CUDA GPU is visible" if built else "this torch has no CUDA support"
+        raise ValueError(f"Device {device!r} is not available: {why}. "
+                         f"Install CUDA torch with `uv sync --python 3.13 --extra cuda` on a machine with an NVIDIA GPU.")
+    if kind == "mps":
+        mps = getattr(torch.backends, "mps", None)
+        if mps is None or not mps.is_available():
+            raise ValueError(f"Device {device!r} is not available: mps needs Apple silicon and a torch built with MPS.")
+
+
 def _quantization_config(name: str):
-    """ Quantisation through transformers' HfQuantizer slot. Only torchnative provides one today. """
+    """ Quantisation through transformers' HfQuantizer slot (SPEC S1.16). Only torchnative provides one. """
     try:
-        from torchnative.quant import TorchnativeConfig
+        from torchnative.quant import FORMATS, TorchnativeConfig
     except ImportError as e:
         raise ValueError(f"Quantisation '{name}' needs torchnative (uv sync --extra torchnative).") from e
+    formats = [f for f in FORMATS() if f not in ("f32", "f16", "bf16")]
+    if name not in formats:
+        raise ValueError(f"Quantisation '{name}' is not a torchnative format; use one of: {', '.join(formats)}.")
     return TorchnativeConfig(name)
