@@ -552,3 +552,14 @@ compose.desktop {
 tasks.matching { it.name == "packageNativeImage" }.configureEach {
     dependsOn(generateNativeSerializerConfig, generateNativeResourceConfig, compileNativeResources)
 }
+
+// Desktop tests save chats (a completed turn is saved, SPEC S2.6) under an app-data directory of their
+// own, never in the developer's or the runner's profile.
+tasks.withType<Test>().configureEach {
+    if (name == "desktopTest") {
+        val home = layout.buildDirectory.dir("test-home").get().asFile
+        systemProperty("user.home", home.absolutePath)
+        environment("XDG_DATA_HOME", home.resolve("data").absolutePath)
+        environment("APPDATA", home.resolve("AppData").absolutePath)
+    }
+}

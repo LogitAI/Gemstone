@@ -1009,15 +1009,52 @@ Test: `app/src/commonTest/.../ui/viewmodel/NotificationViewModelTest.kt`.
 
 ## 3. Planned capabilities
 
-### S3.1 On-device inference through Python Multiplatform: `planned` · G2, G3
+### S3.1 On-device inference through Python Multiplatform: `partial` · G2, G3
 
 The client embeds the Python model code via Python Multiplatform and runs without the server.
-The engine is the torchnative-based system of S1.11.
-No code on `develop`. Tracked in #42.
+The engine is the torchnative-based system of S1.11. In the release scope (owner, 2026-11-21). Tracked in #42.
 
-### S3.2 Offline operation: `planned` · G3
+- **The transport seam (implemented).** The chat screen talks to a `ChatTransport`
+  (`app/src/commonMain/kotlin/gemstone/framework/network/ChatTransport.kt`): `ChatWebSocketClient`
+  (the server, S1.4) or `InAppChatTransport`, which runs an `InAppEngine` in the app. The active
+  transport is `ChatTransports.active`; the chat, the model selection and the settings dialog follow
+  it when it changes. An `InAppEngine` lists the models stored on the device and streams a reply in
+  the server's WebSocket protocol (text chunks, `<think>`, `</think>`, `<tool_call>...</tool_call>`,
+  `<EOS>`), which `ChatStreamDecoder` turns into the same chat events for both transports.
+- **The Python entry point (implemented).** `api/src/main/inapp.py` is what the client's `InAppEngine`
+  calls through Python Multiplatform. `models()` lists the models stored on the device: the local store's
+  models and the derived models of them, never a catalogue name whose weights are not there.
+  `chat(model_id, history, message)` yields the WebSocket stream's frames (S1.4), ending with `<EOS>`,
+  through the same registry and lease as the server; the lease is released however the stream ends. A
+  model that is not on the device raises `LookupError`: nothing is downloaded.
+- **Not yet:** an `InAppEngine` that runs `api/src/main/engine.py` through Python Multiplatform, the
+  Python packages in the app, and model storage on the device. Means (owner, 2026-11-22: "배포된
+  아티팩트로 (추천)"): python-multiplatform and toolchain's Gradle plugin as published artifacts, desktop
+  first, wired when their 1.0 releases are published.
 
-Depends on S3.1. Today every chat goes through the server. Tracked in #190.
+Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`, `api/tests/test_inapp.py`.
+
+### S3.2 Offline operation: `partial` · G3
+
+With the in-app transport active, a chat opens no network connection: the model list comes from the
+in-app engine and the reply from its stream. Every request the app's HTTP client sends (HTTP or a
+WebSocket upgrade) is counted (`NetworkActivity.requests`), so a test can assert that none was. In the
+release scope (owner, 2026-11-21). Tracked in #190.
+
+- **Implemented:** the client half, on a fake in-app engine: refreshing the model list, selecting a model
+  and completing a chat send no request, and the same steps on the server transport do (the counter is
+  shown to observe them).
+- **Tools without a connection (implemented; agent proposal, not confirmed).** A tool that needs the
+  internet (weather, forecast, calendar events, holidays, exchange rate, web search, site search, webpage
+  fetch) and could not connect (name resolution failed, connection refused, network unreachable, the
+  connection attempt timed out) gives the model the tool result `Unavailable offline: <tool> needs the internet, and this
+  device could not connect. ...` instead of the connection error; the chat continues. Any other failure
+  stays the tool's own error, and local tools (`calculate`, `get_cache_data`) are untouched. Nothing is
+  probed: the result is judged from the failed request alone. Whether these web tools are in scope at all
+  is still the open question 1 of "Outside intent" below.
+- **Not yet:** the same test on the real in-app engine (S3.1) and on Android.
+
+Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`, `api/tests/test_tool_offline.py`.
 
 ### S3.3 Cross-platform sync: `planned` · G7
 

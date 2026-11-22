@@ -6,10 +6,14 @@ import androidx.compose.runtime.setValue
 import gemstone.framework.network.ModelCatalog
 import gemstone.framework.network.ModelInfo
 import gemstone.framework.network.http.ModelsApi
+import gemstone.framework.network.ChatTransport
+import gemstone.framework.network.ChatTransports
+import gemstone.framework.network.InAppChatTransport
 import gemstone.framework.network.websocket.ChatWebSocketClient
 
 
-val webSocketClient = ChatWebSocketClient()
+/** The server transport (S1.4); [ChatTransports.active] is the one in use (S3.1). */
+val webSocketClient: ChatWebSocketClient get() = ChatTransports.server
 
 
 object AIModelViewModel {
@@ -31,22 +35,35 @@ object AIModelViewModel {
     val selectedAIModelOrDefault
         get() = selectedAIModel.ifEmpty { defaultAIModel }
 
-    /** Loads the model list from the server; safe to call again as a refresh. Never throws. */
+    /** Loads the model list from the active transport; safe to call again as a refresh. Never throws. */
     fun refreshAIModels() {
         ChatViewModel.runBlocking {
-            applyCatalog(modelsApi.fetch())
+            applyCatalog(fetchCatalog())
         }
+    }
+
+    /** The server's list, or the models stored on the device for the in-app transport (S3.2: no request). */
+    private suspend fun fetchCatalog(): Result<ModelCatalog> = when (val transport = ChatTransports.active) {
+        is InAppChatTransport -> runCatching {
+            val models = transport.models()
+            ModelCatalog(models, models.firstOrNull()?.id)
+        }
+        else -> modelsApi.fetch()
     }
 
     /** Pulls [modelName] on the server (`POST /api/pull`), notifies on completion or failure, and refreshes the list. */
     fun pullModel(modelName: String) {
         val trimmed = modelName.trim()
         if (trimmed.isEmpty()) return
+        if (ChatTransports.active is InAppChatTransport) {
+            NotificationViewModel.notifyModelDownload(trimmed, success = false, detail = "Pulling a model onto the device is not available yet (#42)")
+            return
+        }
         ChatViewModel.runBlocking {
             val result = modelsApi.pull(trimmed)
             if (result.isSuccess) {
                 NotificationViewModel.notifyModelDownload(trimmed, success = true)
-                applyCatalog(modelsApi.fetch())
+                applyCatalog(fetchCatalog())
             } else {
                 NotificationViewModel.notifyModelDownload(
                     trimmed,
@@ -84,7 +101,7 @@ object AIModelViewModel {
             selectedAIModel = model.id
             selectedAIModelDescription = model.name
             ChatViewModel.runBlocking {
-                initializeModel(webSocketClient, model.id)
+                initializeModel(ChatTransports.active, model.id)
             }
         }
     }
@@ -93,11 +110,11 @@ object AIModelViewModel {
         selectedAIModel = ""
         selectedAIModelDescription = defaultAIModelDescription
         ChatViewModel.runBlocking {
-            initializeModel(webSocketClient)
+            initializeModel(ChatTransports.active)
         }
     }
     suspend fun initializeModel(
-        client: ChatWebSocketClient,
+        client: ChatTransport,
         model: String = defaultAIModel,
         failureCallback: () -> Unit = {}
     ) {
