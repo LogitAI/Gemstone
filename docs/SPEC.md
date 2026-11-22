@@ -1043,10 +1043,17 @@ release scope (owner, 2026-11-21). Tracked in #190.
 - **Implemented:** the client half, on a fake in-app engine: refreshing the model list, selecting a model
   and completing a chat send no request, and the same steps on the server transport do (the counter is
   shown to observe them).
-- **Not yet:** the same test on the real in-app engine (S3.1), on Android, and tool results for tools that
-  need the internet ("unavailable offline", INTENT "Outside intent" question 1).
+- **Tools without a connection (implemented; agent proposal, not confirmed).** A tool that needs the
+  internet (weather, forecast, calendar events, holidays, exchange rate, web search, site search, webpage
+  fetch) and could not connect (name resolution failed, connection refused, network unreachable, the
+  connection attempt timed out) gives the model the tool result `Unavailable offline: <tool> needs the internet, and this
+  device could not connect. ...` instead of the connection error; the chat continues. Any other failure
+  stays the tool's own error, and local tools (`calculate`, `get_cache_data`) are untouched. Nothing is
+  probed: the result is judged from the failed request alone. Whether these web tools are in scope at all
+  is still the open question 1 of "Outside intent" below.
+- **Not yet:** the same test on the real in-app engine (S3.1) and on Android.
 
-Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`.
+Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`, `api/tests/test_tool_offline.py`.
 
 ### S3.3 Cross-platform sync: `planned` · G7
 

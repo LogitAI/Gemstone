@@ -18,6 +18,35 @@ from . import cache
 #from . import embedding
 
 
+# The tools that need the internet (SPEC S3.2, #190). When one of them could not connect, the model gets
+# an "unavailable offline" result instead of the connection error, so the chat continues without it.
+NETWORK_TOOLS = frozenset({
+    "get_weather", "get_weather_forecast", "get_calendar_events", "get_upcoming_holidays", "get_exchange_rate",
+    "search_web", "search_website", "fetch_webpage",
+})
+
+# What urllib3 and requests write when the request never reached a server: name resolution failed, the
+# network is down, nothing accepted the connection, or the connection attempt timed out. "Max retries
+# exceeded" alone is not one of them: it also ends a run of 5xx answers.
+_NO_CONNECTION = (
+    "NameResolutionError", "Failed to resolve", "nodename nor servname", "Name or service not known",
+    "Temporary failure in name resolution", "getaddrinfo failed", "No address associated with hostname",
+    "NewConnectionError", "Failed to establish a new connection", "Network is unreachable",
+    "Connection refused", "ConnectTimeoutError", "No route to host",
+)
+
+
+def offline_result(name: str, result) -> str | None:
+    """ The "unavailable offline" result for `name`'s `result`, or None when it is not a connection failure. """
+    if name not in NETWORK_TOOLS:
+        return None
+    text = result if isinstance(result, str) else dumps(result, ensure_ascii=False, default=str)
+    if not any(marker in text for marker in _NO_CONNECTION):
+        return None
+    return (f"Unavailable offline: {name} needs the internet, and this device could not connect. "
+            "Answer without it, and say that this information could not be fetched.")
+
+
 @dataclass
 class FunctionCalling:
     schemas: list[dict]
@@ -219,6 +248,7 @@ class FunctionCallResult(list):
             timeout = self.tool_timeout()
             worker.join(timeout)
             result = outcome[0] if outcome else f"Error: tool '{name}' timed out after {timeout:g} seconds."
+            result = offline_result(name, result) or result
 
         # Keep the full result server side; the client history only gets a placeholder
         if tool_call_caches is not None:
