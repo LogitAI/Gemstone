@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import gemstone.app.generated.resources.Res
 import gemstone.app.generated.resources.chat_title_placeholder
+import gemstone.framework.network.ChatTransports
 import gemstone.framework.network.websocket.ChatEvent
 import gemstone.framework.network.websocket.ChatState
 import gemstone.framework.storage.SavedChat
@@ -161,7 +162,7 @@ object ChatViewModel {
     fun cleanup() {
         coroutineScope.cancel()
         coroutineScope.launch {
-            webSocketClient.deleteSession()
+            ChatTransports.active.deleteSession()
         }
     }
 
@@ -216,9 +217,11 @@ object ChatViewModel {
         savedChats = chatArchive.chats
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeClientEvents() {
         coroutineScope.launch {
-            webSocketClient.events.collect { event: ChatEvent ->
+            // flatMapLatest: the chat follows the active transport when it changes (S3.1)
+            ChatTransports.activeFlow.flatMapLatest { it.events }.collect { event: ChatEvent ->
                 when (event) {
                     is ChatEvent.MessageReceived -> {
                         if (event.isThinking) {
@@ -343,9 +346,10 @@ object ChatViewModel {
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeClientState() {
         coroutineScope.launch {
-            webSocketClient.state.collect { state ->
+            ChatTransports.activeFlow.flatMapLatest { it.state }.collect { state ->
                 when (state) {
                     is ChatState.Connected -> {
                         _uiState.value = _uiState.value.copy(
@@ -397,9 +401,10 @@ object ChatViewModel {
                 messageInput = ""
             )
 
-            if (webSocketClient.sessionId == null) {
+            val transport = ChatTransports.active
+            if (transport.sessionId == null) {
                 run {
-                    AIModelViewModel.initializeModel(webSocketClient) {
+                    AIModelViewModel.initializeModel(transport) {
                         AIModelViewModel.selectedAIModel = "Server Error"
                         AIModelViewModel.selectedAIModelDescription = "Server Not Available"
                     }
@@ -408,7 +413,7 @@ object ChatViewModel {
 
             turnStart = chatHistory.size
             turnStartMark = TimeSource.Monotonic.markNow()
-            val result = webSocketClient.sendMessage(messageInput, chatHistory)
+            val result = transport.sendMessage(messageInput, chatHistory)
             if (result.isFailure) {
                 failTurn("Failed to send message: ${result.exceptionOrNull()?.message}")
             }
