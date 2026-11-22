@@ -38,17 +38,22 @@ def configure_logging() -> None:
 _DEVICE = re.compile(r"cpu|mps|cuda(:\d+)?")
 
 
+def parse_device(value: Optional[str], setting: str = "GEMSTONE_DEVICE") -> str:
+    """ `value` as a device (`cpu` when empty); ValueError naming `setting` and the accepted devices. """
+    value = (value or "").strip().lower()
+    if not value:
+        return "cpu"
+    if not _DEVICE.fullmatch(value):
+        raise ValueError(f"{setting}={value!r} is not a device: use cpu, cuda, cuda:<index> or mps.")
+    return value
+
+
 def serving_device() -> str:
     """
     The device every engine the server loads runs on (GEMSTONE_DEVICE, SPEC S1.17): `cpu` (default),
     `cuda`, `cuda:<index>` or `mps`. A malformed value raises ValueError naming the accepted ones.
     """
-    value = os.environ.get("GEMSTONE_DEVICE", "").strip().lower()
-    if not value:
-        return "cpu"
-    if not _DEVICE.fullmatch(value):
-        raise ValueError(f"GEMSTONE_DEVICE={value!r} is not a device: use cpu, cuda, cuda:<index> or mps.")
-    return value
+    return parse_device(os.environ.get("GEMSTONE_DEVICE"))
 
 
 def serving_quantization() -> Optional[str]:
