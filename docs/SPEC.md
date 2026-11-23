@@ -1047,7 +1047,8 @@ The engine is the torchnative-based system of S1.11. In the release scope (owner
   first, wired when their 1.0 releases are published.
 
 Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`, `api/tests/test_inapp.py`,
-`api/tests/test_inapp_config.py`.
+`api/tests/test_inapp_config.py` (its `real_model` test runs the real engine through `configure` and `chat` on
+the test model, downloads off). Developer guide: `docs/serving/in-app.md`.
 
 ### S3.2 Offline operation: `partial` · G3
 
