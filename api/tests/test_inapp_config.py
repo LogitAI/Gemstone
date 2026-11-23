@@ -118,3 +118,34 @@ def test_reconfiguring_unloads_what_the_earlier_registry_loaded(models_dir):
 
     assert inapp.current().loaded() == []
     assert engines.engines[0].closed_engine, "the earlier registry's engine was unloaded"
+
+
+@pytest.mark.real_model
+def test_the_real_engine_chats_from_the_configured_directory(engine):
+    """
+    The demonstration #42 asks for, on the Python side: `configure` and `chat` drive the real
+    `engine.Engine` (not a fake) on the test model, read from a configured directory with downloads off.
+    The directory is `HF_HOME`, where the `engine` fixture has put the test model. Only the chat template
+    is added, because SmolLM2-135M is a base model and ships without one.
+    """
+    import functools
+    import pathlib
+
+    from huggingface_hub import constants
+
+    from api.src.main.engine import Engine
+    from api.tests.conftest import CHAT_TEMPLATE, TEST_DEVICE, TEST_MODEL
+
+    hub_dir = pathlib.Path(constants.HF_HUB_CACHE)
+    assert hub_dir.name == "hub", f"the test needs the cache laid out as HF_HOME/hub, not {hub_dir}"
+    real = functools.partial(Engine, chat_template=CHAT_TEMPLATE)
+    inapp.configure(models_dir=str(hub_dir.parent), device=TEST_DEVICE, engine_class=real)
+
+    assert TEST_MODEL in {m["hf_id"] for m in inapp.models()}
+    frames = list(inapp.chat(TEST_MODEL, [], "The capital of France is"))
+
+    assert frames[-1] == "<EOS>"
+    assert "".join(frames[:-1]).strip(), "the real engine streamed some text before <EOS>"
+    [resident] = inapp.current().loaded()
+    assert resident["hf_id"] == TEST_MODEL
+    assert resident["device"] == TEST_DEVICE, "the configured device reached the real engine"
