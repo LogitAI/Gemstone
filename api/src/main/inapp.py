@@ -12,20 +12,88 @@ classes and leases as the server, and they never touch the network:
   `<think>`, `</think>`, `<tool_call>...</tool_call>`, then `<EOS>`. The lease is released however the
   stream ends, including when the app stops reading and closes the generator. A model that is not on
   the device raises `LookupError`.
+- `configure(...)` sets the app's own model directory, residency limits, thread count, device and
+  weight format; until it is called, the server's registry and environment apply.
 """
+import os
 import threading
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Union
 
 from . import registry as registry_module
 from .models.config import ChatHistory
-from .registry import DEFAULT_KEEP_ALIVE
+from .registry import DEFAULT_KEEP_ALIVE, AliasStore, HFStore, Registry, model_class_for, parse_bytes
 
 
 EOS = "<EOS>"
 
+_lock = threading.Lock()
+_configured: Optional[Registry] = None
+
+
+def configure(models_dir: Optional[str] = None, *, max_memory: Union[int, str, None] = None,
+              max_loaded: int = 1, threads: Optional[int] = None, device: Optional[str] = None,
+              quantization: Optional[str] = None, engine_class=None) -> Registry:
+    """
+    The registry `models()` and `chat()` use from now on (SPEC S3.1). `models_dir` is laid out like
+    `HF_HOME` (repositories in `hub/`, derived models in `gemstone/aliases.json`); None keeps the
+    default Hugging Face cache. `max_memory` is bytes or a size such as "3GB" (0 = no budget).
+    `threads` sets torch's intra-op thread count. `device` and `quantization` are the engine options;
+    a model class's own options win. A malformed value raises ValueError naming the setting, and the
+    earlier configuration stays. The earlier registry's models are unloaded. `engine_class` replaces
+    `engine.Engine` (tests).
+    """
+    from .settings import parse_device
+    device = parse_device(device, "device")
+    try:
+        memory = 0 if max_memory is None else max(0, parse_bytes(max_memory))
+    except ValueError as e:
+        raise ValueError(f"max_memory={max_memory!r} is not a size: use bytes or a number with a unit, e.g. 3GB.") from e
+    if not isinstance(max_loaded, int) or max_loaded < 1:
+        raise ValueError(f"max_loaded={max_loaded!r}: at least one model must be loadable.")
+    if threads is not None and (not isinstance(threads, int) or threads < 1):
+        raise ValueError(f"threads={threads!r}: use a positive thread count, or None for torch's default.")
+
+    hub = os.path.join(models_dir, "hub") if models_dir is not None else None
+    aliases = AliasStore(os.path.join(models_dir, "gemstone", "aliases.json")) if models_dir is not None else None
+    options = {"device": device, **({"quantization": quantization} if quantization else {})}
+
+    def load(hf_id: str):
+        engine = engine_class
+        if engine is None:
+            from .engine import Engine as engine
+        cls = model_class_for(hf_id)
+        return engine(hf_id, context_length=cls.context_length or None, local_files_only=True,
+                      cache_dir=hub, **{**options, **cls.engine_options})
+
+    if threads is not None:
+        import torch
+        torch.set_num_threads(threads)
+    new = Registry(loader=load, store=HFStore(hub), max_loaded=max_loaded, max_memory=memory, aliases=aliases)
+    global _configured
+    with _lock:
+        old, _configured = _configured, new
+    if old is not None:
+        old.unload()
+    return new
+
+
+def current() -> Registry:
+    """ The registry `models()` and `chat()` use: the configured one, else the server's. """
+    with _lock:
+        return _configured if _configured is not None else registry_module.registry
+
+
+def reset() -> None:
+    """ Back to the server's registry, unloading the configured one's models (tests). """
+    global _configured
+    with _lock:
+        old, _configured = _configured, None
+    if old is not None:
+        old.unload()
+
 
 def _registry(registry):
-    return registry if registry is not None else registry_module.registry
+    return registry if registry is not None else current()
 
 
 def models(registry=None) -> List[dict]:

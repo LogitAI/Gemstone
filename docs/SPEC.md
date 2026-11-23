@@ -1027,12 +1027,27 @@ The engine is the torchnative-based system of S1.11. In the release scope (owner
   `chat(model_id, history, message)` yields the WebSocket stream's frames (S1.4), ending with `<EOS>`,
   through the same registry and lease as the server; the lease is released however the stream ends. A
   model that is not on the device raises `LookupError`: nothing is downloaded.
+- **Configuration (implemented; agent proposal, not confirmed).** #42 asks for options for model paths and
+  resource limits. The app calls `inapp.configure(...)` once, before `models()` and `chat()`, with
+  settings it owns instead of the server's environment variables:
+  - `models_dir`: the app's own model directory, laid out like `HF_HOME` (repositories under
+    `hub/`, derived models in `gemstone/aliases.json`). Listing and loading read only this directory.
+    `None` keeps the default Hugging Face cache.
+  - `max_memory` (bytes, or a size such as `"3GB"`; 0 = no budget) and `max_loaded` (default 1): the
+    registry's residency limits (S1.14).
+  - `threads`: torch's intra-op thread count for the process. `None` leaves torch's default.
+  - `device` (`cpu` by default, or `cuda`, `cuda:<index>`, `mps`) and `quantization` (a weight format,
+    S1.16): the engine options (S1.17). A model class's own options still win, as on the server.
+
+  A malformed value raises `ValueError` naming the setting, and nothing changes. A later `configure`
+  replaces the earlier registry, and a model the earlier registry had loaded is unloaded.
 - **Not yet:** an `InAppEngine` that runs `api/src/main/engine.py` through Python Multiplatform, the
   Python packages in the app, and model storage on the device. Means (owner, 2026-11-22: "배포된
   아티팩트로 (추천)"): python-multiplatform and toolchain's Gradle plugin as published artifacts, desktop
   first, wired when their 1.0 releases are published.
 
-Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`, `api/tests/test_inapp.py`.
+Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`, `api/tests/test_inapp.py`,
+`api/tests/test_inapp_config.py`.
 
 ### S3.2 Offline operation: `partial` · G3
 

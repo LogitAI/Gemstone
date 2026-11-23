@@ -359,10 +359,16 @@ class LocalModel:
 
 
 class HFStore:
-    """ The local Hugging Face cache (`HF_HOME`) as the model store. """
+    """
+    The local Hugging Face cache as the model store: `cache_dir` (a `hub` directory), or the default
+    cache of `HF_HOME` when None. The in-app engine passes the app's own directory (SPEC S3.1).
+    """
 
     # Safetensors headers by (repo id, snapshot path): a snapshot directory is named by its commit hash.
     _stats: Dict[Tuple[str, str], tuple] = {}
+
+    def __init__(self, cache_dir: Optional[str] = None):
+        self.cache_dir = cache_dir
 
     def list(self) -> List[LocalModel]:
         """ The complete causal-LM models in the cache; other repos (bert, vision, ...) are not chat models (#119). """
@@ -378,7 +384,7 @@ class HFStore:
     def delete(self, hf_id: str) -> bool:
         from huggingface_hub import scan_cache_dir
         try:
-            cache = scan_cache_dir()
+            cache = scan_cache_dir(self.cache_dir)
         except Exception:
             return False
         hashes = [rev.commit_hash for repo in cache.repos
@@ -419,14 +425,13 @@ class HFStore:
         for name, size in files:
             event = dict(status=f"pulling {name}", digest=name, total=size, completed=0)
             yield dict(event)
-            huggingface_hub.hf_hub_download(hf_id, name, revision="main")
+            huggingface_hub.hf_hub_download(hf_id, name, revision="main", cache_dir=self.cache_dir)
             yield {**event, "completed": size}
 
-    @staticmethod
-    def _repos() -> Iterable:
+    def _repos(self) -> Iterable:
         from huggingface_hub import scan_cache_dir
         try:
-            return [r for r in scan_cache_dir().repos if r.repo_type == "model"]
+            return [r for r in scan_cache_dir(self.cache_dir).repos if r.repo_type == "model"]
         except Exception:  # no cache yet
             return []
 
