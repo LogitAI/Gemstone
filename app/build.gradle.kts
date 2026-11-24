@@ -142,6 +142,11 @@ kotlin {
                 implementation(libs.compose.ui.test.junit4)
             }
         }
+        // Android host tests on the JVM under Robolectric: the in-app chat on Android's framework (#190)
+        androidUnitTest.dependencies {
+            implementation(libs.junit)
+            implementation(libs.robolectric)
+        }
         desktopMain.dependencies {
             api(compose.desktop.currentOs) {
                 exclude(group = "org.jetbrains.compose.material3")
@@ -212,6 +217,10 @@ android {
         getByName("release") {
             isMinifyEnabled = false
         }
+    }
+    testOptions {
+        // Robolectric needs the merged manifest and resources of the app under test
+        unitTests.isIncludeAndroidResources = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
