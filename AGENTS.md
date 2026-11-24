@@ -288,12 +288,13 @@ at: Gradle 8.13 cannot configure this build on JDK 25. A JDK 21 must be installe
 | Android debug install | `./gradlew :app:installDebug` |
 | Web (Wasm) dev server | `./gradlew :app:wasmJsBrowserDevelopmentRun` |
 | Common tests on the JVM | `./gradlew :app:desktopTest` |
+| Android host tests (Robolectric) | `./gradlew :app:testDebugUnitTest` |
 | iOS | Open `app/src/iosMain/swift/iosApp.xcodeproj` in Xcode (see the caveat in `docs/SPEC.md`) |
 
 Verification follows rule 8: redirect Gradle output to a file and read `$?`; run each target's test
 task as its own invocation; delete `app/build/test-results/` before counting.
 
-CI runs the Python tests, the quick-start check, `:app:desktopTest` with `:app:compileKotlinWasmJs`,
+CI runs the Python tests, the quick-start check, `:app:desktopTest`, `:app:testDebugUnitTest` and `:app:compileKotlinWasmJs`,
 and the web bundle check on demand (`workflow_dispatch`, owner policy 2026-11-14, #239/#240), not on
 push, schedule or pull requests (#175). They are the jobs `pytest`, `quickstart`, `gradle`, `web-bundle` and `native-desktop` of
 `.github/workflows/test.yml`. `native-desktop` (windows-latest; owner approval 2026-11-13, #191) builds

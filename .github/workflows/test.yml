@@ -4,7 +4,7 @@ name: Tests
 #   pytest      the Python tests (api/tests) on a real model; the model is downloaded once into a
 #               cached HF_HOME, so every run uses the same checkpoint as a local run
 #   quickstart  the README's start command, run literally, must come up without a model
-#   gradle      the Kotlin client's common tests on the JVM, and the web (Wasm) target compiles
+#   gradle      the Kotlin client's common tests on the JVM, the Android host tests (Robolectric), and the web (Wasm) target compiles
 #   web-bundle  rebuilds the web client from app/; on develop it commits api/src/main/webpack when it differs
 #   native-desktop  builds the GraalVM native executable on Windows x64 through compose-multiplatform-extended
 #               (:app:packageNativeImage: one file, AWT and Skia linked in) and checks
@@ -99,6 +99,9 @@ jobs:
       - name: Common tests on the JVM
         run: ./gradlew :app:desktopTest --console=plain
 
+      - name: Android host tests (Robolectric)
+        run: ./gradlew :app:testDebugUnitTest --console=plain
+
       - name: Compile the web target
         run: ./gradlew :app:compileKotlinWasmJs --console=plain
 
@@ -107,7 +110,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-test-results
-          path: app/build/test-results/desktopTest/
+          path: |
+            app/build/test-results/desktopTest/
+            app/build/test-results/testDebugUnitTest/
           if-no-files-found: ignore
 
   native-desktop:

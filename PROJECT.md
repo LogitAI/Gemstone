@@ -36,7 +36,7 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 | 대화 기록 | 구현 | 기기의 `chats.json`(버전 필드, 암호화하지 않음)에 저장한다. 하나씩 또는 전부 삭제한다 (#43) |
 | 설정 화면 | 구현 | 서버 주소와 API 키 대화상자(#166). 키는 플랫폼 보안 저장소에 둔다. 사용자 이름은 아직 하드코딩 |
 | 도메인 계층(Clean Architecture) | 계획 | 빈 파일 |
-| 온디바이스 추론 · 오프라인 · 동기화 | 부분 | 클라이언트의 전송 경계(`ChatTransport`, 앱 내 엔진 경로)와 네트워크 요청이 없음을 확인하는 테스트(`InAppChatTest`), 앱이 Python Multiplatform 으로 부를 `api/src/main/inapp.py`(`test_inapp.py`). 실제 앱 내 엔진 연결은 PMP·toolchain 배포 후 (#42), 오프라인은 #190, 동기화는 #167 |
+| 온디바이스 추론 · 오프라인 · 동기화 | 부분 | 클라이언트의 전송 경계(`ChatTransport`, 앱 내 엔진 경로)와 네트워크 요청이 없음을 확인하는 테스트(데스크톱 `InAppChatTest`, Android Robolectric `AndroidInAppChatTest`), 앱이 Python Multiplatform 으로 부를 `api/src/main/inapp.py`(`test_inapp.py`). 실제 앱 내 엔진 연결은 PMP·toolchain 배포 후 (#42), 오프라인은 #190, 동기화는 #167 |
 | 네이티브 데스크톱 (GraalVM) | 부분 (SPEC S3.4) | Windows x64 전용. CI(`native-desktop` 잡, #231/#232/#234/#236)가 test.yml 실행 시(2026-11-14 CI 정책에 따라 수동 dispatch, #239) compose-multiplatform-extended 플러그인의 `:app:packageNativeImage` 로 단일 실행 파일을 빌드하고(Liberica NIK 25 Full, 정적 skiko), 파일 하나·버전 리소스·DPI 매니페스트와 창 열기·입력·채팅 응답 저장·JNI 메타데이터 오류 없음을 검증한다. 플러그인 경로의 첫 녹색 실행을 기다린다(#191) |
 | Kotlin 테스트 | 부분 | 서버 주소, 모델 목록 파싱, 종료 코드 매핑은 테스트 있음(CI). 화면과 뷰모델은 테스트 없음 |
 | GPU(CUDA) 추론 | 부분 | `--extra cuda`(CUDA 13.2 torch)와 `GEMSTONE_DEVICE=cuda`(SPEC S1.17). GPU 러너가 없어 GPU 에서 돌려 본 적은 없다 (#164) |
