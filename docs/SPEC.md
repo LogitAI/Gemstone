@@ -1072,9 +1072,15 @@ release scope (owner, 2026-11-21). Tracked in #190.
   stays the tool's own error, and local tools (`calculate`, `get_cache_data`) are untouched. Nothing is
   probed: the result is judged from the failed request alone. Whether these web tools are in scope at all
   is still the open question 1 of "Outside intent" below.
-- **Not yet:** the same test on the real in-app engine (S3.1) and on Android.
+- **Android (implemented):** the same chat runs as an Android host test under Robolectric (leader, 2026-11-25,
+  answering the #190 question "Robolectric host test, an emulator job, or faked storage": "go with the
+  Robolectric host test"), on Android's own `SharedPreferences` and `AtomicFile`: no request is counted,
+  the completed chat is written to `chats.json` in the app's files directory, and the server transport's
+  request is counted. CI runs it in test.yml's `gradle` job (`:app:testDebugUnitTest`).
+- **Not yet:** the same test on the real in-app engine (S3.1).
 
-Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`, `api/tests/test_tool_offline.py`.
+Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`,
+`app/src/androidUnitTest/kotlin/gemstone/framework/network/AndroidInAppChatTest.kt`, `api/tests/test_tool_offline.py`.
 
 ### S3.3 Cross-platform sync: `planned` · G7
 
