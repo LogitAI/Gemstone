@@ -310,7 +310,7 @@ assets live in `api/src/main/static/` and `api/src/main/webpack/`, not in a test
 tests in `app/src/commonTest/kotlin/gemstone/framework/network/` cover the network layer
 (`ServerAddressTest`, `ModelCatalogTest`, `ChatCloseEventTest`); `app/src/desktopTest/` holds the Compose UI
 tests of the screens (`LayoutTest`, `ReasoningStatusTest`, `ChatInputCursorTest`, `MessageSelectionTest`) and
-`InAppChatTest`.
+`InAppChatTest`; `app/src/androidUnitTest/` holds `AndroidInAppChatTest` (Robolectric).
 `ComposeAppCommonTest.kt` asserts `1 + 2 == 3`; do not report it as coverage. New behaviour starts
 with a real failing test (rule 5).
 
