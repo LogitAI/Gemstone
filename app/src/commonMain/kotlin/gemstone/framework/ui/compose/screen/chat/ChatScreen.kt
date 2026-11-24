@@ -375,14 +375,12 @@ fun MessageBubble(
                     )
                 }
                 Spacer(modifier = Modifier.width(Dimen.LIST_ELEMENT_SPACING * 2))
-                var status = "${thoughts.second}초 동안 " + when (thoughts.third) {
-                    true -> "생각 중..."
-                    false -> "생각함"
-                }
-                if (thoughts.second < 1) {
-                    status = "답변 생성 대기 중..."
-                }
-                status += if (showThoughts) "  <" else "  >"
+                // SPEC S2.9: string resources, like every other text of the app
+                val status = when {
+                    thoughts.second < 1 -> stringResource(Res.string.chat_waiting_for_reply)
+                    thoughts.third -> stringResource(Res.string.chat_thinking_for, thoughts.second)
+                    else -> stringResource(Res.string.chat_thought_for, thoughts.second)
+                } + if (showThoughts) "  <" else "  >"
                 BodyText(
                     status,
                     fontWeight = FontWeight.Light,

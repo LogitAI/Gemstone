@@ -878,7 +878,9 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
 
 In landscape the sidebar sits next to the chat; in portrait the sidebar is a start screen that
 navigates to the chat, with a swipe-back gesture to return. Code: `.../screen/chat/MainScreen.kt`,
-`.../navigation/AppNavigation.kt`. Test: none.
+`.../navigation/AppNavigation.kt`. Test: `app/src/desktopTest/kotlin/gemstone/framework/ui/LayoutTest.kt`
+(landscape shows the sidebar beside the chat; portrait starts on the sidebar, with no chat input, and
+"New Chat" navigates to the chat). The swipe-back gesture has no test.
 
 ### S2.5 Model selection: `implemented` · G5
 
@@ -990,8 +992,10 @@ the target, not the current code.
 
 ### S2.9 Localisation: `partial` · G1 (assumed)
 
-Android declares `en` and `ko` locales, but only English strings exist, and the reasoning status
-line is hard-coded in Korean (`"…초 동안"`, `ChatScreen.kt`).
+Android declares `en` and `ko` locales, but only English strings exist. The reasoning status line
+above a reply ("Thinking for 3 s...", "Thought for 3 s", "Waiting for the reply...") was hard-coded in
+Korean and is now an English string resource like the rest (#261). Which languages are in scope is
+"Outside intent" question 4. Test: `app/src/desktopTest/kotlin/gemstone/framework/ui/ReasoningStatusTest.kt`.
 
 ### S2.10 Notifications: `implemented` · G4, G5
 
@@ -1076,7 +1080,7 @@ Tests: `app/src/desktopTest/kotlin/gemstone/framework/network/InAppChatTest.kt`,
 
 No code. The meaning of sync is an open question in `INTENT.md` § 5. Tracked in #167.
 
-### S3.4 Native desktop executable (GraalVM native-image): `partial` · G8
+### S3.4 Native desktop executable (GraalVM native-image): `implemented` · G8
 
 Built by `compose-multiplatform-extended` (decided 2026-10-02; in 1.0, owner 2026-11-21): the
 `org.thisisthepy.compose` plugin's `nativeImage { }` block and `:app:packageNativeImage` task link AWT,
@@ -1102,8 +1106,9 @@ starts the server on SmolLM2-135M-Instruct (fetched into a cached `HF_HOME`, the
 `HF_HUB_OFFLINE=1`), selects that model in the sidebar, sends the typed text and requires the reply to
 be saved in `chats.json` within 300 s (S2.6; model download in CI approved by the leader 2026-11-13).
 Its stderr may not show a missing-metadata error (`NoSuchFieldError`, `NoSuchMethodError`,
-`NoClassDefFoundError`, `Missing...RegistrationError`; #235). `partial` until that job is green on the
-plugin's build; macOS and Linux, which the plugin also builds, are not in Gemstone's CI. Tracked in #191.
+`NoClassDefFoundError`, `Missing...RegistrationError`; #235). The job is green on the plugin's build
+since test.yml run 45003070062 (2026-11-22, #255); #191 is closed. macOS and Linux, which the plugin
+also builds, are not in Gemstone's CI.
 
 ---
 
