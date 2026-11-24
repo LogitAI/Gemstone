@@ -308,7 +308,9 @@ Most API tests use a fake engine and need no model; the engine, batching and ser
 SmolLM2-135M in float32 (the equality criteria are stated for float32). The served web
 assets live in `api/src/main/static/` and `api/src/main/webpack/`, not in a test directory. The Kotlin
 tests in `app/src/commonTest/kotlin/gemstone/framework/network/` cover the network layer
-(`ServerAddressTest`, `ModelCatalogTest`, `ChatCloseEventTest`); the screens and view models have none.
+(`ServerAddressTest`, `ModelCatalogTest`, `ChatCloseEventTest`); `app/src/desktopTest/` holds the Compose UI
+tests of the screens (`LayoutTest`, `ReasoningStatusTest`, `ChatInputCursorTest`, `MessageSelectionTest`) and
+`InAppChatTest`; `app/src/androidUnitTest/` holds `AndroidInAppChatTest` (Robolectric).
 `ComposeAppCommonTest.kt` asserts `1 + 2 == 3`; do not report it as coverage. New behaviour starts
 with a real failing test (rule 5).
 
