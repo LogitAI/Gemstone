@@ -30,6 +30,9 @@ runtime-android = "1.10.6"
 ktor = "3.4.2"
 robolectric = "4.18.1"
 
+# toolchain's Gradle plugin (`python { }`), unpublished: mavenLocal on feat/42-android-jit only (settings.gradle.kts)
+python-toolchain = "1.0.0-alpha"
+
 [libraries]
 compose-runtime = { module = "org.thisisthepy.compose.runtime:runtime", version.ref = "compose-multiplatform" }
 compose-foundation = { module = "org.thisisthepy.compose.foundation:foundation", version.ref = "compose-multiplatform" }
@@ -80,3 +83,4 @@ compose-multiplatform = { id = "org.thisisthepy.compose", version.ref = "compose
 kotlin-native-desktop = { id = "org.thisisthepy.kotlin.native.desktop", version.ref = "compose-plugin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+python-toolchain = { id = "org.thisisthepy.python.multiplatform", version.ref = "python-toolchain" }

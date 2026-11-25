@@ -1,0 +1,5 @@
+[project]
+name = "gemstone-ondevice"
+version = "0.0.0"
+description = "Placeholder for Gemstone's on-device Python (#42): the api package moves here when PMP 3.15.0 is published."
+requires-python = ">=3.13"

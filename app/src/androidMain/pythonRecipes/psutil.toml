@@ -1,0 +1,3 @@
+# psutil 7.2.2 rejects sys.platform "android" ("platform android is not supported", setup.py and
+# psutil/__init__.py). Android's kernel is Linux, so the patch treats it as Linux (#42).
+patches = ["patches/psutil-android-is-linux.patch"]

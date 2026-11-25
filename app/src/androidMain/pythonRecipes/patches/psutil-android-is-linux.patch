@@ -1,0 +1,13 @@
+--- a/psutil/_common.py
++++ b/psutil/_common.py
+@@ -71,7 +71,9 @@
+ 
+ POSIX = os.name == "posix"
+ WINDOWS = os.name == "nt"
+-LINUX = sys.platform.startswith("linux")
++# Android's kernel is Linux and CPython 3.13+ reports sys.platform "android": build and run the Linux
++# implementation there (Gemstone's recipe, #42).
++LINUX = sys.platform.startswith(("linux", "android"))
+ MACOS = sys.platform.startswith("darwin")
+ OSX = MACOS  # deprecated alias
+ FREEBSD = sys.platform.startswith(("freebsd", "midnightbsd"))

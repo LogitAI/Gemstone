@@ -13,6 +13,7 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.compose.hotreload)
     kotlin("plugin.serialization").version(libs.versions.kotlin.get())
+    alias(libs.plugins.python.toolchain)
 }
 
 // Gemstone's one version, shared by the client and the API: the `version` of pyproject.toml's
@@ -20,6 +21,49 @@ plugins {
 val appVersion: String = Regex("""(?m)^version\s*=\s*"([^"]+)"""")
     .find(providers.fileContents(rootProject.layout.projectDirectory.file("pyproject.toml")).asText.get())
     ?.groupValues?.get(1) ?: error("pyproject.toml has no [project] version")
+
+// On-device Python for Android (#42; leader Decision 5, 2026-11-25): toolchain's `python { }` installs the
+// engine's native dependencies for the phone. The four below have no cp315t Android wheel on PyPI
+// (#178 lists them for the server), so `pip { jit }` cross-builds them from source with the recipes in
+// src/androidMain/pythonRecipes (one `<name>.toml` per package that needs one). The Python package itself
+// is a placeholder until the api package moves in; the in-app engine (S3.1) is wired when PMP 3.15.0 is
+// published.
+python {
+    compileSdk = PY3_15_0
+    localLibraryPath = "src/commonMain/python"
+    android("android") { androidSdk = 24 }
+    androidArm64()
+    sourceSets {
+        val commonMain by getting {
+            dependencies {
+                implementation("tokenizers")
+                implementation("safetensors")
+                implementation("hf-xet")
+                implementation("psutil")
+            }
+        }
+    }
+    defaultConfig {
+        versionCode = 1
+        versionName = appVersion
+        pip {
+            autoUpdate = false
+            repositories {
+                central {
+                    setUrl("https://pypi.org/simple", "https://pypi.org/simple")
+                }
+                jit {
+                    localRecipes {
+                        add("src/androidMain/pythonRecipes")
+                    }
+                }
+            }
+        }
+    }
+    packaging {
+        fileName = "gemstone"
+    }
+}
 
 
 kotlin {
