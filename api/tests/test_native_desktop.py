@@ -32,7 +32,17 @@ def test_ci_builds_with_package_native_image_and_checks_the_one_file():
     job = _job((ROOT / ".github" / "workflows" / "test.yml").read_text(), "native-desktop")
     assert ":app:packageNativeImage" in job and "nativeDist" not in job
     assert "bellsoft-liberica-vm-full-openjdk25" in job and "ilammy/msvc-dev-cmd" in job
-    assert "build-skiko-static-jvm.sh" in job and "ref: v1.11.1-ext.5" in job
+    assert "build-skiko-static-jvm.sh" in job
     assert 'app/build/compose/native-image/main' in job
     assert "ProductVersion" in job and "permonitorv2" in job
     assert "chats.json" in job  # the chat check stays
+
+
+def test_the_skiko_script_comes_from_the_tag_of_the_compose_libraries():
+    """skiko's static archive is built from the core fork at the tag of the Compose libraries Gemstone
+    resolves (#265), so a version bump in libs.versions.toml cannot leave the native build on an older skiko."""
+    toml = (ROOT / "gradle" / "libs.versions.toml").read_text()
+    version = re.search(r'^compose-multiplatform = "([^"]+)"', toml, re.M).group(1)
+    job = _job((ROOT / ".github" / "workflows" / "test.yml").read_text(), "native-desktop")
+    assert re.findall(r"ref: (v1\.11\.1-ext\.\d+)", job) == [f"v{version}"]
+    assert f"key: skiko-static-windows-x64-v{version}" in job

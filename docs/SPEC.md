@@ -782,7 +782,7 @@ run passes and is recorded on #164.
 
 The Compose Multiplatform plugin is `org.thisisthepy.compose:1.11.1-ext.3` (together with
 `org.thisisthepy.kotlin.native.desktop:1.11.1-ext.3`), and the Compose and JetBrains AndroidX
-libraries resolve from `org.thisisthepy.compose.*:1.11.1-ext.5` (#215; ext.5 since #41 for the fork's IME fix). Modules not published by
+libraries resolve from `org.thisisthepy.compose.*:1.11.1-ext.6` (#215; ext.5 since #41 for the fork's IME fix, ext.6 since #265, team leader decision 2026-11-25). The desktop window module (`compose.desktop.currentOs`, which the plugin names at ext.2) is resolved at that same version. Modules not published by
 the fork on Maven Central stay on their upstream coordinates (`org.jetbrains.compose.material:material-icons-extended:1.7.3`,
 `org.jetbrains.compose.components:components-resources:1.11.1` and
 `org.jetbrains.compose.components:components-ui-tooling-preview:1.11.1`), with their transitive
@@ -1105,7 +1105,7 @@ plugin's `:app:runNativeImageAgent`. See [`build/native-desktop.md`](build/nativ
 CI builds it on Windows x64 in the native-desktop job of test.yml (dispatched by hand per the
 2026-11-14 CI policy, #239; added 2026-11-13 with the owner's approval): Liberica NIK 25 Full, the MSVC
 tools, and skiko's static archive built by compose-multiplatform-core-extended's
-`build-skiko-static-jvm.sh` at tag `v1.11.1-ext.5` (cached). The job requires `packageNativeImage` to
+`build-skiko-static-jvm.sh` at the tag of the Compose libraries, `v1.11.1-ext.6` (cached; `test_native_desktop.py` keeps the two equal). The job requires `packageNativeImage` to
 succeed and its output directory to hold only `gemstone.exe`, whose version resource says the
 `pyproject.toml` version and "Gemstone AI" and whose embedded manifest is Gemstone's (per-monitor DPI).
 It then requires the executable to open its "Gemstone AI" window and still run 15 s later, and a
