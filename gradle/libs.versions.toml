@@ -8,16 +8,16 @@ androidx-appcompat = "1.7.1"
 androidx-constraintlayout = "2.2.1"
 androidx-core = "1.18.0"
 androidx-espresso = "3.7.0"
-androidx-lifecycle = "1.11.1-ext.2"
+androidx-lifecycle = "1.11.1-ext.6"
 androidx-testExt = "1.3.0"
 compose-hotReload = "1.0.0"
-compose-multiplatform = "1.11.1-ext.2"
+compose-multiplatform = "1.11.1-ext.6"
 compose-plugin = "1.11.1-ext.3"
 compose-material-icons = "1.7.3"
 compose-components = "1.11.1"
-compose-navigation = "1.11.1-ext.2"
+compose-navigation = "1.11.1-ext.6"
 # The Compose UI the desktop actually resolves; the UI test library must match it
-compose-ui-resolved = "1.11.1-ext.2"
+compose-ui-resolved = "1.11.1-ext.6"
 compose-webview = "2.0.3"
 jewel = "0.34.0-253.32098.37"
 jna = "5.14.0"
@@ -28,6 +28,7 @@ kotlinx-serialization = "1.11.0"
 kotlinx-datetime = "0.7.1"
 runtime-android = "1.10.6"
 ktor = "3.4.2"
+robolectric = "4.18.1"
 
 [libraries]
 compose-runtime = { module = "org.thisisthepy.compose.runtime:runtime", version.ref = "compose-multiplatform" }
@@ -49,6 +50,7 @@ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotl
 compose-ui-test-junit4 = { module = "org.thisisthepy.compose.ui:ui-test-junit4", version.ref = "compose-ui-resolved" }
 kotlin-testJunit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 junit = { module = "junit:junit", version.ref = "junit" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
 androidx-testExt-junit = { module = "androidx.test.ext:junit", version.ref = "androidx-testExt" }
 androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "androidx-espresso" }

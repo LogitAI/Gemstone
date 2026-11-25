@@ -57,6 +57,61 @@ PAGED_ATTENTION = {
 # seed, which makes the final draw keep the scores so the manager's argmax picks the top token.
 _GREEDY = dict(temperature=1.0, top_k=0, top_p=1.0, min_p=0.0, seed=-1)
 
+# The value of each sampler argument at which its filter is an identity. A filter whose argument
+# is neutral for every row it would process is skipped, on both paths (#74): on torchnative each
+# one costs a sort, a softmax or a cumulative sum over the whole vocabulary per decode step.
+# `api/tests/test_sampler_rng.py` checks each predicate against the filter it stands for.
+_NEUTRAL = {
+    "temperature": lambda value: value == 1.0,
+    "top_k": lambda k: k <= 0,
+    "top_p": lambda p: p >= 1.0,
+    "min_p": lambda p: p <= 0.0,
+    "seed": lambda seed: seed < 0,
+}
+
+
+class _LockedTokenizer:
+    """
+    Thread-safe proxy for a Hugging Face tokenizer.
+    Acquires `lock` only around individual tokenizer method calls (`__call__`, `encode`, `decode`,
+    `apply_chat_template`, `batch_decode`, `convert_tokens_to_ids`, `convert_ids_to_tokens`),
+    and delegates attribute reads directly to the underlying tokenizer via `__getattr__`.
+    """
+    def __init__(self, tokenizer: Any, lock: threading.Lock):
+        object.__setattr__(self, "_tokenizer", tokenizer)
+        object.__setattr__(self, "_lock", lock)
+
+    def __call__(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer(*args, **kwargs)
+
+    def encode(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.encode(*args, **kwargs)
+
+    def decode(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.decode(*args, **kwargs)
+
+    def apply_chat_template(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.apply_chat_template(*args, **kwargs)
+
+    def batch_decode(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.batch_decode(*args, **kwargs)
+
+    def convert_tokens_to_ids(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.convert_tokens_to_ids(*args, **kwargs)
+
+    def convert_ids_to_tokens(self, *args, **kwargs):
+        with self._lock:
+            return self._tokenizer.convert_ids_to_tokens(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._tokenizer, name)
+
 
 class Engine:
     """
@@ -99,6 +154,7 @@ class Engine:
         """
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
+        check_device(device)
         hub_kwargs = dict(revision=revision, cache_dir=cache_dir, local_files_only=local_files_only)
         model_kwargs = dict(hub_kwargs)
         if dtype is not None:
@@ -107,8 +163,12 @@ class Engine:
             model_kwargs["quantization_config"] = _quantization_config(quantization)
 
         self.model_id = model_id
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id, **hub_kwargs)
+        raw_tokenizer = AutoTokenizer.from_pretrained(model_id, **hub_kwargs)
+        self._tokenizer_lock = threading.Lock()
+        self.tokenizer = _LockedTokenizer(raw_tokenizer, self._tokenizer_lock)
         self.model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs).to(device).eval()
+        self.device = device
+        self.quantization = quantization
         self.chat_template = chat_template
         self.context_length = context_length or getattr(self.model.config, "max_position_embeddings", None)
         self._gate = _Gate()
@@ -615,7 +675,8 @@ class _Batcher:
 # sampling in these per-request logits processors instead: the last one draws each row's token
 # from that request's own random stream (`random.Random(seed)`) and leaves only that token
 # selectable. The stream is plain Python, so it needs no torch RNG (torchnative has no
-# `torch.Generator` yet).
+# `torch.Generator` yet). A filter that is an identity for the whole batch is skipped (`_NEUTRAL`,
+# #74): a greedy batch runs none of them.
 # --------------------------------------------------------------------------------------------- #
 
 def _sampling_processors():
@@ -672,14 +733,25 @@ def _temperature(scores, temperature):
     return scores / temperature
 
 
-def _top_k(scores, k):
+def _top_k(scores, k, largest=None):
+    """
+    `largest` is the largest k of the batch as a Python int (0: a row is off; None: read it from
+    `k`). Below the vocabulary size, each row's threshold comes from a partial selection of that
+    many values (`torch.topk`) instead of a sort of the whole row: the k-th largest value is the
+    same either way, so the result is identical (#74).
+    """
     import torch
 
     vocab = scores.size(-1)
     k = k.to(torch.int64)
     k = torch.where(k <= 0, torch.full_like(k, vocab), k.clamp(max=vocab))  # 0 = off
-    sorted_scores = torch.sort(scores, dim=-1, descending=True)[0]
-    thresholds = sorted_scores.gather(-1, k - 1)
+    if largest is None:
+        largest = int(k.max().item())
+    if 0 < largest < vocab:
+        top = torch.topk(scores, largest, dim=-1, largest=True, sorted=True)[0]
+    else:
+        top = torch.sort(scores, dim=-1, descending=True)[0]
+    thresholds = top.gather(-1, k - 1)
     return scores.masked_fill(scores < thresholds, float("-inf"))
 
 
@@ -757,10 +829,15 @@ class _ExclusiveSampler:
         def arg(value, dtype=torch.float32):
             return torch.full((rows, 1), value, dtype=dtype, device=scores.device)
 
-        scores = _temperature(scores, arg(temperature))
-        scores = _top_k(scores, arg(top_k, torch.int64))
-        scores = _top_p(scores, arg(top_p))
-        scores = _min_p(scores, arg(min_p))
+        # A filter at its neutral value is an identity (`_NEUTRAL`) and is skipped (#74).
+        if not _NEUTRAL["temperature"](temperature):
+            scores = _temperature(scores, arg(temperature))
+        if not _NEUTRAL["top_k"](top_k):
+            scores = _top_k(scores, arg(top_k, torch.int64), top_k)
+        if not _NEUTRAL["top_p"](top_p):
+            scores = _top_p(scores, arg(top_p))
+        if not _NEUTRAL["min_p"](min_p):
+            scores = _min_p(scores, arg(min_p))
         if typical_p < 1.0:
             scores = _typical_p(scores, arg(typical_p))
         return _draw(scores, arg(self.uniform(input_ids.size(-1) - self.prompt_length)))
@@ -776,64 +853,87 @@ def _define_samplers():
     def float_arg(tensor_arg, rows):
         return tensor_arg[:rows].view(dtype=torch.float32).unsqueeze(-1)  # [B, 1]
 
-    class Temperature(ContinuousBatchingLogitsProcessor):
-        supported_kwargs = {"temperature": float}
+    class Filter(ContinuousBatchingLogitsProcessor):
+        """
+        One per-request filter of the batch. The manager calls `prepare_tensor_args` for the rows
+        of a step before its forward and `__call__` on their scores after it, from its one loop
+        thread (`use_async_batching=False`), so what `prepare_tensor_args` records describes the
+        batch `__call__` then sees. `neutral` is True when every row's argument makes the filter
+        an identity (`_NEUTRAL`): the call then returns the scores untouched instead of running a
+        sort, a softmax or a cumulative sum over the whole vocabulary for nothing (#74). A greedy
+        batch (`_GREEDY`) skips all five filters.
+        """
         ignored_kwargs = ()
+        neutral = False
+
+        def values(self, requests, default):
+            name = next(iter(self.supported_kwargs))
+            values = [r.state.logit_processor_kwargs.get(name, default) for r in requests]
+            self.neutral = all(_NEUTRAL[name](value) for value in values)
+            return values
+
+    class Temperature(Filter):
+        supported_kwargs = {"temperature": float}
 
         def fill_defaults(self, int32_tensor):
             int32_tensor.copy_(torch.ones_like(int32_tensor, dtype=torch.float32).view(dtype=torch.int32))
 
         def prepare_tensor_args(self, requests):
-            return as_float([r.state.logit_processor_kwargs.get("temperature", 1.0) for r in requests])
+            return as_float(self.values(requests, 1.0))
 
         def __call__(self, scores, tensor_arg):
+            if self.neutral:
+                return scores
             return _temperature(scores, float_arg(tensor_arg, scores.size(0)))
 
-    class TopK(ContinuousBatchingLogitsProcessor):
+    class TopK(Filter):
         supported_kwargs = {"top_k": int}
-        ignored_kwargs = ()
+        largest = 0  # the batch's largest k (0: a row is off), for `_top_k`'s partial selection
 
         def fill_defaults(self, int32_tensor):
             int32_tensor.fill_(0)
 
         def prepare_tensor_args(self, requests):
-            return torch.tensor(
-                [r.state.logit_processor_kwargs.get("top_k", 0) for r in requests], dtype=torch.int32, device="cpu"
-            )
+            ks = [int(k) for k in self.values(requests, 0)]
+            self.largest = 0 if any(k <= 0 for k in ks) else max(ks, default=0)
+            return torch.tensor(ks, dtype=torch.int32, device="cpu")
 
         def __call__(self, scores, tensor_arg):
-            return _top_k(scores, tensor_arg[: scores.size(0)].unsqueeze(-1))
+            if self.neutral:
+                return scores
+            return _top_k(scores, tensor_arg[: scores.size(0)].unsqueeze(-1), self.largest)
 
-    class TopP(ContinuousBatchingLogitsProcessor):
+    class TopP(Filter):
         supported_kwargs = {"top_p": float}
-        ignored_kwargs = ()
 
         def fill_defaults(self, int32_tensor):
             int32_tensor.copy_(torch.ones_like(int32_tensor, dtype=torch.float32).view(dtype=torch.int32))
 
         def prepare_tensor_args(self, requests):
-            return as_float([r.state.logit_processor_kwargs.get("top_p", 1.0) for r in requests])
+            return as_float(self.values(requests, 1.0))
 
         def __call__(self, scores, tensor_arg):
+            if self.neutral:
+                return scores
             return _top_p(scores, float_arg(tensor_arg, scores.size(0)))
 
-    class MinP(ContinuousBatchingLogitsProcessor):
+    class MinP(Filter):
         supported_kwargs = {"min_p": float}
-        ignored_kwargs = ()
 
         def fill_defaults(self, int32_tensor):
             int32_tensor.copy_(torch.zeros_like(int32_tensor, dtype=torch.float32).view(dtype=torch.int32))
 
         def prepare_tensor_args(self, requests):
-            return as_float([r.state.logit_processor_kwargs.get("min_p", 0.0) for r in requests])
+            return as_float(self.values(requests, 0.0))
 
         def __call__(self, scores, tensor_arg):
+            if self.neutral:
+                return scores
             return _min_p(scores, float_arg(tensor_arg, scores.size(0)))
 
-    class Draw(ContinuousBatchingLogitsProcessor):
+    class Draw(Filter):
         """ Inverse-CDF draw with the request's own uniform number; a negative seed means greedy. """
         supported_kwargs = {"seed": int}
-        ignored_kwargs = ()
 
         def fill_defaults(self, int32_tensor):
             int32_tensor.copy_(torch.full_like(int32_tensor, -1.0, dtype=torch.float32).view(dtype=torch.int32))
@@ -843,7 +943,7 @@ def _define_samplers():
             for r in requests:
                 state = r.state
                 seed = state.logit_processor_kwargs.get("seed", -1)
-                if seed < 0:
+                if _NEUTRAL["seed"](seed):
                     uniforms.append(-1.0)
                     continue
                 # Index of the token being drawn. A request the cache had to evict restarts with its
@@ -852,9 +952,12 @@ def _define_samplers():
                 folded = len(state.initial_tokens) - true_prompt if true_prompt else 0
                 index = state.generated_len() + folded
                 uniforms.append(_SAMPLER_STATE.draw(state.request_id, seed, index))
+            self.neutral = all(u < 0 for u in uniforms)
             return as_float(uniforms)
 
         def __call__(self, scores, tensor_arg):
+            if self.neutral:
+                return scores
             return _draw(scores, float_arg(tensor_arg, scores.size(0)))
 
     return [Temperature, TopK, TopP, MinP, Draw]
@@ -875,10 +978,32 @@ class _LazySamplers:
 _SAMPLERS = _LazySamplers()
 
 
+def check_device(device: str) -> None:
+    """
+    Refuse a device the installed torch cannot use, before any weights load (SPEC S1.17), naming the
+    device and, for CUDA, the install that provides it.
+    """
+    import torch
+
+    kind = str(device).split(":")[0]
+    if kind == "cuda" and not torch.cuda.is_available():
+        built = getattr(torch.version, "cuda", None)
+        why = "no CUDA GPU is visible" if built else "this torch has no CUDA support"
+        raise ValueError(f"Device {device!r} is not available: {why}. "
+                         f"Install CUDA torch with `uv sync --python 3.13 --extra cuda` on a machine with an NVIDIA GPU.")
+    if kind == "mps":
+        mps = getattr(torch.backends, "mps", None)
+        if mps is None or not mps.is_available():
+            raise ValueError(f"Device {device!r} is not available: mps needs Apple silicon and a torch built with MPS.")
+
+
 def _quantization_config(name: str):
-    """ Quantisation through transformers' HfQuantizer slot. Only torchnative provides one today. """
+    """ Quantisation through transformers' HfQuantizer slot (SPEC S1.16). Only torchnative provides one. """
     try:
-        from torchnative.quant import TorchnativeConfig
+        from torchnative.quant import FORMATS, TorchnativeConfig
     except ImportError as e:
         raise ValueError(f"Quantisation '{name}' needs torchnative (uv sync --extra torchnative).") from e
+    formats = [f for f in FORMATS() if f not in ("f32", "f16", "bf16")]
+    if name not in formats:
+        raise ValueError(f"Quantisation '{name}' is not a torchnative format; use one of: {', '.join(formats)}.")
     return TorchnativeConfig(name)

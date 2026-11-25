@@ -10,7 +10,7 @@ English | [한국어](https://github.com/LogitAI/Gemstone/blob/main/docs/locale/
 
 [![License: Apache-2.0](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](https://github.com/LogitAI/Gemstone/blob/main/LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
-[![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.11.1--ext.2-4285F4?logo=jetpackcompose&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
+[![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.11.1--ext.6-4285F4?logo=jetpackcompose&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
 [![Python](https://img.shields.io/badge/Python-3.13%20%7C%203.15t-3776AB?logo=python&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/pyproject.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Desktop%20%7C%20Web-5b6270)](#-status)
 
@@ -41,7 +41,7 @@ chat needs no separate server (planned, [#42](https://github.com/LogitAI/Gemston
 - 🧠 **Visible reasoning**: the model's `<think>` block appears as a collapsible panel with elapsed time.
 - 🔌 **Tool calling**: weather, public holidays, exchange rates, a calculator and web search, run server-side in parallel and fed back to the model.
 - 📦 **Open-weight models on one engine**: Qwen 3 0.6B runs on a single transformers-based engine, on PyTorch or on [torchnative](https://github.com/thisisthepy/torchnative).
-- 🔁 **A local Ollama replacement**: concurrent requests share one batch (continuous batching with a paged KV cache), and Ollama and OpenAI clients connect with a base URL. 4-bit weights and GGUF are planned ([#67](https://github.com/LogitAI/Gemstone/issues/67)).
+- 🔁 **A local Ollama replacement**: concurrent requests share one batch (continuous batching with a paged KV cache), and Ollama and OpenAI clients connect with a base URL. On torchnative, `GEMSTONE_QUANTIZATION=q4_k` loads 4-bit weights ([#67](https://github.com/LogitAI/Gemstone/issues/67)); `GEMSTONE_DEVICE=cuda` runs on an NVIDIA GPU ([#164](https://github.com/LogitAI/Gemstone/issues/164)).
 - 🖥️ **Native desktop feel**: a JetBrains Jewel decorated window, with Dmg / Msi / Deb installers.
 
 ## 🚀 Quick start
@@ -57,10 +57,14 @@ cd Gemstone
 uv sync --python 3.13 --extra torch   # or --python 3.15t --extra torchnative (not both)
 ```
 
+torchnative (0.1.0b11 or newer) ships free-threaded 3.15t wheels for Linux x86_64 / aarch64 and macOS arm64; on Windows use
+`--extra torch`. On 3.15t, `psutil`, `safetensors`, `tokenizers` and `hf-xet` have no free-threaded wheels
+yet, so `uv sync` builds them from source and needs a C compiler and Rust ([#178](https://github.com/LogitAI/Gemstone/issues/178)).
+
 **2. Start the model server** (port `23100`; the model downloads on first use)
 
 ```bash
-uv run --extra torch python -m api run server
+uv run --extra torch python -m api run server   # or: uv run --extra torchnative python -m api run server
 ```
 
 Open <http://127.0.0.1:23100/> for the web client the server bundles.
@@ -156,7 +160,7 @@ that tracks it. Python tests (a real model included) and the Kotlin network-laye
 | Area | State |
 |---|---|
 | Streaming chat, reasoning display, tool calling | ✅ Implemented |
-| One transformers engine, continuous batching, paged KV cache (CPU) | ✅ Implemented on PyTorch; 🟡 partial on torchnative: CPU passes except batching, mps waits for torchnative ([#84](https://github.com/LogitAI/Gemstone/issues/84)) |
+| One transformers engine, continuous batching, paged KV cache (CPU) | ✅ Implemented on PyTorch and on torchnative (CPU, 0.1.0b11 or newer); mps waits for torchnative ([#84](https://github.com/LogitAI/Gemstone/issues/84)) |
 | Several resident models, eviction, `keep_alive` | ✅ Implemented |
 | OpenAI-compatible API (`/v1`, tool calls passed through) | 🟡 Partial: no `n` > 1, logprobs or embeddings |
 | Ollama-compatible API (chat, generate, tags, show, pull, delete, ps, copy, create, embed) | 🟡 Partial: `push` returns 501; no Modelfile, template or blobs |
@@ -168,8 +172,8 @@ that tracks it. Python tests (a real model included) and the Kotlin network-laye
 | Chat history | ✅ Implemented: saved on the device as plain JSON (not encrypted), deletable per chat or all at once ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
 | UI tests | ⏳ Planned |
 | Native desktop executable (GraalVM, no JVM) | ⏳ Planned: a Windows x64 build path exists but has not been run |
-| GPU (CUDA) inference | ⏳ Planned ([#164](https://github.com/LogitAI/Gemstone/issues/164)) |
-| 4-bit weights, GGUF | ⏳ Planned ([#67](https://github.com/LogitAI/Gemstone/issues/67)) |
+| GPU (CUDA) inference | 🟡 Partial: `uv sync --python 3.13 --extra cuda`, `GEMSTONE_DEVICE=cuda`; not yet run on a GPU in CI ([#164](https://github.com/LogitAI/Gemstone/issues/164)) |
+| 4-bit weights, GGUF | 🟡 Partial: `GEMSTONE_QUANTIZATION=q4_k` on torchnative; GGUF files not yet ([#67](https://github.com/LogitAI/Gemstone/issues/67)) |
 | On-device inference via Python Multiplatform | ⏳ Planned ([#42](https://github.com/LogitAI/Gemstone/issues/42)) |
 | Offline mode, cross-device sync | ⏳ Planned ([#42](https://github.com/LogitAI/Gemstone/issues/42), [#167](https://github.com/LogitAI/Gemstone/issues/167)) |
 

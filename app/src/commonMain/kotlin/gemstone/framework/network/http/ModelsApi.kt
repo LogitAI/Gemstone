@@ -2,6 +2,7 @@ package gemstone.framework.network.http
 
 import gemstone.framework.network.ModelCatalog
 import gemstone.framework.network.ServerAddress
+import gemstone.framework.network.appHttpClient
 import gemstone.framework.network.authorize
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -17,7 +18,7 @@ class ModelsApi(
     private val address: () -> ServerAddress = { serverSettings.address },
     private val apiKey: () -> String? = { serverSettings.apiKey }
 ) {
-    private val httpClient = HttpClientFactory.create()
+    private val httpClient = appHttpClient()
 
     /** Fetches `GET /api/models`; failure (server down, bad status, bad JSON) is returned, not thrown. */
     suspend fun fetch(): Result<ModelCatalog> = try {

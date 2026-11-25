@@ -39,11 +39,13 @@ def count_tokens(engine, text):
     return len(engine.tokenizer(text, add_special_tokens=False)["input_ids"])
 
 
-def run(engine, prompts, tokens, concurrent):
+def run(engine, prompts, tokens, concurrent, sampling=None):
+    """ `sampling`: the engine's sampling arguments (None: greedy, `temperature=0`). """
+    params = dict(temperature=0) if sampling is None else dict(sampling)
     replies = [None] * len(prompts)
 
     def one(i):
-        replies[i] = "".join(engine([{"role": "user", "content": prompts[i]}], temperature=0, max_new_tokens=tokens))
+        replies[i] = "".join(engine([{"role": "user", "content": prompts[i]}], max_new_tokens=tokens, **params))
 
     start = time.perf_counter()
     if concurrent:
@@ -65,7 +67,18 @@ def main():
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--tokens", type=int, default=64)
     parser.add_argument("--attn", default="sdpa_paged", choices=["sdpa_paged", "eager_paged"])
+    parser.add_argument("--json", type=str, default=None)
     args = parser.parse_args()
+
+    import json
+    import importlib.metadata as meta
+    try:
+        sub_ver = f"torchnative {meta.version('torchnative')}"
+    except Exception:
+        try:
+            sub_ver = f"torch {meta.version('torch')}"
+        except Exception:
+            sub_ver = "unknown"
 
     from api.src.main.engine import Engine
 
@@ -75,6 +88,8 @@ def main():
         print(f"load average: {os.getloadavg()}")
     except OSError:
         pass
+
+    results_list = []
 
     for batching, cases in [
         (True, [("1 request", False, 1), ("sequential", False, None), ("batched", True, None)]),
@@ -89,8 +104,30 @@ def main():
         run(engine, prompts[:1], 8, False)  # warm-up
         for label, concurrent, limit in cases:
             generated, elapsed = run(engine, prompts[:limit], args.tokens, concurrent)
-            print(f"{label:>11}: {generated:5d} tokens in {elapsed:7.2f} s = {generated / elapsed:8.1f} tokens/s")
+            tps = generated / elapsed if elapsed > 0 else 0.0
+            print(f"{label:>11}: {generated:5d} tokens in {elapsed:7.2f} s = {tps:8.1f} tokens/s")
+            results_list.append({
+                "label": label,
+                "generated_tokens": generated,
+                "elapsed_seconds": elapsed,
+                "tokens_per_second": tps,
+            })
         engine.close()
+
+    if args.json:
+        payload = {
+            "model": TEST_MODEL,
+            "concurrency": args.concurrency,
+            "tokens": args.tokens,
+            "attn": args.attn,
+            "python": sys.version,
+            "substrate": sub_ver,
+            "gil_enabled": getattr(sys, '_is_gil_enabled', lambda: True)(),
+            "results": results_list,
+        }
+        os.makedirs(os.path.dirname(os.path.abspath(args.json)), exist_ok=True)
+        with open(args.json, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
 
 
 if __name__ == "__main__":

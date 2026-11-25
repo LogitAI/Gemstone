@@ -10,7 +10,7 @@
 
 [![License: Apache-2.0](https://img.shields.io/github/license/LogitAI/Gemstone?color=c2185b)](https://github.com/LogitAI/Gemstone/blob/main/LICENSE.md)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
-[![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.11.1--ext.2-4285F4?logo=jetpackcompose&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
+[![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.11.1--ext.6-4285F4?logo=jetpackcompose&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/gradle/libs.versions.toml)
 [![Python](https://img.shields.io/badge/Python-3.13%20%7C%203.15t-3776AB?logo=python&logoColor=white)](https://github.com/LogitAI/Gemstone/blob/main/pyproject.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Desktop%20%7C%20Web-5b6270)](#-현황)
 
@@ -41,7 +41,7 @@ Python 서버로 이루어져 있습니다. 서버의 엔진은 CPU 에서 돌�
 - 🧠 **보이는 추론 과정**: 모델의 `<think>` 블록이 경과 시간과 함께 접을 수 있는 패널로 표시됩니다.
 - 🔌 **도구 호출**: 날씨, 공휴일, 환율, 계산기, 웹 검색을 서버에서 병렬로 실행하고 결과를 모델에 돌려줍니다.
 - 📦 **엔진 하나로 도는 공개 가중치 모델**: Qwen 3 0.6B 를 transformers 기반 단일 엔진이 돌립니다. 이 엔진은 PyTorch 위에서도, [torchnative](https://github.com/thisisthepy/torchnative) 위에서도 돕니다.
-- 🔁 **로컬 Ollama 대체제**: 동시 요청이 한 배치를 함께 씁니다(페이지드 KV 캐시를 쓰는 연속 배칭). Ollama 와 OpenAI 클라이언트는 base URL 만 바꿔 붙습니다. 4비트 가중치와 GGUF 는 계획입니다([#67](https://github.com/LogitAI/Gemstone/issues/67)).
+- 🔁 **로컬 Ollama 대체제**: 동시 요청이 한 배치를 함께 씁니다(페이지드 KV 캐시를 쓰는 연속 배칭). Ollama 와 OpenAI 클라이언트는 base URL 만 바꿔 붙습니다. torchnative 에서는 `GEMSTONE_QUANTIZATION=q4_k` 로 4비트 가중치를 올리고([#67](https://github.com/LogitAI/Gemstone/issues/67)), `GEMSTONE_DEVICE=cuda` 로 NVIDIA GPU 에서 돌립니다([#164](https://github.com/LogitAI/Gemstone/issues/164)).
 - 🖥️ **네이티브 데스크톱 경험**: JetBrains Jewel 데코레이티드 윈도우를 쓰고, Dmg / Msi / Deb 설치 파일을 만듭니다.
 
 ## 🚀 빠른 시작
@@ -57,10 +57,14 @@ cd Gemstone
 uv sync --python 3.13 --extra torch   # 또는 --python 3.15t --extra torchnative (둘 다는 안 됩니다)
 ```
 
+torchnative(0.1.0b11 이상)는 Linux x86_64 / aarch64 와 macOS arm64 용 free-threaded 3.15t wheel 을 제공합니다. Windows 에서는
+`--extra torch` 를 쓰세요. 3.15t 에서는 `psutil`, `safetensors`, `tokenizers`, `hf-xet` 에 free-threaded wheel 이
+아직 없어 `uv sync` 가 소스에서 빌드하므로 C 컴파일러와 Rust 가 필요합니다([#178](https://github.com/LogitAI/Gemstone/issues/178)).
+
 **2. 모델 서버 실행** (포트 `23100`, 모델은 처음 쓸 때 내려받습니다)
 
 ```bash
-uv run --extra torch python -m api run server
+uv run --extra torch python -m api run server   # 또는: uv run --extra torchnative python -m api run server
 ```
 
 <http://127.0.0.1:23100/> 를 열면 서버에 함께 들어 있는 웹 클라이언트가 뜹니다.
@@ -156,7 +160,7 @@ Gemstone 은 초기 단계의, 동작하는 프로토타입입니다. 각 행에
 | 영역 | 상태 |
 |---|---|
 | 스트리밍 채팅, 추론 표시, 도구 호출 | ✅ 구현 |
-| transformers 단일 엔진, 연속 배칭, 페이지드 KV 캐시 (CPU) | ✅ PyTorch 에서 구현, 🟡 torchnative 에서는 부분: CPU 는 배칭을 빼고 통과, mps 는 torchnative 대기 ([#84](https://github.com/LogitAI/Gemstone/issues/84)) |
+| transformers 단일 엔진, 연속 배칭, 페이지드 KV 캐시 (CPU) | ✅ PyTorch 와 torchnative(CPU, 0.1.0b11 이상)에서 구현, mps 는 torchnative 대기 ([#84](https://github.com/LogitAI/Gemstone/issues/84)) |
 | 여러 모델 상주, 축출, `keep_alive` | ✅ 구현 |
 | OpenAI 호환 API (`/v1`, 도구 호출은 클라이언트로 전달) | 🟡 부분: `n` > 1, logprobs, embeddings 없음 |
 | Ollama 호환 API (chat, generate, tags, show, pull, delete, ps, copy, create, embed) | 🟡 부분: `push` 는 501, Modelfile · template · blobs 없음 |
@@ -168,8 +172,8 @@ Gemstone 은 초기 단계의, 동작하는 프로토타입입니다. 각 행에
 | 대화 기록 | ✅ 구현: 기기에 평문 JSON 으로 저장(암호화하지 않음), 하나씩 또는 전부 삭제 가능 ([#43](https://github.com/LogitAI/Gemstone/issues/43)) |
 | UI 테스트 | ⏳ 계획 |
 | 네이티브 데스크톱 실행 파일 (GraalVM, JVM 없음) | ⏳ 계획: Windows x64 빌드 경로는 있으나 아직 실행해 보지 않음 |
-| GPU(CUDA) 추론 | ⏳ 계획 ([#164](https://github.com/LogitAI/Gemstone/issues/164)) |
-| 4비트 가중치, GGUF | ⏳ 계획 ([#67](https://github.com/LogitAI/Gemstone/issues/67)) |
+| GPU(CUDA) 추론 | 🟡 부분: `uv sync --python 3.13 --extra cuda`, `GEMSTONE_DEVICE=cuda`. CI 에서 GPU 로 돌려 본 적은 아직 없음 ([#164](https://github.com/LogitAI/Gemstone/issues/164)) |
+| 4비트 가중치, GGUF | 🟡 부분: torchnative 에서 `GEMSTONE_QUANTIZATION=q4_k`. GGUF 파일은 아직 ([#67](https://github.com/LogitAI/Gemstone/issues/67)) |
 | Python Multiplatform 을 통한 온디바이스 추론 | ⏳ 계획 ([#42](https://github.com/LogitAI/Gemstone/issues/42)) |
 | 오프라인 모드, 기기 간 동기화 | ⏳ 계획 ([#42](https://github.com/LogitAI/Gemstone/issues/42), [#167](https://github.com/LogitAI/Gemstone/issues/167)) |
 

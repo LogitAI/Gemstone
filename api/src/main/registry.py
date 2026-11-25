@@ -359,10 +359,16 @@ class LocalModel:
 
 
 class HFStore:
-    """ The local Hugging Face cache (`HF_HOME`) as the model store. """
+    """
+    The local Hugging Face cache as the model store: `cache_dir` (a `hub` directory), or the default
+    cache of `HF_HOME` when None. The in-app engine passes the app's own directory (SPEC S3.1).
+    """
 
     # Safetensors headers by (repo id, snapshot path): a snapshot directory is named by its commit hash.
     _stats: Dict[Tuple[str, str], tuple] = {}
+
+    def __init__(self, cache_dir: Optional[str] = None):
+        self.cache_dir = cache_dir
 
     def list(self) -> List[LocalModel]:
         """ The complete causal-LM models in the cache; other repos (bert, vision, ...) are not chat models (#119). """
@@ -378,7 +384,7 @@ class HFStore:
     def delete(self, hf_id: str) -> bool:
         from huggingface_hub import scan_cache_dir
         try:
-            cache = scan_cache_dir()
+            cache = scan_cache_dir(self.cache_dir)
         except Exception:
             return False
         hashes = [rev.commit_hash for repo in cache.repos
@@ -419,14 +425,13 @@ class HFStore:
         for name, size in files:
             event = dict(status=f"pulling {name}", digest=name, total=size, completed=0)
             yield dict(event)
-            huggingface_hub.hf_hub_download(hf_id, name, revision="main")
+            huggingface_hub.hf_hub_download(hf_id, name, revision="main", cache_dir=self.cache_dir)
             yield {**event, "completed": size}
 
-    @staticmethod
-    def _repos() -> Iterable:
+    def _repos(self) -> Iterable:
         from huggingface_hub import scan_cache_dir
         try:
-            return [r for r in scan_cache_dir().repos if r.repo_type == "model"]
+            return [r for r in scan_cache_dir(self.cache_dir).repos if r.repo_type == "model"]
         except Exception:  # no cache yet
             return []
 
@@ -559,9 +564,10 @@ def load_engine(hf_id: str):
     Load a model from the local cache only; /api/pull (or a first use of a catalogue model) is how
     a model gets there. The model class's context length and engine options apply.
     """
-    from .engine import Engine
+    from . import engine, settings
     cls = model_class_for(hf_id)
-    return Engine(hf_id, context_length=cls.context_length or None, local_files_only=True, **cls.engine_options)
+    return engine.Engine(hf_id, context_length=cls.context_length or None, local_files_only=True,
+                         **settings.engine_options(cls.engine_options))
 
 
 class ModelUnavailable(Exception):
@@ -848,8 +854,9 @@ class Registry:
 
     def loaded(self) -> List[dict]:
         """
-        The resident models for /api/ps: `hf_id`, `info`, `expires_at`, `size` (bytes) and `active`
-        (leases held), latest expiry first, as Ollama lists them.
+        The resident models for /api/ps: `hf_id`, `info`, `expires_at`, `size` (bytes), `active`
+        (leases held), and the engine's `device` and `quantization` (S1.17), latest expiry first, as
+        Ollama lists them.
         """
         with self._cond:
             entries = []
@@ -860,7 +867,9 @@ class Registry:
                     expires = _iso(datetime.now(timezone.utc) + timedelta(seconds=r.keep_alive))
                 else:
                     expires = _iso(r.expires_at)
-                entries.append(dict(hf_id=r.hf_id, info=r.info, expires_at=expires, size=r.memory, active=r.active))
+                entries.append(dict(hf_id=r.hf_id, info=r.info, expires_at=expires, size=r.memory, active=r.active,
+                                    device=str(getattr(r.engine, "device", "cpu")),
+                                    quantization=getattr(r.engine, "quantization", None)))
         return sorted(entries, key=lambda e: e["expires_at"], reverse=True)  # stable: ties stay most recent first
 
     def _victims_locked(self, incoming: int, best_effort: bool = False) -> Optional[List[Resident]]:

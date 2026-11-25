@@ -1,8 +1,11 @@
+import threading
 import requests
 import json
 from typing import List, Dict, Optional, Any
 from urllib.parse import urlparse, quote_plus
 import os
+
+from .connection import is_no_connection
 
 # Load environment variables from .env file
 try:
@@ -18,15 +21,25 @@ class WebSearchAPI:
     
     def __init__(self):
         """Initialize web search client."""
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        })
+        self._local = threading.local()
         # API key should be set as environment variable: SERPAPI_KEY
         self.api_key = os.getenv('SERPAPI_KEY')
         
         # Try to import SerpApi library
         self.serpapi_available = self._check_serpapi_library()
+
+    def _make_session(self) -> requests.Session:
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
+        return session
+
+    @property
+    def session(self) -> requests.Session:
+        if not hasattr(self._local, "session"):
+            self._local.session = self._make_session()
+        return self._local.session
     
     def _check_serpapi_library(self) -> bool:
         """Check if SerpApi library is available."""
@@ -257,6 +270,8 @@ class WebSearchAPI:
         results = self.search_fallback_bing(query, max_results)
         if results and 'error' not in results[0]:
             return results
+        if results and is_no_connection(results[0]['error']):
+            return results  # offline: the dispatcher turns this into "unavailable offline" (SPEC S3.2)
         
         # If all else fails, create synthetic results with helpful guidance
         return [{

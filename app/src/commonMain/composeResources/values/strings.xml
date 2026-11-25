@@ -18,6 +18,9 @@
     <string name="chat_message_placeholder">Ask me anything...</string>
     <string name="chat_error_retry">Retry</string>
     <string name="chat_error_dismiss">Dismiss</string>
+    <string name="chat_thinking_for">Thinking for %1$d s...</string>
+    <string name="chat_thought_for">Thought for %1$d s</string>
+    <string name="chat_waiting_for_reply">Waiting for the reply...</string>
 
     <!-- Settings -->
     <string name="settings_open_desc">Open settings</string>

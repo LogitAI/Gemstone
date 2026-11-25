@@ -9,7 +9,8 @@ def run_uvicorn(target, **kwargs):
 def main(argv):
     if argv[:2] != ["run", "server"]:
         sys.exit("usage: python -m api run server [host] [port] [--reload]\n"
-                 "env: GEMSTONE_HOST=host[:port], GEMSTONE_API_KEY, GEMSTONE_ORIGINS, GEMSTONE_DEV=1")
+                 "env: GEMSTONE_HOST=host[:port], GEMSTONE_API_KEY, GEMSTONE_ORIGINS, GEMSTONE_DEV=1,\n"
+                 "     GEMSTONE_DEVICE=cpu|cuda[:n]|mps, GEMSTONE_QUANTIZATION=<torchnative format, e.g. q4_k>")
     try:
         from api.src.main import security, settings
         server_object = "api.src.main.server:app"
@@ -17,6 +18,10 @@ def main(argv):
         from src.main import security, settings
         server_object = "src.main.server:app"
     settings.configure_logging()
+    try:  # SPEC S1.17: a malformed device stops the server before it binds
+        settings.serving_device()
+    except ValueError as e:
+        sys.exit(str(e))
     config = security.resolve_server_config(argv)
     security.warn_if_open(config.host)
     run_uvicorn(

@@ -1,6 +1,8 @@
 package gemstone.framework.network.websocket
 
-import gemstone.framework.network.http.HttpClientFactory
+import gemstone.framework.network.ChatStreamDecoder
+import gemstone.framework.network.ChatTransport
+import gemstone.framework.network.appHttpClient
 import gemstone.framework.network.ServerAddress
 import gemstone.framework.network.authorize
 import gemstone.framework.network.http.serverSettings
@@ -66,8 +68,8 @@ class ChatWebSocketClient(
     // Read on every request, so a change saved in the settings applies at once (SPEC S2.7)
     private val address: () -> ServerAddress = { serverSettings.address },
     private val apiKey: () -> String? = { serverSettings.apiKey }
-) {
-    private val httpClient = HttpClientFactory.create()
+) : ChatTransport {
+    private val httpClient = appHttpClient()
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -75,7 +77,7 @@ class ChatWebSocketClient(
     }
 
     private var webSocketSession: DefaultClientWebSocketSession? = null
-    var sessionId: String? = null
+    override var sessionId: String? = null
         set(value) {
             field = value
             if (value != null) {
@@ -86,19 +88,19 @@ class ChatWebSocketClient(
         }
 
     private val _events = MutableSharedFlow<ChatEvent>()
-    val events: SharedFlow<ChatEvent> = _events.asSharedFlow()
+    override val events: SharedFlow<ChatEvent> = _events.asSharedFlow()
 
     /** True while something collects [events]; an event emitted with no collector is lost. */
     internal val hasEventListener: Boolean
         get() = _events.subscriptionCount.value > 0
 
     private val _state = MutableStateFlow<ChatState>(ChatState.Disconnected)
-    val state: StateFlow<ChatState> = _state.asStateFlow()
+    override val state: StateFlow<ChatState> = _state.asStateFlow()
 
-    private var thinkingStartTime: Long = 0
-    private var isThinking = false
+    // The server's stream protocol, shared with the in-app transport (SPEC S3.1); a reply ends with a disconnect
+    private val decoder = ChatStreamDecoder(_events, _state) { disconnect() }
 
-    suspend fun createSession(modelId: String): Result<String> {
+    override suspend fun createSession(modelId: String): Result<String> {
         return try {
             val response = httpClient.post(address().httpUrl("/api/models/$modelId/sessions/")) { authorize(apiKey()) }
             if (response.status == HttpStatusCode.OK) {
@@ -125,7 +127,7 @@ class ChatWebSocketClient(
         }
     }
 
-    suspend fun sendMessage(
+    override suspend fun sendMessage(
         message: String,
         chatHistory: ChatHistory
     ): Result<Unit> {
@@ -198,56 +200,7 @@ class ChatWebSocketClient(
 
     private suspend fun handleMessage(message: String) {
         println("INFO: Received message: $message")
-        when {
-            message == "<EOS>" -> {
-                disconnect()
-                _events.emit(ChatEvent.MessageComplete)
-                return
-            }
-
-            message == "<think>" -> {
-                isThinking = true
-                thinkingStartTime = Clock.System.now().toEpochMilliseconds()
-                _state.value = ChatState.Thinking(0f)
-                _events.emit(ChatEvent.ThinkingStarted)
-            }
-
-            message == "</think>" -> {
-                isThinking = false
-                _state.value = ChatState.Responding
-                _events.emit(ChatEvent.ThinkingEnded)
-            }
-
-            message.contains("<tool_call>") -> {
-                val regex = """<tool_call>([\s\S]*?)</tool_call>""".toRegex()
-                regex.findAll(message).forEach { match ->
-                    handleToolCall(match.groupValues[1])
-                }
-            }
-
-            else -> {
-                if (isThinking) {
-                    _events.emit(ChatEvent.MessageReceived(message, isThinking = true))
-                    val currentTime = Clock.System.now().toEpochMilliseconds()
-                    val elapsedSeconds = (currentTime - thinkingStartTime) / 1000f
-                    thinkingStartTime = currentTime
-                    _state.value = ChatState.Thinking(elapsedSeconds)
-                } else {
-                    _state.value = ChatState.Responding
-                    _events.emit(ChatEvent.MessageReceived(message, isThinking = false))
-                }
-            }
-        }
-    }
-
-    private suspend fun handleToolCall(message: String) {
-        try {
-            val toolCall = json.decodeFromString<JsonElement>(message.trim())
-            _events.emit(ChatEvent.ToolCallReceived(toolCall))
-        } catch (e: Exception) {
-            // Skipped, not an error: the reply continues, and an error would fail the turn (SPEC S2.3)
-            println("WARNING: Skipping a tool call that cannot be parsed: ${e.message}")
-        }
+        decoder.accept(message)
     }
 
     private suspend fun disconnect() {
@@ -260,7 +213,7 @@ class ChatWebSocketClient(
         }
     }
 
-    suspend fun deleteSession() {
+    override suspend fun deleteSession() {
         val currentSessionId = sessionId ?: return
         try {
             httpClient.delete(address().httpUrl("/api/sessions/$currentSessionId")) { authorize(apiKey()) }
@@ -271,11 +224,11 @@ class ChatWebSocketClient(
     }
 
     /** Forgets the session without telling the server: it belongs to a server no longer in use (S2.7). */
-    fun forgetSession() {
+    override fun forgetSession() {
         sessionId = null
     }
 
-    fun close() {
+    override fun close() {
         httpClient.close()
     }
 }

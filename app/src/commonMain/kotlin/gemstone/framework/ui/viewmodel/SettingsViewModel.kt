@@ -57,7 +57,7 @@ object SettingsViewModel {
         dialogOpen = false
         if (before != serverSettings.address to serverSettings.apiKey) {
             // The session belongs to the old server; the model list comes from the new one
-            webSocketClient.forgetSession()
+            gemstone.framework.network.ChatTransports.active.forgetSession()
             AIModelViewModel.refreshAIModels()
         }
     }

@@ -16,13 +16,19 @@ import java.io.File
  *
  *  - Skiko normally unpacks Skia out of its runtime jar into `~/.skiko/<hash>/`. There is no jar
  *    to unpack from here, so it can only find a copy some earlier JVM run left behind: the app
- *    renders on the machine that built it and has no renderer anywhere else. The `nativeDist`
- *    task stages the library and its ICU data alongside the executable instead.
+ *    renders on the machine that built it and has no renderer anywhere else, unless the library
+ *    and its ICU data sit beside the executable.
+ *
+ * The executable the build makes today (`packageNativeImage`, compose-multiplatform-extended) links
+ * all of that in, so this returns at once there; it stays for an image built with Skia as a file.
  *
  * Must run before anything touches AWT or Compose.
  */
 fun configureNativeImageRuntime() {
     if (System.getProperty("java.home") != null) return
+    // The executable compose-multiplatform-extended's packageNativeImage builds (#191) links AWT,
+    // JAWT and Skia in and answers their library loads itself; it needs neither property below.
+    if (System.getProperty("compose.nativeimage.staticLibraries") != null) return
 
     val executable = ProcessHandle.current().info().command().orElse(null) ?: return
     val binDir = File(executable).parentFile ?: return
@@ -32,7 +38,7 @@ fun configureNativeImageRuntime() {
         System.err.println(
             "This executable expects to run from a 'bin' directory next to the native libraries " +
                 "it needs, but it is in ${binDir.absolutePath}. AWT will fail to load. Run the " +
-                "nativeDist Gradle task and launch the binary it stages under build/dist/bin."
+                "executable from :app:packageNativeImage instead."
         )
     }
 

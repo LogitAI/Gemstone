@@ -1,64 +1,62 @@
 # Native desktop build (GraalVM native-image)
 
-Compiles the desktop target to a standalone native executable: no JVM, no JDK on the target
-machine, no installer.
+Compiles the desktop target to one standalone executable: no JVM, no JDK and no installer on the
+target machine, and nothing beside the file.
 
-Status: `partial` (`docs/SPEC.md` S3.4). The build path is on `develop` (#71) for Windows x64 only.
-CI builds it on every push to `develop`: job `native-desktop` of `.github/workflows/test.yml`
-(windows-latest, Temurin 21 for the Gradle daemon, GraalVM for JDK 22 for `nativeCompile`). The job
-starts the executable and fails unless the "Gemstone AI" window opens and the process is still alive
-15 s later, and unless a click on the chat input field focuses it (text typed before the click must
-change nothing; text typed after it must appear in the input row and nowhere else). It then
-starts the server on SmolLM2-135M-Instruct (`smollm2:135m`, about 270 MB, cached between runs and
-served offline so no other model is fetched), selects that model in the sidebar, sends the typed
-text and fails unless the reply is saved in `%APPDATA%\Gemstone\chats.json` within 300 s (#191).
-It also fails when stderr shows a missing-metadata error (`NoSuchFieldError`,
-`NoSuchMethodError`, `NoClassDefFoundError`, `Missing...RegistrationError`; #235).
-It uploads stdout, stderr, the server log, `chats.json` and screenshots as the
-`native-desktop-smoke` artifact.
+Status: `partial` (`docs/SPEC.md` S3.4). Since #191 the build is compose-multiplatform-extended's:
+the `org.thisisthepy.compose` plugin's `nativeImage { }` block in `app/build.gradle.kts` and its
+`packageNativeImage` task, which link AWT, JAWT and Skia statically into the executable. Gemstone's CI
+builds it on Windows x64 only.
 
-```powershell
-$env:JAVA_HOME = "<a GraalVM 22 installation>"
-$env:GRAALVM_HOME = $env:JAVA_HOME
+CI builds it in job `native-desktop` of `.github/workflows/test.yml` (dispatched on demand, #239;
+windows-latest, Temurin 21 for the Gradle daemon, Liberica NIK 25 Full for native-image, the MSVC
+tools from `ilammy/msvc-dev-cmd`, and skiko's static archive built once by
+compose-multiplatform-core-extended's `extended/skiko/build-skiko-static-jvm.sh` at tag
+`v1.11.1-ext.6` and cached). GraalVM also writes its `java`/`jvm` shims and a few AWT DLLs beside the
+image on Windows (the plugin removes them on Linux only, run 44980924569), so the job copies
+`gemstone.exe` alone into an empty directory and runs that copy. It fails unless the executable imports
+none of those DLLs, its
+version resource says the `pyproject.toml` version and "Gemstone AI", and its embedded manifest is
+Gemstone's (per-monitor DPI). It then starts the executable and fails unless the "Gemstone AI" window
+opens and the process is still alive 15 s later, and unless a click on the chat input field focuses it
+(text typed before the click must change nothing; text typed after it must appear in the input row and
+nowhere else). It then starts the server on SmolLM2-135M-Instruct (`smollm2:135m`, about 270 MB, cached
+between runs and served offline so no other model is fetched), selects that model in the sidebar,
+sends the typed text and fails unless the reply is saved in `%APPDATA%\Gemstone\chats.json` within
+300 s. It also fails when stderr shows a missing-metadata error (`NoSuchFieldError`,
+`NoSuchMethodError`, `NoClassDefFoundError`, `Missing...RegistrationError`; #235). It uploads stdout,
+stderr, the server log, `chats.json` and screenshots as the `native-desktop-smoke` artifact.
 
-./gradlew :app:nativeDist
-./app/build/dist/bin/gemstone.exe
+## Build it yourself (Windows x64)
+
+From an x64 Native Tools prompt (MSVC 14.51 or later, `clang-cl` on PATH), in Git Bash:
+
+```bash
+export GRAALVM_HOME=<Liberica NIK 25 Full>      # the JDK's static AWT archives come from the Full edition
+bash <core-extended>/extended/skiko/build-skiko-static-jvm.sh "$PWD/.cache/skiko-static"   # once; takes long
+export SKIKO_STATIC="$(cygpath -w "$PWD/.cache/skiko-static/out/windows-x64")"
+./gradlew :app:packageNativeImage --no-configuration-cache   # the plugin's tasks cannot be cached yet
+./app/build/compose/native-image/main/gemstone.exe
 ```
 
-Output is `app/build/dist`, about 109MB: an 84MB executable plus the native libraries it needs
-(Windows x64, measured when the build landed in 891a176).
+`<core-extended>` is a checkout of compose-multiplatform-core-extended at `v1.11.1-ext.6`, the tag of
+the Compose libraries Gemstone uses; its script pins skiko's revision. The plugin's own requirements
+are in its README (`extended/README.md`, "One executable: packageNativeImage").
 
 ## Tasks
 
-| Task | What it does |
-|---|---|
-| `generateNativeResourceConfig` | Enumerates Compose Resources and `META-INF/services` from the classpath into `resource-config.json` |
-| `nativeCompile` | Builds the executable into `build/native/nativeCompile/bin` |
-| `nativeDist` | Stages the executable and every native library it needs into `build/dist` |
-| `metadataCopy` | Copies tracing agent output into `src/desktopMain/resources/META-INF/native-image` |
+| Task | Owner | What it does |
+|---|---|---|
+| `generateNativeSerializerConfig` | Gemstone | Registers every `@Serializable` type for reflection (`reflect-config.json`), from the compiled classes |
+| `generateNativeResourceConfig` | Gemstone | Enumerates Compose Resources and `META-INF/services` from the classpath into `resource-config.json` |
+| `compileNativeResources` | Gemstone | Compiles the icon, the version information and the DPI manifest (Windows) |
+| `packageNativeImage` | plugin | Builds `build/compose/native-image/main/gemstone.exe` from all of the above and `app/native-metadata/` |
+| `runNativeImageAgent` | plugin | Runs the app on GraalVM's JVM with the tracing agent and merges what it sees into `src/desktopMain/resources/META-INF/native-image` |
 
-## Why the layout looks like a JDK
-
-`build/dist` has a `bin` and a `lib` directory because AWT expects to find things relative to
-`java.home`, and **`java.home` is null in a native image**:
-
-- AWT loads its native libraries from `<java.home>/bin`. Unset, the binary dies opening
-  `(null)\bin\jawt.dll`: a hard `0xC0000409` crash with no Java stack trace and no build-time
-  warning.
-- AWT reads its font configuration from `<java.home>/lib`. Without it `Font.createFont` fails
-  with `IOException: Problem reading font data`, which is what Jewel hits loading its Inter font.
-
-native-image emits the JDK libraries next to the executable anyway, so putting the executable
-*inside* `bin` makes its parent a valid `java.home`.
-[`NativeRuntime.kt`](../../app/src/desktopMain/kotlin/gemstone/NativeRuntime.kt) derives it at
-startup from the executable's own path. Move the executable out of `bin` and it will tell you
-so on stderr before it dies.
-
-Skiko needs the same treatment for a different reason: it normally unpacks Skia out of its
-runtime jar into `~/.skiko`, and a native image has no jar to unpack from. `nativeDist` stages
-`skiko-windows-x64.dll` and `icudtl.dat` into `bin`, and `NativeRuntime.kt` points
-`skiko.library.path` / `skiko.data.path` at them. Skip this and the app renders only on the
-machine that built it.
+Before #191 Gemstone built a dynamic image itself (`nativeCompile`, `nativeDist`, GraalVM for JDK 22):
+an 84 MB executable in a `bin` directory with Skia's DLL and AWT's font files beside it, and
+`NativeRuntime.kt` pointing `java.home` and `skiko.library.path` there. The plugin's static image
+needs none of that; `NativeRuntime.kt` returns at once in it.
 
 ## Reachability metadata
 
@@ -72,13 +70,12 @@ The JNI and reflection metadata under `src/desktopMain/resources/META-INF/native
 comes from a tracing agent run:
 
 ```powershell
-$env:JAVA_HOME = "<a GraalVM 22 installation>"
-Start-Job { ./gradlew :app:run -Pagent }
+$env:GRAALVM_HOME = "<Liberica NIK 25 Full>"
+Start-Job { ./gradlew :app:runNativeImageAgent --no-configuration-cache }
 ./tools/drive-desktop.ps1     # exercises the UI, then closes the window cleanly
-./gradlew :app:metadataCopy
 ```
 
-The agent only writes its configuration on a clean JVM shutdown, which is why the script closes
+The agent writes its configuration (merged into `src/desktopMain/resources/META-INF/native-image`) only on a clean JVM shutdown, which is why the script closes
 the window rather than killing the process.
 
 Most of that metadata is not actually specific to this app: 160 of its 164 JNI entries are
@@ -90,7 +87,7 @@ for the measurements behind that.
 
 ## Known limitations
 
-- Windows x64 only so far.
+- Gemstone's CI builds Windows x64 only; the plugin also builds macOS arm64 and Linux.
 - Startup prints `java.lang.Error: no ComponentUI class for: javax.swing.JRootPane`. The app
   recovers and renders correctly; the cause is unresolved and tracked upstream as
   [oracle/graal#9284](https://github.com/oracle/graal/issues/9284).
