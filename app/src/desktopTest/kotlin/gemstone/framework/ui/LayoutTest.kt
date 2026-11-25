@@ -9,10 +9,14 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.ComposeUiTest
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import gemstone.framework.network.ChatTransports
@@ -36,8 +40,8 @@ import kotlin.test.Test
 
 
 /**
- * SPEC S2.4 (#261): in landscape the sidebar sits next to the chat; in portrait the sidebar is a start
- * screen, and choosing a chat navigates to the chat. The screen runs on an in-app transport with no
+ * SPEC S2.4 (#261, #263): in landscape the sidebar sits next to the chat; in portrait the sidebar is a start
+ * screen, choosing a chat navigates to the chat, and a swipe from the left edge returns to the sidebar. The screen runs on an in-app transport with no
  * models, so the sidebar's model list opens no connection (InAppChatTest counts them).
  */
 @OptIn(ExperimentalTestApi::class, ExperimentalCoroutinesApi::class)
@@ -94,5 +98,51 @@ class LayoutTest {
         waitForIdle()
         onNode(hasSetTextAction()).assertExists()
         onNodeWithText("Recent Chats").assertDoesNotExist()
+    }
+
+    /** Portrait, on the chat: opened from the sidebar's "New Chat". */
+    private fun ComposeUiTest.openChatInPortrait() {
+        setContent { Screen(400, 800) }
+        waitForIdle()
+        onNodeWithText("New Chat").performClick()
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+        onNode(hasSetTextAction()).assertExists()
+    }
+
+    /** Drags from [startX] to [endX] (fractions of the width) at mid-height, in small steps like a finger. */
+    private fun ComposeUiTest.drag(startX: Float, endX: Float) {
+        onRoot().performTouchInput {
+            val y = height / 2f
+            down(Offset(width * startX, y))
+            val steps = 20
+            for (i in 1..steps) moveTo(Offset(width * (startX + (endX - startX) * i / steps), y))
+            up()
+        }
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+    }
+
+    @Test
+    fun portraitSwipeFromTheLeftEdgeReturnsToTheSidebar() = runComposeUiTest {
+        openChatInPortrait()
+        drag(startX = 0.02f, endX = 0.9f)
+        onNodeWithText("Recent Chats").assertExists()
+        onNode(hasSetTextAction()).assertDoesNotExist()
+    }
+
+    @Test
+    fun portraitShortSwipeStaysOnTheChat() = runComposeUiTest {
+        openChatInPortrait()
+        drag(startX = 0.02f, endX = 0.2f)  // below the 40 % threshold
+        onNode(hasSetTextAction()).assertExists()
+        onNodeWithText("Recent Chats").assertDoesNotExist()
+    }
+
+    @Test
+    fun portraitSwipeAwayFromTheEdgeStaysOnTheChat() = runComposeUiTest {
+        openChatInPortrait()
+        drag(startX = 0.6f, endX = 0.98f)  // starts outside the edge area
+        onNode(hasSetTextAction()).assertExists()
     }
 }

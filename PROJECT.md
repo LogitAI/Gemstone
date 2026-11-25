@@ -38,7 +38,7 @@ INTENT, SPEC 순으로 그쪽이 이긴다.
 | 도메인 계층(Clean Architecture) | 계획 | 빈 파일 |
 | 온디바이스 추론 · 오프라인 · 동기화 | 부분 | 클라이언트의 전송 경계(`ChatTransport`, 앱 내 엔진 경로)와 네트워크 요청이 없음을 확인하는 테스트(데스크톱 `InAppChatTest`, Android Robolectric `AndroidInAppChatTest`), 앱이 Python Multiplatform 으로 부를 `api/src/main/inapp.py`(`test_inapp.py`). 실제 앱 내 엔진 연결은 PMP·toolchain 배포 후 (#42), 오프라인은 #190, 동기화는 #167 |
 | 네이티브 데스크톱 (GraalVM) | 구현 (SPEC S3.4) | Windows x64 전용. CI(`native-desktop` 잡, #231/#232/#234/#236)가 test.yml 실행 시(2026-11-14 CI 정책에 따라 수동 dispatch, #239) compose-multiplatform-extended 플러그인의 `:app:packageNativeImage` 로 단일 실행 파일을 빌드하고(Liberica NIK 25 Full, 정적 skiko), 파일 하나·버전 리소스·DPI 매니페스트와 창 열기·입력·채팅 응답 저장·JNI 메타데이터 오류 없음을 검증한다. 플러그인 경로에서 녹색(run 45003070062, #191 종료) |
-| Kotlin 테스트 | 부분 | 서버 주소, 모델 목록 파싱, 종료 코드 매핑, 채팅 보관, 앱 내 전송(데스크톱, Android Robolectric), 화면 배치와 추론 상태 줄(`LayoutTest`, `ReasoningStatusTest`)은 테스트 있음(CI). 스와이프 뒤로 가기와 대부분의 뷰모델은 테스트 없음 |
+| Kotlin 테스트 | 부분 | 서버 주소, 모델 목록 파싱, 종료 코드 매핑, 채팅 보관, 앱 내 전송(데스크톱, Android Robolectric), 화면 배치·세로 화면의 가장자리 스와이프 뒤로 가기와 추론 상태 줄(`LayoutTest`, `ReasoningStatusTest`)은 테스트 있음(CI). 대부분의 뷰모델은 테스트 없음 |
 | GPU(CUDA) 추론 | 부분 | `--extra cuda`(CUDA 13.2 torch)와 `GEMSTONE_DEVICE=cuda`(SPEC S1.17). GPU 러너가 없어 GPU 에서 돌려 본 적은 없다 (#164) |
 | free-threaded 3.15t (torchnative) | 부분 | 표준 인터프리터로 정했다(#177, #188). torchnative 0.1.0b8 에서 `sys._is_gil_enabled() == False` 이고, `hf-xet` 은 직접 의존성에서 제거되었으며(#242) cp315t wheel 이 없는 4개 패키지(`psutil`, `safetensors`, `tokenizers`, `hf-xet`; `pyyaml` 은 6.0.4 부터 cp315t wheel 이 있다)는 `test-torchnative.yml` 이 소스에서 빌드해 캐시한다(#178). `uv.lock` 은 `transformers 5.23.0` 까지 판올림했다(#241) |
 
