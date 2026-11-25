@@ -148,7 +148,9 @@ kotlin {
             implementation(libs.robolectric)
         }
         desktopMain.dependencies {
-            api(compose.desktop.currentOs) {
+            // The plugin (1.11.1-ext.3) names its own desktop version (ext.2) in `currentOs`; the window
+            // module follows the libraries' version instead, so a library bump reaches it too (#265).
+            api(compose.desktop.currentOs.substringBeforeLast(':') + ":" + libs.versions.compose.multiplatform.get()) {
                 exclude(group = "org.jetbrains.compose.material3")
                 exclude(group = "org.thisisthepy.compose.material3")
             }

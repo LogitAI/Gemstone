@@ -146,12 +146,12 @@ jobs:
           "${home}bin/native-image.cmd" --version
 
       # skiko's static archive comes from the core fork's script at the tag of the Compose libraries
-      # Gemstone uses (1.11.1-ext.5); the script pins skiko's revision, so the cache key is the tag.
+      # Gemstone uses (1.11.1-ext.6); the script pins skiko's revision, so the cache key is the tag.
       - name: The core fork's skiko script
         uses: actions/checkout@v4
         with:
           repository: thisisthepy/compose-multiplatform-core-extended
-          ref: v1.11.1-ext.5
+          ref: v1.11.1-ext.6
           path: core-extended
           sparse-checkout: extended/skiko
 
@@ -160,7 +160,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/skiko-static/out/windows-x64
-          key: skiko-static-windows-x64-v1.11.1-ext.5
+          key: skiko-static-windows-x64-v1.11.1-ext.6
 
       # skiko compiles with clang-cl from PATH. The runner's standalone LLVM (C:\Program Files\LLVM)
       # comes first there and does not follow Visual Studio's STL: VS 18.12 (MSVC 14.52) failed with
