@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -37,6 +38,9 @@ import kotlin.math.roundToInt
  * @param enableHaptics 햅틱 피드백 활성화 여부
  * @param swipeThreshold 뒤로가기가 실행되는 임계값 (0.0 ~ 1.0)
  * @param edgeWidth 스와이프가 감지되는 가장자리 영역의 너비 (dp)
+ * @param enterTransition, exitTransition: a navigation's transitions (default: slide in and out from the right)
+ * @param popEnterTransition, popExitTransition: a pop's transitions when it is not a swipe back (the
+ *   system back); a swipe back has none, since the drag has already moved the screen
  * @param builder NavHost의 콘텐츠
  */
 @Composable
@@ -47,6 +51,14 @@ fun SwipeBackNavHost(
     enableHaptics: Boolean = true,
     swipeThreshold: Float = 0.4f,
     edgeWidth: Float = 150f,
+    enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing))
+    },
+    exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+        slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing))
+    },
+    popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = { EnterTransition.None },
+    popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = { ExitTransition.None },
     builder: NavGraphBuilder.() -> Unit
 ) {
     val density = LocalDensity.current
@@ -169,24 +181,10 @@ fun SwipeBackNavHost(
                     .graphicsLayer {
                         translationX = animatedOffset
                     },
-                enterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = tween(300, easing = FastOutSlowInEasing)
-                    )
-                },
-                exitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = tween(300, easing = FastOutSlowInEasing)
-                    )
-                },
-                popEnterTransition = {
-                    EnterTransition.None
-                },
-                popExitTransition = {
-                    ExitTransition.None
-                },
+                enterTransition = enterTransition,
+                exitTransition = exitTransition,
+                popEnterTransition = { if (isSwipeBack) EnterTransition.None else popEnterTransition() },
+                popExitTransition = { if (isSwipeBack) ExitTransition.None else popExitTransition() },
                 builder = builder
             )
         }

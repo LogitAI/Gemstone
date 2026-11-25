@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -72,7 +71,8 @@ fun MainScreen() {
                 }
                 navController.addOnDestinationChangedListener(listener)
             }
-            NavHost(
+            // The owner's edge swipe returns from the chat to the sidebar (SPEC S2.4, #263)
+            SwipeBackNavHost(
                 navController = navController,
                 startDestination = Main,
                 enterTransition = {

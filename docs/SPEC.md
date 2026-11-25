@@ -877,10 +877,14 @@ Code: `app/build.gradle.kts`, `app/src/iosMain/swift/iosApp.xcodeproj/project.pb
 ### S2.4 Layout and navigation: `implemented` · G1
 
 In landscape the sidebar sits next to the chat; in portrait the sidebar is a start screen that
-navigates to the chat, with a swipe-back gesture to return. Code: `.../screen/chat/MainScreen.kt`,
-`.../navigation/AppNavigation.kt`. Test: `app/src/desktopTest/kotlin/gemstone/framework/ui/LayoutTest.kt`
-(landscape shows the sidebar beside the chat; portrait starts on the sidebar, with no chat input, and
-"New Chat" navigates to the chat). The swipe-back gesture has no test.
+navigates to the chat, with a swipe-back gesture to return: a drag that starts within 150 dp of the left
+edge and ends past 40 % of the width pops back to the sidebar (`SwipeBackNavHost`, the owner's code of
+73f3670; wired into MainScreen by #263, leader decision 2026-11-25), and a shorter drag or one that starts
+away from the edge does not. A tap and Android's system back keep MainScreen's slide transitions. Code:
+`.../screen/chat/MainScreen.kt`, `.../navigation/AppNavigation.kt`. Test:
+`app/src/desktopTest/kotlin/gemstone/framework/ui/LayoutTest.kt` (landscape shows the sidebar beside the
+chat; portrait starts on the sidebar, with no chat input, "New Chat" navigates to the chat, and the swipe
+cases above).
 
 ### S2.5 Model selection: `implemented` · G5
 
